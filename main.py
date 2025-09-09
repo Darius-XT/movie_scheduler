@@ -1,40 +1,56 @@
 import requests
-import time
-import random
 from fake_useragent import UserAgent
 
 
-class SimpleHTMLFetcher:
+class HTMLFetcher:
     def __init__(self):
-        self.session = requests.Session()  # 连接复用与cookie管理
-        self.ua = UserAgent()  # 使用fake_useragent库随机生成User-Agent
+        # 生成反爬虫请求头
+        def get_headers():
+            return {
+                "User-Agent": UserAgent(),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Cache-Control": "max-age=0",
+            }
 
-    def get_headers(self):
-        """生成反爬虫请求头"""
-        return {
-            "User-Agent": self.ua.random,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Cache-Control": "max-age=0",
+        self.session = requests.Session()  # 连接复用与cookie管理
+        self.headers = get_headers()
+        self.city_map = {
+            "北京": 1,
+            "上海": 10,
         }
+
+    # 设置城市
+    def set_city(self, city: str):
+        self.session.cookies.set("ci", str(self.city_map[city]), domain="maoyan.com")
+        self.session.cookies.set(
+            "recentCis",
+            f"{str(self.city_map[city])}%3D10%3D1245%3D1126%3D150",
+            domain="maoyan.com",
+        )
 
     def get_html(self, url: str) -> str:
         """核心功能：获取URL的HTML内容"""
         try:
             print(f"正在访问: {url}")
 
-            # 随机延迟
-            time.sleep(random.uniform(1, 3))
+            # 打印当前session中的所有cookie
+            print("当前session中的cookies:")
+            for cookie in self.session.cookies:
+                print(
+                    f"  {cookie.name}={cookie.value} (domain={cookie.domain}, path={cookie.path})"
+                )
+            print()
 
             response = self.session.get(
                 url,
-                headers=self.get_headers(),
+                headers=self.headers,
                 timeout=15,  # 设置超时时间
                 allow_redirects=True,  # 允许重定向
             )
@@ -54,32 +70,16 @@ class SimpleHTMLFetcher:
             return ""
 
 
-def get_url_html(url: str) -> str:
-    """核心功能：获取任意URL的HTML内容"""
-    fetcher = SimpleHTMLFetcher()
-
-    html = fetcher.get_html(url)
-
-    if html:
-        # 保存到文件
-        filename = f"{url.replace('https://', '').replace('http://', '').replace('/', '_').replace('?', '_').replace(':', '_')}.html"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(html)
-
-        print(f"HTML已保存到: {filename}")
-
-    return html
-
-
 if __name__ == "__main__":
+    fetcher = HTMLFetcher()
+    fetcher.set_city("上海")
     # 测试猫眼网站
     url = "https://www.maoyan.com"
-    html_content = get_url_html(url)
+    html_content = fetcher.get_html(url)
 
     # 显示前500个字符
     if html_content:
-        print("\n前500个字符:")
-        print("-" * 50)
-        print(html_content[:500])
+        with open("html_content.html", "w") as f:
+            f.write(html_content)
     else:
         print("未能获取到HTML内容")
