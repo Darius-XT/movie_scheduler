@@ -5,8 +5,9 @@ build/
 dist/
 wheels/
 *.egg-info
-
 .venv
 *.html
 .vscode
 logs/
+.git
+.claude
