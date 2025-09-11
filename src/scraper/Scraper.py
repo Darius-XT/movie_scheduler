@@ -1,9 +1,9 @@
 import requests
 from fake_useragent import UserAgent
-from logger_config import logger
+from src.config.logger_config import logger
 
 
-class HTMLFetcher:
+class Scraper:
     def __init__(self):
         # 生成反爬虫请求头
         def get_headers():
@@ -79,4 +79,4 @@ class HTMLFetcher:
             return ""
 
 
-fetcher = HTMLFetcher()
+scraper = Scraper()
