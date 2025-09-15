@@ -7,7 +7,6 @@ wheels/
 *.egg-info
 .venv
 *.html
-*.json
 .vscode
 logs/
 .git

@@ -1,5 +1,5 @@
 import requests
-from src.config.logger_config import logger
+from src.core.logger import logger
 
 
 class Scraper:
@@ -47,10 +47,14 @@ class Scraper:
         )
         logger.info(f"城市设置为: {city} (ID: {self.city_map[city]})")
 
-    def get_and_save_html(self, url: str, save_path: str) -> bool:
-        """核心功能：获取URL的HTML内容"""
+    def get_html(self, url: str) -> tuple[bool, str]:
+        """核心功能：获取URL的HTML内容
+
+        Returns:
+            tuple[bool, str]: (是否成功, HTML内容)
+        """
         try:
-            logger.info(f"正在访问: {url}")
+            logger.debug(f"开始爬取URL: {url}")
 
             # 记录当前session中的所有cookie
             if self.session.cookies:
@@ -69,22 +73,20 @@ class Scraper:
                 allow_redirects=True,  # 允许重定向
             )
 
-            logger.info(f"response状态码: {response.status_code}")
-            logger.info(f"最终URL: {response.url}")
-            logger.info(f"HTML长度: {len(response.text)} 字符")
+            logger.debug(f"response状态码: {response.status_code}")
+            logger.debug(f"最终URL: {response.url}")
+            logger.debug(f"HTML长度: {len(response.text)} 字符")
 
             if response.status_code == 200:
-                with open(save_path, "w", encoding="utf-8") as f:
-                    f.write(response.text)
-                logger.info(f"HTML内容已保存到 {save_path}")
-                return True
+                logger.debug("成功获取HTML内容")
+                return True, response.text
             else:
                 logger.warning(f"请求失败，状态码: {response.status_code}")
-                return False
+                return False, ""
 
         except Exception as e:
             logger.error(f"获取HTML失败: {e}")
-            return False
+            return False, ""
 
 
 scraper = Scraper()

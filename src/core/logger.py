@@ -4,8 +4,8 @@ from datetime import datetime
 import atexit
 
 
+# 清理旧的日志文件，只保留最近的文件
 def clean_old_logs(log_dir: str, max_files: int = 7):
-    """清理旧的日志文件，只保留最近的文件"""
     log_path = Path(log_dir)
     if not log_path.exists():
         return
@@ -25,17 +25,17 @@ def clean_old_logs(log_dir: str, max_files: int = 7):
             print(f"删除日志文件失败 {old_file.name}: {e}")
 
 
-def add_run_separator(log_file_path: Path):
-    """添加运行分隔符到日志文件"""
-    try:
-        with open(log_file_path, "a", encoding="utf-8") as f:
-            if log_file_path.stat().st_size > 0:
-                f.write("\n")
-    except Exception as e:
-        print(f"添加运行分隔符失败: {e}")
-
-
+# 初始化日志对象
 def setup_logger(level: int = logging.INFO, log_dir: str = "logs") -> logging.Logger:
+    # 添加运行分隔符到日志文件
+    def add_run_separator(log_file_path: Path):
+        try:
+            with open(log_file_path, "a", encoding="utf-8") as f:
+                if log_file_path.stat().st_size > 0:
+                    f.write("\n")
+        except Exception as e:
+            print(f"添加运行分隔符失败: {e}")
+
     # 创建日志目录
     Path(log_dir).mkdir(exist_ok=True)
 
@@ -67,4 +67,4 @@ def setup_logger(level: int = logging.INFO, log_dir: str = "logs") -> logging.Lo
     return logger
 
 
-logger = setup_logger(level=logging.DEBUG, log_dir="src/logs")
+logger = setup_logger(level=logging.INFO, log_dir="src/data/logs")
