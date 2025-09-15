@@ -67,4 +67,4 @@ def setup_logger(level: int = logging.INFO, log_dir: str = "logs") -> logging.Lo
     return logger
 
 
-logger = setup_logger(level=logging.DEBUG, log_dir="logs")
+logger = setup_logger(level=logging.DEBUG, log_dir="src/logs")
