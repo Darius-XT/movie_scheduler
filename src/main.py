@@ -1,4 +1,4 @@
-from src.scraper.Scraper import scraper
+from src.core.scraper import scraper
 from src.config.logger_config import logger
 
 if __name__ == "__main__":
