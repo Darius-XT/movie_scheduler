@@ -47,7 +47,7 @@ class Scraper:
         )
         logger.info(f"城市设置为: {city} (ID: {self.city_map[city]})")
 
-    def get_html(self, url: str) -> str:
+    def get_and_save_html(self, url: str, save_path: str) -> bool:
         """核心功能：获取URL的HTML内容"""
         try:
             logger.info(f"正在访问: {url}")
@@ -74,14 +74,17 @@ class Scraper:
             logger.info(f"HTML长度: {len(response.text)} 字符")
 
             if response.status_code == 200:
-                return response.text
+                with open(save_path, "w", encoding="utf-8") as f:
+                    f.write(response.text)
+                logger.info(f"HTML内容已保存到 {save_path}")
+                return True
             else:
                 logger.warning(f"请求失败，状态码: {response.status_code}")
-                return ""
+                return False
 
         except Exception as e:
             logger.error(f"获取HTML失败: {e}")
-            return ""
+            return False
 
 
 scraper = Scraper()

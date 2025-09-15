@@ -117,8 +117,8 @@ class MovieParser:
     def _extract_score(self, item) -> Dict:
         """提取评分信息"""
         score_info = {
-            'score': None,
-            'score_integer': None,
+            'score': "",
+            'score_integer': None, 
             'score_fraction': None
         }
         
