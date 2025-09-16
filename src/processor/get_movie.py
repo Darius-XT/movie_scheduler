@@ -1,7 +1,9 @@
+"""获取指定类型的所有电影(包括爬取, 解析, 更新数据库的完整流程)"""
+
 from src.processor.database.operations import MovieOperations
-from src.model.parser import parser
-from src.model.logger import logger
-from src.model.scraper import scraper
+from src.base.parser import parser
+from src.base.logger import logger
+from src.base.scraper import scraper
 
 
 # 获取指定类型的所有电影, 并返回成功得到的电影数量

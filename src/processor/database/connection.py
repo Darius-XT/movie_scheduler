@@ -1,9 +1,11 @@
+"""数据库连接管理"""
+
 from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
-from src.model.movie import Base
-from src.model.logger import logger
+from src.base.movie import Base
+from src.base.logger import logger
 
 
 class DatabaseConnection:

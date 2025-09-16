@@ -1,6 +1,9 @@
-from src.model.logger import logger
-from src.model.scraper import scraper
-from src.model.parser import parser
+"""测试从单个URL抓取电影并保存到数据库, 同时还会保存当次的 HTML 文件"""
+
+from src.base.logger import logger
+from src.base.scraper import scraper
+from src.base.parser import parser
+from src.base.html_saver import html_saver
 from src.processor.database.operations import MovieOperations
 
 
@@ -10,6 +13,9 @@ def save_movies_from_single_url(url: str) -> tuple[int, int]:
     if not success or not html:
         logger.error("获取HTML失败，终止保存流程")
         return 0, 1
+
+    # 保存HTML到文件
+    html_saver.save_html(html, url)
 
     movies = parser.parse_html_content(html)
     if not movies:
@@ -24,7 +30,7 @@ def test_save_single_url():
     """简单测试：抓取热映第一页并尝试入库"""
     # 选定城市，避免Cookie城市不一致
     scraper.set_city("上海")
-    url = "https://www.maoyan.com/films?showType=1&offset=36"
+    url = "https://www.maoyan.com/films?showType=1&offset=18"
 
     success_count, failure_count = save_movies_from_single_url(url)
     logger.info(

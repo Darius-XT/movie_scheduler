@@ -1,7 +1,9 @@
+"""解析爬取到的HTML内容, 提取电影信息"""
+
 import re
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
-from src.model.logger import logger
+from src.base.logger import logger
 
 
 class MovieParser:

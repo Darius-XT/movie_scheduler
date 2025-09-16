@@ -1,3 +1,5 @@
+"""日志记录"""
+
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -67,4 +69,4 @@ def setup_logger(level: int = logging.INFO, log_dir: str = "logs") -> logging.Lo
     return logger
 
 
-logger = setup_logger(level=logging.DEBUG, log_dir="src/data/logs")
+logger = setup_logger(level=logging.INFO, log_dir="src/data/logs")

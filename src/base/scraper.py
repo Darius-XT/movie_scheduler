@@ -1,5 +1,7 @@
+"""爬取HTML内容"""
+
 import requests
-from src.model.logger import logger
+from src.base.logger import logger
 
 
 class Scraper:

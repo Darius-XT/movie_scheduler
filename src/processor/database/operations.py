@@ -1,9 +1,11 @@
+"""电影数据库操作"""
+
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from src.model.movie import Movie
+from src.base.movie import Movie
 from src.processor.database.connection import get_db_session
-from src.model.logger import logger
+from src.base.logger import logger
 
 
 class MovieOperations:
