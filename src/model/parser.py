@@ -1,12 +1,50 @@
 import re
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
-from src.core.logger import logger
+from src.model.logger import logger
 
 
 class MovieParser:
     def __init__(self):
         self.movies = []
+
+    # 检测页面是否为空结果页面
+    def is_empty_page(self, html_content: str) -> bool:
+        """检测HTML内容是否表示没有电影数据的空页面"""
+        try:
+            # 检查是否包含"暂未找到相关结果"等提示文字
+            empty_indicators = [
+                "抱歉，当前城市暂未找到相关结果。",
+            ]
+
+            for indicator in empty_indicators:
+                if indicator in html_content:
+                    logger.debug(f"检测到空页面标识: {indicator}")
+                    return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"检测空页面失败: {e}")
+            return False
+
+    def _extract_city_name(self, soup) -> Optional[str]:
+        """从HTML中提取当前选择的城市名称"""
+        try:
+            # 查找城市名称元素
+            city_name_element = soup.find("div", class_="city-name")
+            if city_name_element:
+                # 获取城市名称文本，去除空白字符
+                city_name = city_name_element.get_text().strip()
+                # 移除可能存在的caret符号
+                city_name = city_name.replace("▼", "").strip()
+                return city_name
+            else:
+                logger.warning("未找到城市名称元素")
+                return None
+        except Exception as e:
+            logger.error(f"提取城市名称失败: {e}")
+            return None
 
     # 解析 html 内容, 返回包含关键信息的字典列表
     def parse_html_content(self, html_content: str) -> List[Dict]:
@@ -14,6 +52,14 @@ class MovieParser:
             logger.debug("解析HTML内容")
             # 将 html 内容转换为 BeautifulSoup 对象(一个可操作的树状结构)
             soup = BeautifulSoup(html_content, "html.parser")
+
+            # 提取当前选择的城市名称
+            city_name = self._extract_city_name(soup)
+            if city_name:
+                logger.debug(f"解析HTML内容，当前选择的城市为: {city_name}")
+            else:
+                logger.warning("未能从HTML中提取到城市名称")
+
             movies = []
 
             # 查找所有电影 dd (描述列表定义)
@@ -63,19 +109,27 @@ class MovieParser:
                 "div", class_="channel-detail channel-detail-orange"
             )
             if score_container:
-                integer_elem = score_container.find("i", class_="integer")
-                fraction_elem = score_container.find("i", class_="fraction")
-
-                if integer_elem and fraction_elem:
-                    integer_part = integer_elem.text.strip().rstrip(".")
-                    fraction_part = fraction_elem.text.strip()
-                    movie_info["score_integer"] = integer_part
-                    movie_info["score_fraction"] = fraction_part
-                    movie_info["score"] = f"{integer_part}.{fraction_part}"
+                # 检查是否为"暂无评分"的情况
+                container_text = score_container.get_text().strip()
+                if any(keyword in container_text for keyword in ["暂无评分", "人想看"]):
+                    movie_info["score_integer"] = "暂无"
+                    movie_info["score_fraction"] = "暂无"
+                    movie_info["score"] = "暂无评分"
+                    logger.debug(f"当前电影暂无评分: 容器内容: {container_text}")
                 else:
-                    logger.warning(
-                        "没有在评分容器(span / div)中找到评分信息, 容器: {score_container}"
-                    )
+                    integer_elem = score_container.find("i", class_="integer")
+                    fraction_elem = score_container.find("i", class_="fraction")
+
+                    if integer_elem and fraction_elem:
+                        integer_part = integer_elem.text.strip().rstrip(".")
+                        fraction_part = fraction_elem.text.strip()
+                        movie_info["score_integer"] = integer_part
+                        movie_info["score_fraction"] = fraction_part
+                        movie_info["score"] = f"{integer_part}.{fraction_part}"
+                    else:
+                        logger.warning(
+                            f"没有在评分容器中找到评分信息, 容器内容: {container_text}"
+                        )
             else:
                 logger.warning("没有在 dd 中找到有效的评分容器, dd: {item}")
 
