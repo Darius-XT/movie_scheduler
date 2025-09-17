@@ -170,5 +170,5 @@ class MovieParser:
 
 @singleton
 def get_parser() -> MovieParser:
-    """惰性创建并返回 MovieParser 单例。"""
+    """惰性创建并返回 MovieParser 单例"""
     return MovieParser()

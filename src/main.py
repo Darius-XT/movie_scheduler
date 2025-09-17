@@ -7,8 +7,8 @@ from src.base.logger import setup_logger
 logger = setup_logger()
 scraper = get_scraper()
 
-# TODO: 现在只有第一页的抓取是正常的, 后面得到的结果都跟对应城市对不上(不属于任何一个正确页面), 而且切换城市后页面得到的内容不会变化
-# TODO: 搞明白在浏览器中切换城市的逻辑
+# TODO: 已确认, 抓取到的电影取决于 cookie 中的 movie_id
+# TODO: 能不能动态得到网站服务器返回的 cookie 中的 movie_id, 不再手动配置 cookie?
 
 
 def main():
@@ -16,7 +16,7 @@ def main():
 
     try:
         # 设置城市
-        scraper.set_city(city)
+        get_scraper(city)
 
         total_movies = get_movies()
 

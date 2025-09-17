@@ -12,3 +12,4 @@ logs/
 .git
 .claude
 *.db
+config.py

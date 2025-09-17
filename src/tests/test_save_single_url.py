@@ -36,7 +36,6 @@ def save_movies_from_single_url(url: str) -> tuple[int, int]:
 def test_save_single_url():
     """简单测试：抓取热映第一页并尝试入库"""
     # 选定城市，避免Cookie城市不一致
-    scraper.set_city("上海")
     url = "https://www.maoyan.com/films?showType=1&offset=18"
 
     success_count, failure_count = save_movies_from_single_url(url)

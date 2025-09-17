@@ -1,10 +1,9 @@
 """电影数据库操作"""
 
-from typing import List, Dict, Optional
-from sqlalchemy.orm import Session
+from typing import List, Dict
 from sqlalchemy.exc import SQLAlchemyError
 from src.base.movie import Movie
-from src.processor.database.connection import get_db_session
+from src.processor.database.connection import get_db_connection
 from src.base.logger import setup_logger
 
 logger = setup_logger()
@@ -13,9 +12,9 @@ logger = setup_logger()
 class MovieOperations:
     """电影数据库操作类"""
 
-    def __init__(self, db: Optional[Session] = None):
-        self.db = db or get_db_session()
-        self._should_close_db = db is None  # 如果是自己创建的session，需要关闭
+    def __init__(self):
+        self.db = get_db_connection().session
+        self._should_close_db = False  # 如果是自己创建的session，需要关闭
 
     def __enter__(self):
         return self
@@ -92,7 +91,7 @@ class MovieOperations:
             return 0
 
     def get_statistics(self) -> Dict:
-        """获取数据库统计信息"""
+        """获取总的数据库统计信息"""
         try:
             total_movies = self.get_movies_count()
 
