@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from src.base.movie import Movie
 from src.processor.database.connection import get_db_session
-from src.base.logger import logger
+from src.base.logger import setup_logger
+
+logger = setup_logger()
 
 
 class MovieOperations:

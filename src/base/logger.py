@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 import atexit
+from singleton_decorator import singleton
 
 
 # 清理旧的日志文件，只保留最近的文件
@@ -27,8 +28,15 @@ def clean_old_logs(log_dir: str, max_files: int = 7):
             print(f"删除日志文件失败 {old_file.name}: {e}")
 
 
-# 初始化日志对象
-def setup_logger(level: int = logging.INFO, log_dir: str = "logs") -> logging.Logger:
+@singleton
+def setup_logger(
+    level: int = logging.INFO, log_dir: str = "src/data/logs"
+) -> logging.Logger:
+    """使用第三方 singleton 装饰器实现惰性单例日志器创建。
+
+    第一次调用时根据传入参数创建 logger，后续无论参数如何，均返回同一实例。
+    """
+
     # 添加运行分隔符到日志文件
     def add_run_separator(log_file_path: Path):
         try:
@@ -67,6 +75,3 @@ def setup_logger(level: int = logging.INFO, log_dir: str = "logs") -> logging.Lo
     atexit.register(add_run_separator, log_file)
 
     return logger
-
-
-logger = setup_logger(level=logging.INFO, log_dir="src/data/logs")

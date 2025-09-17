@@ -3,7 +3,8 @@
 import os
 import glob
 from datetime import datetime
-from src.base.logger import logger
+from singleton_decorator import singleton
+from src.base.logger import setup_logger
 
 
 class HTMLSaver:
@@ -36,7 +37,7 @@ class HTMLSaver:
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(html_content)
 
-            logger.debug(f"HTML已保存到: {filename}")
+            setup_logger().debug(f"HTML已保存到: {filename}")
 
             # 清理旧文件，保持最新的10个
             self._cleanup_old_files()
@@ -44,7 +45,7 @@ class HTMLSaver:
             return True
 
         except Exception as e:
-            logger.error(f"保存HTML失败: {e}")
+            setup_logger().error(f"保存HTML失败: {e}")
             return False
 
     def _extract_url_info(self, url: str) -> str:
@@ -84,12 +85,15 @@ class HTMLSaver:
                     try:
                         os.remove(file_path)
                         filename = os.path.basename(file_path)
-                        logger.debug(f"删除旧的HTML文件: {filename}")
+                        setup_logger().debug(f"删除旧的HTML文件: {filename}")
                     except Exception as e:
-                        logger.error(f"删除文件失败 {file_path}: {e}")
+                        setup_logger().error(f"删除文件失败 {file_path}: {e}")
 
         except Exception as e:
-            logger.error(f"清理旧文件失败: {e}")
+            setup_logger().error(f"清理旧文件失败: {e}")
 
 
-html_saver = HTMLSaver()
+@singleton
+def get_html_saver() -> HTMLSaver:
+    """惰性创建并返回 HTMLSaver 单例。"""
+    return HTMLSaver()

@@ -11,4 +11,5 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "requests-html>=0.10.0",
     "toml>=0.10.2",
+    "singleton-decorator>=1.0.0",
 ]

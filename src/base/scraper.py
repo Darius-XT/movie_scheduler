@@ -1,7 +1,8 @@
 """爬取HTML内容"""
 
 import requests
-from src.base.logger import logger
+from singleton_decorator import singleton
+from src.base.logger import setup_logger
 
 
 class Scraper:
@@ -41,7 +42,7 @@ class Scraper:
         self.reset_cookies_by_city(city)
         self.set_headers_with_new_cookies()
 
-        logger.info(f"城市设置为: {city} (ID: {self.city_map[city]})")
+        setup_logger().info(f"城市设置为: {city} (ID: {self.city_map[city]})")
 
     def get_html(self, url: str) -> tuple[bool, str]:
         """核心功能：获取URL的HTML内容
@@ -50,10 +51,10 @@ class Scraper:
             tuple[bool, str]: (是否成功, HTML内容)
         """
         try:
-            logger.debug(f"开始爬取URL: {url}")
+            setup_logger().debug(f"开始爬取URL: {url}")
 
             # 记录当前请求头中的Cookie
-            logger.debug(f"当前请求头中的Cookie: {self.headers['Cookie']}")
+            setup_logger().debug(f"当前请求头中的Cookie: {self.headers['Cookie']}")
 
             response = self.session.get(
                 url,
@@ -62,26 +63,26 @@ class Scraper:
                 allow_redirects=True,  # 允许重定向
             )
 
-            logger.debug(f"response状态码: {response.status_code}")
-            logger.debug(f"最终URL: {response.url}")
-            logger.debug(f"HTML长度: {len(response.text)} 字符")
+            setup_logger().debug(f"response状态码: {response.status_code}")
+            setup_logger().debug(f"最终URL: {response.url}")
+            setup_logger().debug(f"HTML长度: {len(response.text)} 字符")
 
             if response.status_code == 200:
-                logger.debug("成功获取HTML内容")
+                setup_logger().debug("成功获取HTML内容")
                 return True, response.text
             else:
-                logger.warning(f"请求失败，状态码: {response.status_code}")
+                setup_logger().warning(f"请求失败，状态码: {response.status_code}")
                 return False, ""
 
         except Exception as e:
-            logger.error(f"获取HTML失败: {e}")
+            setup_logger().error(f"获取HTML失败: {e}")
             return False, ""
 
     # 根据城市名更新 cookies
     def reset_cookies_by_city(self, city: str):
         """根据城市名更新 cookies 字符串中的 ci 和 recentCis 值"""
         if city not in self.city_map:
-            logger.error(f"不支持的城市: {city}")
+            setup_logger().error(f"不支持的城市: {city}")
             return
 
         city_id = str(self.city_map[city])
@@ -101,13 +102,16 @@ class Scraper:
 
         # 更新cookies字符串
         self.cookies = "; ".join(updated_cookies)
-        logger.info(f"Cookies已更新为城市: {city} (ID: {city_id})")
+        setup_logger().info(f"Cookies已更新为城市: {city} (ID: {city_id})")
 
     # 根据 cookie 重新设置 header
     def set_headers_with_new_cookies(self):
         """根据传入的 cookies 字符串重新设置 headers"""
         self.headers["Cookie"] = self.cookies
-        logger.debug(f"Headers已更新，新的Cookie: {self.headers['Cookie']}")
+        setup_logger().debug(f"Headers已更新，新的Cookie: {self.headers['Cookie']}")
 
 
-scraper = Scraper()
+@singleton
+def get_scraper() -> Scraper:
+    """惰性创建并返回 Scraper 单例。"""
+    return Scraper()

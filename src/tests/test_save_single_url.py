@@ -1,10 +1,17 @@
 """测试从单个URL抓取电影并保存到数据库, 同时还会保存当次的 HTML 文件"""
 
-from src.base.logger import logger
-from src.base.scraper import scraper
-from src.base.parser import parser
-from src.base.html_saver import html_saver
+from src.base.logger import setup_logger
+from src.base.scraper import get_scraper
+from src.base.parser import get_parser
+from src.base.html_saver import get_html_saver
 from src.processor.database.operations import MovieOperations
+
+
+# 模块加载时初始化单例实例
+logger = setup_logger()
+scraper = get_scraper()
+parser = get_parser()
+html_saver = get_html_saver()
 
 
 def save_movies_from_single_url(url: str) -> tuple[int, int]:

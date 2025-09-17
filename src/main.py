@@ -1,7 +1,11 @@
-from src.base.scraper import scraper
+from src.base.scraper import get_scraper
 from src.processor.get_movie import get_movies
 from src.processor.database.operations import MovieOperations
-from src.base.logger import logger
+from src.base.logger import setup_logger
+
+# 模块加载时初始化单例实例
+logger = setup_logger()
+scraper = get_scraper()
 
 # TODO: 现在只有第一页的抓取是正常的, 后面得到的结果都跟对应城市对不上(不属于任何一个正确页面), 而且切换城市后页面得到的内容不会变化
 # TODO: 搞明白在浏览器中切换城市的逻辑

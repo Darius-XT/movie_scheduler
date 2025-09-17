@@ -5,7 +5,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from src.base.movie import Base
-from src.base.logger import logger
+from src.base.logger import setup_logger
+
+logger = setup_logger()
 
 
 class DatabaseConnection:

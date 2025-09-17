@@ -3,7 +3,8 @@
 import re
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
-from src.base.logger import logger
+from singleton_decorator import singleton
+from src.base.logger import setup_logger
 
 
 class MovieParser:
@@ -21,13 +22,13 @@ class MovieParser:
 
             for indicator in empty_indicators:
                 if indicator in html_content:
-                    logger.debug(f"检测到空页面标识: {indicator}")
+                    setup_logger().debug(f"检测到空页面标识: {indicator}")
                     return True
 
             return False
 
         except Exception as e:
-            logger.error(f"检测空页面失败: {e}")
+            setup_logger().error(f"检测空页面失败: {e}")
             return False
 
     def _extract_city_name(self, soup) -> Optional[str]:
@@ -42,25 +43,25 @@ class MovieParser:
                 city_name = city_name.replace("▼", "").strip()
                 return city_name
             else:
-                logger.warning("未找到城市名称元素")
+                setup_logger().warning("未找到城市名称元素")
                 return None
         except Exception as e:
-            logger.error(f"提取城市名称失败: {e}")
+            setup_logger().error(f"提取城市名称失败: {e}")
             return None
 
     # 解析 html 内容, 返回包含关键信息的字典列表
     def parse_html_content(self, html_content: str) -> List[Dict]:
         try:
-            logger.debug("解析HTML内容")
+            setup_logger().debug("解析HTML内容")
             # 将 html 内容转换为 BeautifulSoup 对象(一个可操作的树状结构)
             soup = BeautifulSoup(html_content, "html.parser")
 
             # 提取当前选择的城市名称
             city_name = self._extract_city_name(soup)
             if city_name:
-                logger.debug(f"解析HTML内容，当前选择的城市为: {city_name}")
+                setup_logger().debug(f"解析HTML内容，当前选择的城市为: {city_name}")
             else:
-                logger.warning("未能从HTML中提取到城市名称")
+                setup_logger().warning("未能从HTML中提取到城市名称")
 
             movies = []
 
@@ -72,11 +73,11 @@ class MovieParser:
                 if movie_info:
                     movies.append(movie_info)
 
-            logger.debug(f"成功解析 {len(movies)} 部电影信息")
+            setup_logger().debug(f"成功解析 {len(movies)} 部电影信息")
             return movies
 
         except Exception as e:
-            logger.error(f"解析HTML内容失败: {e}")
+            setup_logger().error(f"解析HTML内容失败: {e}")
             return []
 
     # 对每个电影 dd, 提取信息
@@ -95,16 +96,16 @@ class MovieParser:
                     movie_info["id"] = int(movie_id_match.group(1))
                     movie_info["url"] = f"https://www.maoyan.com{href}"
                 else:
-                    logger.warning("没有在 href 中匹配到电影 id, href: {href}")
+                    setup_logger().warning("没有在 href 中匹配到电影 id, href: {href}")
             else:
-                logger.warning("没有在 dd 中匹配到有效链接, dd: {item}")
+                setup_logger().warning("没有在 dd 中匹配到有效链接, dd: {item}")
 
             # 获取电影标题
             title_element = item.find("div", class_="movie-item-title")
             if title_element and title_element.find("a"):
                 movie_info["title"] = title_element.find("a").text.strip()
             else:
-                logger.warning("没有在 dd 中找到标题, dd: {item}")
+                setup_logger().warning("没有在 dd 中找到标题, dd: {item}")
 
             # 获取评分容器(span 或 div)
             score_container = item.find("span", class_="score") or item.find(
@@ -117,7 +118,9 @@ class MovieParser:
                     movie_info["score_integer"] = "暂无"
                     movie_info["score_fraction"] = "暂无"
                     movie_info["score"] = "暂无评分"
-                    logger.debug(f"当前电影暂无评分: 容器内容: {container_text}")
+                    setup_logger().debug(
+                        f"当前电影暂无评分: 容器内容: {container_text}"
+                    )
                 else:
                     integer_elem = score_container.find("i", class_="integer")
                     fraction_elem = score_container.find("i", class_="fraction")
@@ -129,11 +132,11 @@ class MovieParser:
                         movie_info["score_fraction"] = fraction_part
                         movie_info["score"] = f"{integer_part}.{fraction_part}"
                     else:
-                        logger.warning(
+                        setup_logger().warning(
                             f"没有在评分容器中找到评分信息, 容器内容: {container_text}"
                         )
             else:
-                logger.warning("没有在 dd 中找到有效的评分容器, dd: {item}")
+                setup_logger().warning("没有在 dd 中找到有效的评分容器, dd: {item}")
 
             # 提取封面 div(包含类型、主演、上映时间)
             hover_info = item.find("div", class_="movie-hover-info")
@@ -161,9 +164,11 @@ class MovieParser:
             return movie_info
 
         except Exception as e:
-            logger.error(f"提取单个电影信息失败: {e}")
+            setup_logger().error(f"提取单个电影信息失败: {e}")
             return None
 
 
-# 创建全局parser实例
-parser = MovieParser()
+@singleton
+def get_parser() -> MovieParser:
+    """惰性创建并返回 MovieParser 单例。"""
+    return MovieParser()
