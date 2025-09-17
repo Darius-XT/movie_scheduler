@@ -67,7 +67,7 @@ def get_movies() -> int:
                 logger.error(f"抓取第{offset//18 + 1}页异常: {e}")
                 break
 
-        logger.debug(f"{show_type_name}电影抓取完成，共抓取{type_movies}部电影")
+        logger.info(f"{show_type_name}电影抓取完成，共抓取{type_movies}部电影")
 
     logger.info(f"所有电影抓取完成，总共成功抓取{total_movies}部电影")
     return total_movies
