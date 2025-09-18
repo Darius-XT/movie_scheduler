@@ -1,20 +1,16 @@
 """测试从单个URL抓取电影并保存到数据库, 同时还会保存当次的 HTML 文件"""
 
-from src.base.logger import setup_logger
-from src.base.scraper import get_scraper
-from src.base.parser import get_parser
-from src.base.html_saver import get_html_saver
-from src.processor.database.operations import MovieOperations
+from src.logger import logger
+from src.operators.url_scraper import scraper
+from src.operators.html_parser import parser
+from src.operators.html_saver import html_saver
+from src.db.db_operator import DBOperator
+from src.db.db_initializer import db_initializer
 
 
 def save_movies_from_single_url(url: str) -> tuple[int, int]:
     """从单个URL抓取电影并保存到数据库，返回(成功数, 失败数)"""
-    # 在函数内部获取单例实例
-    logger = setup_logger()
-    scraper = get_scraper()
-    parser = get_parser()
-    html_saver = get_html_saver()
-    success, html = scraper.get_html(url)
+    success, html = scraper.scrape_url(url)
     if not success or not html:
         logger.error("获取HTML失败，终止保存流程")
         return 0, 1
@@ -22,18 +18,17 @@ def save_movies_from_single_url(url: str) -> tuple[int, int]:
     # 保存HTML到文件
     html_saver.save_html(html, url)
 
-    movies = parser.parse_html_content(html)
+    movies = parser.parse_html(html)
     if not movies:
         logger.warning("未解析到电影数据")
         return 0, 0
 
-    with MovieOperations() as db_ops:
+    with DBOperator(db_initializer) as db_ops:
         return db_ops.save_movies_batch(movies)
 
 
 def test_save_single_url():
     """简单测试：抓取热映第一页并尝试入库"""
-    logger = setup_logger()
     # 选定城市，避免Cookie城市不一致
     url = "https://www.maoyan.com/films?showType=1&offset=18"
 

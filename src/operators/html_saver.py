@@ -3,50 +3,15 @@
 import os
 import glob
 from datetime import datetime
-from singleton_decorator import singleton
-from src.base.logger import setup_logger
+from src.logger import logger
+from src.config import settings
 
 
 class HTMLSaver:
     def __init__(self):
-        self.html_dir = os.path.join(os.path.dirname(__file__), "..", "data", "HTMLs")
+        self.html_dir = settings.html_dir
         os.makedirs(self.html_dir, exist_ok=True)
-        self.max_files = 10
-
-    def save_html(self, html_content: str, url: str) -> bool:
-        """保存 HTML 内容，保持最多10个文件
-
-        Args:
-            html_content: HTML 内容
-            url: 请求的 URL
-
-        Returns:
-            bool: 保存是否成功
-        """
-        try:
-            # 生成文件名：时间戳 + URL中的关键信息
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-            # 从URL中提取关键信息
-            url_info = self._extract_url_info(url)
-            filename = f"{timestamp}_{url_info}.html"
-
-            filepath = os.path.join(self.html_dir, filename)
-
-            # 保存HTML内容
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(html_content)
-
-            setup_logger().debug(f"HTML已保存到: {filename}")
-
-            # 清理旧文件，保持最新的10个
-            self._cleanup_old_files()
-
-            return True
-
-        except Exception as e:
-            setup_logger().error(f"保存HTML失败: {e}")
-            return False
+        self.max_files = settings.html_max_count
 
     def _extract_url_info(self, url: str) -> str:
         """从URL中提取关键信息作为文件名"""
@@ -85,15 +50,48 @@ class HTMLSaver:
                     try:
                         os.remove(file_path)
                         filename = os.path.basename(file_path)
-                        setup_logger().debug(f"删除旧的HTML文件: {filename}")
+                        logger.debug(f"删除旧的HTML文件: {filename}")
                     except Exception as e:
-                        setup_logger().error(f"删除文件失败 {file_path}: {e}")
+                        logger.error(f"删除文件失败 {file_path}: {e}")
 
         except Exception as e:
-            setup_logger().error(f"清理旧文件失败: {e}")
+            logger.error(f"清理旧文件失败: {e}")
+
+    def save_html(self, html_content: str, url: str) -> bool:
+        """保存 HTML 内容，保持最多10个文件
+
+        Args:
+            html_content: HTML 内容
+            url: 请求的 URL
+
+        Returns:
+            bool: 保存是否成功
+        """
+        try:
+            # 生成文件名：时间戳 + URL中的关键信息
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # 从URL中提取关键信息
+            url_info = self._extract_url_info(url)
+            filename = f"{timestamp}_{url_info}.html"
+
+            filepath = os.path.join(self.html_dir, filename)
+
+            # 保存HTML内容
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(html_content)
+
+            logger.debug(f"HTML已保存到: {filename}")
+
+            # 清理旧文件，保持最新的10个
+            self._cleanup_old_files()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"保存HTML失败: {e}")
+            return False
 
 
-@singleton
-def get_html_saver() -> HTMLSaver:
-    """惰性创建并返回 HTMLSaver 单例。"""
-    return HTMLSaver()
+# 直接在模块级别实例化 html_saver
+html_saver = HTMLSaver()

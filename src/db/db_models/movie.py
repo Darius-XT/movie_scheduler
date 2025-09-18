@@ -1,13 +1,11 @@
 """电影数据模型"""
 
 from sqlalchemy import Column, Integer, String, Text, DateTime
-from sqlalchemy.ext.declarative import declarative_base
+from src.db.db_models import Base
 from sqlalchemy.sql import func
 
-# 返回一个基类, 所有数据库模型都继承自这个基类, 能自动将模型映射到数据库表
-Base = declarative_base()
 
-
+# 对应数据库中的 movies 表
 class Movie(Base):
     """电影数据模型"""
 
@@ -17,11 +15,10 @@ class Movie(Base):
     id = Column(Integer, primary_key=True, comment="电影ID")
     title = Column(String(200), nullable=False, comment="电影标题")
     url = Column(Text, nullable=True, comment="电影链接")
+    cinemas_url = Column(Text, nullable=True, comment="影院上映信息链接")
 
     # 评分信息
     score = Column(String(10), nullable=True, comment="完整评分")
-    score_integer = Column(String(5), nullable=True, comment="评分整数部分")
-    score_fraction = Column(String(5), nullable=True, comment="评分小数部分")
 
     # 电影详情
     genres = Column(Text, nullable=True, comment="电影类型")
@@ -44,9 +41,8 @@ class Movie(Base):
             id=data.get("id"),
             title=data.get("title"),
             url=data.get("url"),
+            cinemas_url=data.get("cinemas_url"),
             score=data.get("score"),
-            score_integer=data.get("score_integer"),
-            score_fraction=data.get("score_fraction"),
             genres=data.get("genres"),
             actors=data.get("actors"),
             release_date=data.get("release_date"),

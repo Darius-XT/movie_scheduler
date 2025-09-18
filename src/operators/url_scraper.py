@@ -2,8 +2,7 @@
 
 import requests
 from requests.cookies import create_cookie
-from singleton_decorator import singleton
-from src.base.logger import setup_logger
+from src.logger import logger
 from src.config import settings
 
 # 城市映射常量
@@ -31,7 +30,7 @@ DEFAULT_HEADERS = {
 }
 
 
-class Scraper:
+class URLScraper:
     def __init__(self, city: str | None = None):
         self.city = city or settings.city
         self.city_id = self._get_city_id(self.city)
@@ -122,16 +121,31 @@ class Scraper:
                 timeout=settings.timeout,
             )
         except Exception as e:
-            setup_logger().debug(f"预热请求失败(忽略): {e}")
+            logger.debug(f"预热请求失败(忽略): {e}")
 
-    def get_html(self, url: str) -> tuple[bool, str]:
+    def set_city(self, city: str):
+        """设置城市并重新初始化相关配置
+
+        Args:
+            city: 城市名称
+        """
+        self.city = city
+        self.city_id = self._get_city_id(city)
+
+        # 重新设置城市相关Cookie
+        self.session.cookies.clear()
+        self._preset_city_cookies()
+        # 重新预热
+        self._warm_up_session()
+
+    def scrape_url(self, url: str) -> tuple[bool, str]:
         """核心功能：获取URL的HTML内容
 
         Returns:
             tuple[bool, str]: (是否成功, HTML内容)
         """
         try:
-            setup_logger().debug(f"开始爬取URL: {url}")
+            logger.debug(f"开始爬取URL: {url}")
 
             response = self.session.get(
                 url,
@@ -140,24 +154,21 @@ class Scraper:
                 timeout=settings.timeout,
             )
 
-            setup_logger().debug(f"response状态码: {response.status_code}")
-            setup_logger().debug(f"最终URL: {response.url}")
-            setup_logger().debug(f"HTML长度: {len(response.text)} 字符")
+            logger.debug(f"response状态码: {response.status_code}")
+            logger.debug(f"最终URL: {response.url}")
+            logger.debug(f"HTML长度: {len(response.text)} 字符")
 
             if response.status_code == 200:
-                setup_logger().debug("成功获取HTML内容")
+                logger.debug("成功获取HTML内容")
                 return True, response.text
             else:
-                setup_logger().warning(f"请求失败，状态码: {response.status_code}")
+                logger.warning(f"请求失败，状态码: {response.status_code}")
                 return False, ""
 
         except Exception as e:
-            setup_logger().error(f"获取HTML失败: {e}")
+            logger.error(f"获取HTML失败: {e}")
             return False, ""
 
 
-@singleton
-def get_scraper(city: str = settings.city) -> Scraper:
-    """惰性创建并返回 Scraper 单例。"""
-    city = city or settings.city
-    return Scraper(city)
+# 直接在模块级别实例化 scraper
+scraper = URLScraper()
