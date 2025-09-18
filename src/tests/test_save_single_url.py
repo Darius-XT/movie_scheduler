@@ -7,15 +7,13 @@ from src.base.html_saver import get_html_saver
 from src.processor.database.operations import MovieOperations
 
 
-# 模块加载时初始化单例实例
-logger = setup_logger()
-scraper = get_scraper()
-parser = get_parser()
-html_saver = get_html_saver()
-
-
 def save_movies_from_single_url(url: str) -> tuple[int, int]:
     """从单个URL抓取电影并保存到数据库，返回(成功数, 失败数)"""
+    # 在函数内部获取单例实例
+    logger = setup_logger()
+    scraper = get_scraper()
+    parser = get_parser()
+    html_saver = get_html_saver()
     success, html = scraper.get_html(url)
     if not success or not html:
         logger.error("获取HTML失败，终止保存流程")
@@ -35,6 +33,7 @@ def save_movies_from_single_url(url: str) -> tuple[int, int]:
 
 def test_save_single_url():
     """简单测试：抓取热映第一页并尝试入库"""
+    logger = setup_logger()
     # 选定城市，避免Cookie城市不一致
     url = "https://www.maoyan.com/films?showType=1&offset=18"
 

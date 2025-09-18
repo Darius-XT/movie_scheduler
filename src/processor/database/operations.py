@@ -6,8 +6,6 @@ from src.base.movie import Movie
 from src.processor.database.connection import get_db_connection
 from src.base.logger import setup_logger
 
-logger = setup_logger()
-
 
 class MovieOperations:
     """电影数据库操作类"""
@@ -26,6 +24,7 @@ class MovieOperations:
     # 传入单个电影数据的字典, 保存到数据库
     def save_movie(self, movie_data: Dict) -> bool:
         """保存单个电影数据"""
+        logger = setup_logger()
         try:
             # 检查电影是否已存在
             existing_movie = (
@@ -62,6 +61,7 @@ class MovieOperations:
         Returns:
             tuple[int, int]: (成功保存数量, 失败数量)
         """
+        logger = setup_logger()
         logger.debug("批量保存电影数据")
         success_count = 0
         failure_count = 0
@@ -84,6 +84,7 @@ class MovieOperations:
 
     def get_movies_count(self) -> int:
         """获取电影总数"""
+        logger = setup_logger()
         try:
             return self.db.query(Movie).count()
         except SQLAlchemyError as e:
@@ -92,8 +93,10 @@ class MovieOperations:
 
     def get_statistics(self) -> Dict:
         """获取总的数据库统计信息"""
+        logger = setup_logger()
         try:
             total_movies = self.get_movies_count()
+            logger.info(f"数据库中总电影数: {total_movies}")
 
             return {
                 "total_movies": total_movies,

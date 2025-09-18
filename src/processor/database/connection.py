@@ -7,8 +7,6 @@ from src.base.movie import Base
 from src.base.logger import setup_logger
 from src.config import settings
 
-logger = setup_logger()
-
 
 class DatabaseConnection:
     """数据库连接管理类"""
@@ -30,6 +28,7 @@ class DatabaseConnection:
 
     def _create_tables(self):
         """创建所有表"""
+        logger = setup_logger()
         try:
             # 扫描所有继承自 Base 的模型类, 并据此创建表
             Base.metadata.create_all(bind=self.engine)
@@ -44,7 +43,3 @@ class DatabaseConnection:
 def get_db_connection() -> DatabaseConnection:
     """获取数据库连接实例"""
     return DatabaseConnection()
-
-
-# 全局数据库连接实例(单例)
-db_connection = get_db_connection()

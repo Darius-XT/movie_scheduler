@@ -5,14 +5,14 @@ from src.base.parser import get_parser
 from src.base.logger import setup_logger
 from src.base.scraper import get_scraper
 
-# 在模块加载时创建单例实例，后续直接使用
-logger = setup_logger()
-parser = get_parser()
-scraper = get_scraper()
-
 
 # 获取指定类型的所有电影, 并返回成功得到的电影数量
 def get_movies() -> int:
+    # 在函数内部获取单例实例，此时main.py已经初始化过logger了
+    logger = setup_logger()
+    parser = get_parser()
+    scraper = get_scraper()
+    
     offset = 0
     total_movies = 0
 
