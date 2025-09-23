@@ -282,6 +282,7 @@ dependencies = [
     { name = "singleton-decorator" },
     { name = "sqlalchemy" },
     { name = "toml" },
+    { name = "tqdm" },
 ]
 
 [package.metadata]
@@ -293,6 +294,7 @@ requires-dist = [
     { name = "singleton-decorator", specifier = ">=1.0.0" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "toml", specifier = ">=0.10.2" },
+    { name = "tqdm", specifier = ">=4.66.0" },
 ]
 
 [[package]]

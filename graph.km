@@ -1,0 +1,177 @@
+{
+    "root": {
+        "data": {
+            "id": "dd0odztnws00",
+            "created": 1758681013023,
+            "text": "src"
+        },
+        "children": [
+            {
+                "data": {
+                    "id": "dd0oeu5m85k0",
+                    "created": 1758681079049,
+                    "text": "datas",
+                    "note": "所有的数据:\n1. 临时保存用于监测的 HTML文档\n2. logs\n3. movie.db",
+                    "priority": 2
+                },
+                "children": []
+            },
+            {
+                "data": {
+                    "id": "dd0oez1zwio0",
+                    "created": 1758681089714,
+                    "text": "db",
+                    "note": "所有与数据库相关的部分",
+                    "priority": 2
+                },
+                "children": [
+                    {
+                        "data": {
+                            "id": "dd0oq920oww0",
+                            "created": 1758681973489,
+                            "text": "db_models"
+                        },
+                        "children": [
+                            {
+                                "data": {
+                                    "id": "dd0p553wd2g0",
+                                    "created": 1758683140358,
+                                    "text": "movie"
+                                },
+                                "children": []
+                            }
+                        ]
+                    },
+                    {
+                        "data": {
+                            "id": "dd0oqk34bv40",
+                            "created": 1758681997500,
+                            "text": "db_connector"
+                        },
+                        "children": []
+                    },
+                    {
+                        "data": {
+                            "id": "dd0p5d4fef40",
+                            "created": 1758683157804,
+                            "text": "db_operator"
+                        },
+                        "children": []
+                    }
+                ]
+            },
+            {
+                "data": {
+                    "id": "dd0of18hs080",
+                    "created": 1758681094460,
+                    "text": "models",
+                    "note": "所有需要用到的抽象数据模型定义(暂无)",
+                    "priority": 1
+                },
+                "children": []
+            },
+            {
+                "data": {
+                    "id": "dd0of46cddk0",
+                    "created": 1758681100861,
+                    "text": "operators",
+                    "note": "对各个对象的操作(能做什么)",
+                    "priority": 1
+                },
+                "children": [
+                    {
+                        "data": {
+                            "id": "dd0olzlg0m00",
+                            "created": 1758681639439,
+                            "text": "html_parsers"
+                        },
+                        "children": [
+                            {
+                                "data": {
+                                    "id": "dd0one61i3s0",
+                                    "created": 1758681749524,
+                                    "text": "movie_info_parser"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "dd0onk241nk0",
+                                    "created": 1758681762347,
+                                    "text": "movie_list_parser"
+                                },
+                                "children": []
+                            }
+                        ]
+                    },
+                    {
+                        "data": {
+                            "id": "dd0om5ms4wg0",
+                            "created": 1758681652581,
+                            "text": "url_scrapers"
+                        },
+                        "children": [
+                            {
+                                "data": {
+                                    "id": "dd0onitv2qg0",
+                                    "created": 1758681759671,
+                                    "text": "movie_info_scraper"
+                                },
+                                "children": []
+                            },
+                            {
+                                "data": {
+                                    "id": "dd0onx1tfm80",
+                                    "created": 1758681790627,
+                                    "text": "movie_list_scraper"
+                                },
+                                "children": []
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "data": {
+                    "id": "dd0oia7s5fs0",
+                    "created": 1758681349101,
+                    "text": "services",
+                    "note": "业务逻辑(各个业务调用哪些操作)",
+                    "priority": 1,
+                    "progress": null
+                },
+                "children": [
+                    {
+                        "data": {
+                            "id": "dd0oo771bxc0",
+                            "created": 1758681812710,
+                            "text": "get_movie_list_info"
+                        },
+                        "children": []
+                    }
+                ]
+            },
+            {
+                "data": {
+                    "id": "dd0oknck8f40",
+                    "created": 1758681534416,
+                    "text": "utils",
+                    "note": "辅助函数"
+                },
+                "children": [
+                    {
+                        "data": {
+                            "id": "dd0opl14wqo0",
+                            "created": 1758681921193,
+                            "text": "html_saver"
+                        },
+                        "children": []
+                    }
+                ]
+            }
+        ]
+    },
+    "template": "structure",
+    "theme": "fresh-purple",
+    "version": "1.4.43"
+}

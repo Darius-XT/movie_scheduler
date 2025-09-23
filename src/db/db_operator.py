@@ -143,6 +143,21 @@ class DBOperator:
             logger.error(f"获取电影数量失败: {e}")
             return 0
 
+    def get_movies_without_details(self) -> List[Movie]:
+        """获取既没有导演也没有国家信息的电影（新增的电影）"""
+        try:
+            return (
+                self.session.query(Movie)
+                .filter(
+                    ((Movie.director.is_(None)) | (Movie.director == ""))
+                    & ((Movie.country.is_(None)) | (Movie.country == ""))
+                )
+                .all()
+            )
+        except SQLAlchemyError as e:
+            logger.error(f"获取没有详细信息的电影失败: {e}")
+            return []
+
     def delete_movie(self, movie_id: int) -> bool:
         """删除电影"""
         try:

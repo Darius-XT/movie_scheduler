@@ -1,9 +1,11 @@
 """爬取HTML内容"""
 
+import logging
 import requests
 from requests.cookies import create_cookie
 from src.logger import logger
 from src.config import settings
+from src.utils.file_saver import file_saver
 
 # 城市映射常量
 CITY_MAPPING = {
@@ -11,7 +13,7 @@ CITY_MAPPING = {
     "上海": 10,
 }
 
-# 请求头配置基础模板（不包含Cookie）
+# 请求头配置基础模板
 DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
     "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -30,28 +32,27 @@ DEFAULT_HEADERS = {
 }
 
 
-class URLScraper:
-    def __init__(self, city: str | None = None):
-        self.city = city or settings.city
-        self.city_id = self._get_city_id(self.city)
+# * 电影列表爬取器: 注意 cookie 与 header 是分别管理的(在 session 中)
+class MovieListScraper:
+    def __init__(self):
+        self.headers = DEFAULT_HEADERS.copy()
+        # session 负责连接复用与 cookie 管理, 注意 cookie 可以直接在 session 中持久化复用, 而 header 则需要每次请求时都设置
+        self.session = requests.Session()
+        # 标记是否已经预热过
+        self._warmed_up = False
+        # 当前城市信息
+        self._current_city = None
 
-        # 会话与Cookie管理
-        self.session = requests.Session()  # 连接复用与cookie管理
-        self.headers = DEFAULT_HEADERS.copy()  # 不在headers里写Cookie
-        # 预置城市相关Cookie到会话
-        self._preset_city_cookies()
-        # 预热一次，让服务器下发其余Set-Cookie
-        self._warm_up_session()
-
+    # 获取城市ID
     def _get_city_id(self, city: str) -> int:
-        """获取城市ID"""
         return CITY_MAPPING.get(city, CITY_MAPPING[settings.city])
 
-    def _preset_city_cookies(self):
-        """在会话中预置城市相关Cookie，以便首个请求即带上正确城市。"""
+    # 在会话中预置城市相关Cookie，以及其它身份验证相关的 cookie, 仅不包括 movie_ids
+    def _preset_cookies(self, city: str):
         domain = "www.maoyan.com"
         path = "/"
-        city_id_str = str(self.city_id)
+        city_id = self._get_city_id(city)
+        city_id_str = str(city_id)
         recent_cis = f"{city_id_str}%3D1%3D50%3D1245%3D1126"
 
         # 预置所有关键Cookie（除了动态的movie列表）
@@ -111,41 +112,58 @@ class URLScraper:
                 create_cookie(name=name, value=value, domain=domain, path=path)
             )
 
-    def _warm_up_session(self):
-        """访问站点首页以获取服务器下发的其它Cookie: 预热时只预填城市Cookie, 其它 cookie 在请求后获取"""
+    # 预热，获取服务器下发的 movie_ids 相关的 Cookie, 并且由于先访问了列表的第一页, 避免了直接爬取后面的页触发反爬虫检测
+    def _warm_up_session(self, show_type: int, city: str):
         try:
+            # 使用与要抓取的URL相同的端点，但offset设为0
+            warmup_url = f"https://www.maoyan.com/films?showType={show_type}&offset=0"
+            logger.debug(f"开始预热会话: {warmup_url}, 城市: {city}")
+
             self.session.get(
-                "https://www.maoyan.com",
+                warmup_url,
                 headers=self.headers,
                 allow_redirects=settings.allow_redirects,
                 timeout=settings.timeout,
             )
+            logger.debug("预热请求完成")
         except Exception as e:
             logger.debug(f"预热请求失败(忽略): {e}")
 
-    def set_city(self, city: str):
-        """设置城市并重新初始化相关配置
+    def scrape_movie_list(
+        self, show_type: int, offset: int, city: str | None = None
+    ) -> tuple[bool, str]:
+        """核心功能：获取电影列表HTML内容
 
         Args:
-            city: 城市名称
-        """
-        self.city = city
-        self.city_id = self._get_city_id(city)
-
-        # 重新设置城市相关Cookie
-        self.session.cookies.clear()
-        self._preset_city_cookies()
-        # 重新预热
-        self._warm_up_session()
-
-    def scrape_url(self, url: str) -> tuple[bool, str]:
-        """核心功能：获取URL的HTML内容
+            show_type: 显示类型 (1=正在热映, 2=即将上映)
+            offset: 偏移量
+            city: 城市名称，如果为None则使用默认城市
 
         Returns:
             tuple[bool, str]: (是否成功, HTML内容)
         """
         try:
-            logger.debug(f"开始爬取URL: {url}")
+            # 处理城市参数
+            if city is None:
+                city = settings.city
+
+            # 如果城市发生变化，需要重新设置Cookie和预热状态
+            if self._current_city != city:
+                logger.debug(f"城市发生变化: {self._current_city} -> {city}")
+                self.session.cookies.clear()
+                self._preset_cookies(city)
+                self._current_city = city
+                self._warmed_up = False
+
+            # 如果是第一次调用或城市变化后，先进行预热
+            if not self._warmed_up:
+                self._warm_up_session(show_type, city)
+                self._warmed_up = True
+
+            url = f"https://www.maoyan.com/films?showType={show_type}&offset={offset}"
+            logger.debug(
+                f"开始爬取电影列表: showType={show_type}, offset={offset}, city={city}"
+            )
 
             response = self.session.get(
                 url,
@@ -171,4 +189,13 @@ class URLScraper:
 
 
 # 直接在模块级别实例化 scraper
-scraper = URLScraper()
+movie_list_scraper = MovieListScraper()
+
+# 单元测试
+if __name__ == "__main__":
+    logger.setLevel(logging.DEBUG)
+    show_type = 1
+    offset = 36
+    city = "上海"
+    _, content = movie_list_scraper.scrape_movie_list(show_type, offset, city)
+    file_saver.save_file(content, "html")

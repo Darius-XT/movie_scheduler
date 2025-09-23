@@ -6,9 +6,40 @@ from bs4 import BeautifulSoup
 from src.logger import logger
 
 
-class HTMLParser:
+class MovieListParser:
     def __init__(self):
         self.movies = []
+
+    # 解析 html 内容, 返回包含关键信息的字典列表
+    def parse_movie_list(self, html_content: str) -> List[Dict]:
+        try:
+            logger.debug("解析HTML内容")
+            # 将 html 内容转换为 BeautifulSoup 对象(一个可操作的树状结构)
+            soup = BeautifulSoup(html_content, "html.parser")
+
+            # 提取当前选择的城市名称
+            city_name = self._extract_city_name(soup)
+            if city_name:
+                logger.debug(f"解析HTML内容，当前选择的城市为: {city_name}")
+            else:
+                logger.warning("未能从HTML中提取到城市名称")
+
+            movies = []
+
+            # 查找所有电影 dd (描述列表定义)
+            movie_items = soup.find_all("dd")
+
+            for item in movie_items:
+                movie_info = self._extract_movie_info(item)
+                if movie_info:
+                    movies.append(movie_info)
+
+            logger.debug(f"成功解析 {len(movies)} 部电影信息")
+            return movies
+
+        except Exception as e:
+            logger.error(f"解析HTML内容失败: {e}")
+            return []
 
     # 检测页面是否为空结果页面
     def is_empty_page(self, html_content: str) -> bool:
@@ -53,25 +84,22 @@ class HTMLParser:
         try:
             movie_info = {}
 
-            # 获取电影 url(如果没有说明不是有效的电影, 直接返回)
+            # 获取电影 ID(从链接中提取)
             movie_link = item.find("a", href=re.compile(r"/films/\d+"))
             if movie_link:
                 # 从链接中提取 href, eg: /films/123456
                 href = movie_link.get("href")
                 movie_id_match = re.search(r"/films/(\d+)", href)
-                # 如果 href 中有电影 id, 则提取 id, 并构建 url
+                # 如果 href 中有电影 id, 则提取 id
                 if movie_id_match:
                     movie_id = int(movie_id_match.group(1))
                     movie_info["id"] = movie_id
-                    movie_info["url"] = f"https://www.maoyan.com{href}"
-                    # 生成影院上映信息URL
-                    movie_info["cinemas_url"] = (
-                        f"https://www.maoyan.com/cinemas?movieId={movie_id}"
-                    )
                 else:
                     logger.warning("没有在 href 中匹配到电影 id, href: {href}")
+                    return None
             else:
                 logger.warning("没有在 dd 中匹配到有效链接, dd: {item}")
+                return None
 
             # 获取电影标题
             title_element = item.find("div", class_="movie-item-title")
@@ -134,37 +162,12 @@ class HTMLParser:
             logger.error(f"提取单个电影信息失败: {e}")
             return None
 
-    # 解析 html 内容, 返回包含关键信息的字典列表
-    def parse_html(self, html_content: str) -> List[Dict]:
-        try:
-            logger.debug("解析HTML内容")
-            # 将 html 内容转换为 BeautifulSoup 对象(一个可操作的树状结构)
-            soup = BeautifulSoup(html_content, "html.parser")
-
-            # 提取当前选择的城市名称
-            city_name = self._extract_city_name(soup)
-            if city_name:
-                logger.debug(f"解析HTML内容，当前选择的城市为: {city_name}")
-            else:
-                logger.warning("未能从HTML中提取到城市名称")
-
-            movies = []
-
-            # 查找所有电影 dd (描述列表定义)
-            movie_items = soup.find_all("dd")
-
-            for item in movie_items:
-                movie_info = self._extract_movie_info(item)
-                if movie_info:
-                    movies.append(movie_info)
-
-            logger.debug(f"成功解析 {len(movies)} 部电影信息")
-            return movies
-
-        except Exception as e:
-            logger.error(f"解析HTML内容失败: {e}")
-            return []
-
 
 # 直接在模块级别实例化 parser
-parser = HTMLParser()
+parser = MovieListParser()
+
+if __name__ == "__main__":
+    with open("src/datas/demos/movie_list.html", "r", encoding="utf-8") as f:
+        html_content = f.read()
+    movies = parser.parse_movie_list(html_content)
+    print(movies)

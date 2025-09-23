@@ -14,8 +14,6 @@ class Movie(Base):
     # 基本信息
     id = Column(Integer, primary_key=True, comment="电影ID")
     title = Column(String(200), nullable=False, comment="电影标题")
-    url = Column(Text, nullable=True, comment="电影链接")
-    cinemas_url = Column(Text, nullable=True, comment="影院上映信息链接")
 
     # 评分信息
     score = Column(String(10), nullable=True, comment="完整评分")
@@ -25,9 +23,19 @@ class Movie(Base):
     actors = Column(Text, nullable=True, comment="主演")
     release_date = Column(String(50), nullable=True, comment="上映时间")
 
-    # 时间戳
+    # 详细信息（从电影详情API获取）
+    director = Column(Text, nullable=True, comment="导演")
+    country = Column(String(100), nullable=True, comment="制片国家")
+    language = Column(String(100), nullable=True, comment="语言")
+    duration = Column(Integer, nullable=True, comment="时长(分钟)")
+    description = Column(Text, nullable=True, comment="剧情简介")
+
+    # 时间戳（东八区北京时间）
     updated_at = Column(
-        DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间"
+        DateTime,
+        server_default=func.datetime("now", "+8 hours"),
+        onupdate=func.datetime("now", "+8 hours"),
+        comment="更新时间（北京时间）",
     )
 
     # 设置直接 print 对象时会打印的输出
@@ -40,10 +48,13 @@ class Movie(Base):
         return cls(
             id=data.get("id"),
             title=data.get("title"),
-            url=data.get("url"),
-            cinemas_url=data.get("cinemas_url"),
             score=data.get("score"),
             genres=data.get("genres"),
             actors=data.get("actors"),
             release_date=data.get("release_date"),
+            director=data.get("director"),
+            country=data.get("country"),
+            language=data.get("language"),
+            duration=data.get("duration"),
+            description=data.get("description"),
         )
