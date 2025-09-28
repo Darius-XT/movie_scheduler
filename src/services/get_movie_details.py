@@ -2,10 +2,11 @@
 
 from src.db.db_connector import db_connector
 from src.db.db_operator import DBOperator
-from src.operators.url_scrapers.movie_details_scraper import movie_details_scraper
-from src.operators.html_parsers.movie_details_parser import parser
+from src.operators.scrapers.movie_details_scraper import movie_details_scraper
+from src.operators.parsers.movie_details_parser import parser
 from src.logger import logger
 from tqdm import tqdm
+import logging
 
 
 def get_movie_details() -> int:
@@ -41,7 +42,7 @@ def get_movie_details() -> int:
             for movie in progress_bar:
                 movie_id = int(movie.id)  # type: ignore
                 # 更新进度条描述
-                progress_bar.set_description(f"获取电影详情: {movie.title[:20]}...")
+                progress_bar.set_description(f"获取电影详情: {movie.title}...")
 
                 try:
                     # 抓取电影详情
@@ -83,7 +84,9 @@ def get_movie_details() -> int:
 
                     # 更新电影详情到数据库
                     if db_ops.save_movie(movie_details):
-                        logger.info(f"成功更新电影详情: {movie.title} (ID: {movie_id})")
+                        logger.debug(
+                            f"成功更新电影详情: {movie.title} (ID: {movie_id})"
+                        )
                         success_count += 1
                     else:
                         logger.error(
@@ -99,7 +102,6 @@ def get_movie_details() -> int:
                     continue
 
             # 进度条完成后的总结
-            progress_bar.set_description("电影详情获取完成")
             progress_bar.close()
 
     except Exception as e:
@@ -107,16 +109,19 @@ def get_movie_details() -> int:
         return success_count
 
     # 打印统计信息
-    logger.info("电影详情获取完成:")
-    logger.info(f"  成功: {success_count} 部")
-    logger.info(f"  失败: {failure_count} 部")
-    logger.info(f"  总计: {success_count + failure_count} 部")
+    logger.info(
+        "电影详情获取完成, 成功: %d 部, 失败: %d 部, 总计: %d 部",
+        success_count,
+        failure_count,
+        success_count + failure_count,
+    )
 
     return success_count
 
 
 if __name__ == "__main__":
-    import logging
-
     logger.setLevel(logging.DEBUG)
+
+    print("=== 电影详情获取服务单元测试 ===\n")
+
     get_movie_details()

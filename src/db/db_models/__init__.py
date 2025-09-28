@@ -7,3 +7,4 @@ Base = declarative_base()
 # 而类在被导入的时候才会被定义; 并且继承自 base 的类在被定义才会注册到 Base.metadata
 # 因此, 需要在建表之前导入, 进而触发定义与注册行为
 from .movie import Movie  # noqa
+from .cinema import Cinema  # noqa

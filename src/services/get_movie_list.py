@@ -2,10 +2,11 @@
 
 from src.db.db_connector import db_connector
 from src.db.db_operator import DBOperator
-from src.operators.html_parsers.movie_list_parser import parser
+from src.operators.parsers.movie_list_parser import parser
 from src.logger import logger
-from src.operators.url_scrapers.movie_list_scraper import movie_list_scraper
+from src.operators.scrapers.movie_list_scraper import movie_list_scraper
 from typing import Dict, List, Set, Any
+import logging
 
 
 def get_movie_list() -> Dict[str, int]:
@@ -113,9 +114,10 @@ def _perform_incremental_update(
         # 2. 删除下架电影
         removed_count = 0
         for movie_id in removed_movie_ids:
-            if db_ops.delete_movie(movie_id):
+            movie = db_ops.get_movie_by_id(movie_id)
+            if movie and db_ops.delete_movie(movie_id):
                 removed_count += 1
-                logger.info(f"删除下架电影: ID {movie_id}")
+                logger.info(f"删除下架电影: title={movie.title}, ID={movie_id}")
 
         # 3. 获取最终统计
         final_count = db_ops.get_movies_count()
@@ -127,16 +129,19 @@ def _perform_incremental_update(
         "total": final_count,
     }
 
-    logger.info("列表更新完成:")
-    logger.info(f"  新增: {stats['added']} 部")
-    logger.info(f"  删除: {stats['removed']} 部")
-    logger.info(f"  当前总数: {stats['total']} 部")
+    logger.info(
+        "列表更新完成, 新增: %d 部, 删除: %d 部, 当前总数: %d 部",
+        stats["added"],
+        stats["removed"],
+        stats["total"],
+    )
 
     return stats
 
 
 if __name__ == "__main__":
-    import logging
-
     logger.setLevel(logging.DEBUG)
+
+    print("=== 电影列表获取服务单元测试 ===\n")
+
     get_movie_list()

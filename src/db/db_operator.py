@@ -4,6 +4,7 @@ from typing import List, Dict, Optional, Type
 from types import TracebackType
 from sqlalchemy.exc import SQLAlchemyError
 from src.db.db_models.movie import Movie
+from src.db.db_models.cinema import Cinema
 from src.db.db_connector import DBConnector, db_connector
 from src.logger import logger
 
@@ -63,14 +64,14 @@ class DBOperator:
                 for key, value in movie_data.items():
                     if hasattr(existing_movie, key):
                         setattr(existing_movie, key, value)
-                logger.info(
+                logger.debug(
                     f"更新电影: {movie_data.get('title', 'Unknown')} (ID: {movie_data['id']})"
                 )
             else:
                 # 创建新电影
                 movie = Movie.from_dict(movie_data)
                 self.session.add(movie)
-                logger.info(
+                logger.debug(
                     f"添加新电影: {movie_data.get('title', 'Unknown')} (ID: {movie_data['id']})"
                 )
 
@@ -99,7 +100,7 @@ class DBOperator:
                 else:
                     failure_count += 1
 
-            logger.info(
+            logger.debug(
                 f"批量保存完成: 成功 {success_count} 部，失败 {failure_count} 部\n"
             )
             return success_count, failure_count
@@ -165,7 +166,7 @@ class DBOperator:
             if movie:
                 self.session.delete(movie)
                 self.session.commit()
-                logger.info(f"电影删除成功: ID {movie_id}")
+                logger.debug(f"电影删除成功: ID {movie_id}")
                 return True
             else:
                 logger.warning(f"未找到要删除的电影: ID {movie_id}")
@@ -175,18 +176,125 @@ class DBOperator:
             self.session.rollback()
             return False
 
-    def get_statistics(self) -> Dict:
+    def print_statistics(self) -> None:
         """获取数据库统计信息"""
         try:
             total_movies = self.get_movies_count()
-            logger.info(f"数据库中总电影数: {total_movies}")
+            total_cinemas = self.get_cinemas_count()
+            logger.info(f"数据库中总电影数: {total_movies}, 总影院数: {total_cinemas}")
 
-            # 可以添加更多统计信息
-            stats = {
-                "total_movies": total_movies,
-            }
-
-            return stats
         except SQLAlchemyError as e:
             logger.error(f"获取统计信息失败: {e}")
-            return {}
+
+    # 影院相关操作
+    def save_cinema(self, cinema_data: Dict) -> bool:
+        """保存单个影院数据"""
+        try:
+            # 检查影院是否已存在
+            existing_cinema = (
+                self.session.query(Cinema)
+                .filter(Cinema.id == cinema_data["id"])
+                .first()
+            )
+
+            if existing_cinema:
+                # 更新已存在的影院
+                for key, value in cinema_data.items():
+                    if hasattr(existing_cinema, key):
+                        setattr(existing_cinema, key, value)
+                logger.debug(
+                    f"更新影院: {cinema_data.get('name', 'Unknown')} (ID: {cinema_data['id']})"
+                )
+            else:
+                # 创建新影院
+                cinema = Cinema.from_dict(cinema_data)
+                self.session.add(cinema)
+                logger.debug(
+                    f"添加新影院: {cinema_data.get('name', 'Unknown')} (ID: {cinema_data['id']})"
+                )
+
+            self.session.commit()
+            return True
+
+        except SQLAlchemyError as e:
+            logger.error(f"保存影院数据失败: {e}")
+            self.session.rollback()
+            return False
+
+    def save_cinemas_batch(self, cinemas_data: List[Dict]) -> tuple[int, int]:
+        """批量保存影院数据
+
+        Returns:
+            tuple[int, int]: (成功保存数量, 失败数量)
+        """
+        logger.debug("批量保存影院数据")
+        success_count = 0
+        failure_count = 0
+
+        try:
+            for cinema_data in cinemas_data:
+                if self.save_cinema(cinema_data):
+                    success_count += 1
+                else:
+                    failure_count += 1
+
+            logger.debug(
+                f"批量保存影院完成: 成功 {success_count} 家，失败 {failure_count} 家\n"
+            )
+            return success_count, failure_count
+
+        except Exception as e:
+            logger.error(f"批量保存影院数据失败: {e}")
+            return success_count, failure_count
+
+    def get_cinema_by_id(self, cinema_id: int) -> Optional[Cinema]:
+        """根据ID获取影院"""
+        try:
+            return self.session.query(Cinema).filter(Cinema.id == cinema_id).first()
+        except SQLAlchemyError as e:
+            logger.error(f"根据ID获取影院失败: {e}")
+            return None
+
+    def get_cinemas_by_name(self, name: str) -> List[Cinema]:
+        """根据名称搜索影院"""
+        try:
+            return self.session.query(Cinema).filter(Cinema.name.contains(name)).all()
+        except SQLAlchemyError as e:
+            logger.error(f"根据名称搜索影院失败: {e}")
+            return []
+
+    def get_all_cinemas(self, limit: Optional[int] = None) -> List[Cinema]:
+        """获取所有影院"""
+        try:
+            query = self.session.query(Cinema)
+            if limit:
+                query = query.limit(limit)
+            return query.all()
+        except SQLAlchemyError as e:
+            logger.error(f"获取所有影院失败: {e}")
+            return []
+
+    def get_cinemas_count(self) -> int:
+        """获取影院总数"""
+        try:
+            return self.session.query(Cinema).count()
+        except SQLAlchemyError as e:
+            logger.error(f"获取影院数量失败: {e}")
+            return 0
+
+    def delete_cinema(self, cinema_id: int) -> bool:
+        """删除影院"""
+        try:
+            cinema = self.get_cinema_by_id(cinema_id)
+            if cinema:
+                self.session.delete(cinema)
+                self.session.commit()
+                logger.debug(f"影院删除成功: ID {cinema_id}")
+                return True
+            else:
+                logger.warning(f"未找到要删除的影院: ID {cinema_id}")
+                return False
+        except SQLAlchemyError as e:
+            logger.error(f"删除影院失败: {e}")
+            self.session.rollback()
+            return False

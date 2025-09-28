@@ -16,16 +16,19 @@ class FileSaver:
     def _cleanup_old_files(self):
         """清理旧的文件，保持最新的10个"""
         try:
-            # 获取所有文件
-            pattern = os.path.join(self.file_dir, "*.html")
-            html_files = glob.glob(pattern)
+            # 获取所有文件（任何后缀）
+            pattern = os.path.join(self.file_dir, "*")
+            all_files = glob.glob(pattern)
+
+            # 过滤出文件（排除目录）
+            files = [f for f in all_files if os.path.isfile(f)]
 
             # 按修改时间排序，最新的在前
-            html_files.sort(key=os.path.getmtime, reverse=True)
+            files.sort(key=os.path.getmtime, reverse=True)
 
             # 如果超过最大文件数，删除最旧的文件
-            if len(html_files) > self.max_files:
-                files_to_delete = html_files[self.max_files :]
+            if len(files) > self.max_files:
+                files_to_delete = files[self.max_files :]
                 for file_path in files_to_delete:
                     try:
                         os.remove(file_path)
