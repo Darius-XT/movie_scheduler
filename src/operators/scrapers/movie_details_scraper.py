@@ -1,4 +1,4 @@
-"""获取电影详情信息"""
+"""调用接口获取单个电影详情信息"""
 
 import logging
 import requests

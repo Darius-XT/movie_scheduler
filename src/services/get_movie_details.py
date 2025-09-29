@@ -5,7 +5,6 @@ from src.db.db_operator import DBOperator
 from src.operators.scrapers.movie_details_scraper import movie_details_scraper
 from src.operators.parsers.movie_details_parser import parser
 from src.logger import logger
-from tqdm import tqdm
 import logging
 
 
@@ -34,15 +33,10 @@ def get_movie_details() -> int:
                 f"找到 {len(movies_without_details)} 部需要补充详情的电影，开始获取详情..."
             )
 
-            # 使用进度条显示处理进度
-            progress_bar = tqdm(
-                movies_without_details, desc="获取电影详情", unit="部", ncols=80
-            )
-
-            for movie in progress_bar:
+            # 遍历需要获取详情的电影
+            for movie in movies_without_details:
                 movie_id = int(movie.id)  # type: ignore
-                # 更新进度条描述
-                progress_bar.set_description(f"获取电影详情: {movie.title}...")
+                logger.debug(f"正在获取电影详情: {movie.title} (ID: {movie_id})")
 
                 try:
                     # 抓取电影详情
@@ -101,9 +95,6 @@ def get_movie_details() -> int:
                     failure_count += 1
                     continue
 
-            # 进度条完成后的总结
-            progress_bar.close()
-
     except Exception as e:
         logger.error(f"获取电影详情过程中发生异常: {e}")
         return success_count
@@ -121,7 +112,5 @@ def get_movie_details() -> int:
 
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
-
-    print("=== 电影详情获取服务单元测试 ===\n")
 
     get_movie_details()

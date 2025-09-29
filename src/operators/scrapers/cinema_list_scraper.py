@@ -30,7 +30,7 @@ class CinemaListScraper:
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
         }
 
-    def scrape_cinema_page(
+    def scrape_cinema_list(
         self, keyword: str, city_id: int, offset: int = 0
     ) -> tuple[bool, str]:
         """爬取单页影院数据
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     import logging
 
     logger.setLevel(logging.DEBUG)
-    success, content = cinema_list_scraper.scrape_cinema_page(
+    success, content = cinema_list_scraper.scrape_cinema_list(
         keyword="影", city_id=10, offset=40
     )
     file_saver.save_file(content, "json")

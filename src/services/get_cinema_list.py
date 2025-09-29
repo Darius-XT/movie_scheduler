@@ -1,4 +1,4 @@
-"""影院数据采集服务"""
+"""影院数据采集服务(一次性, 与主流程无关)"""
 
 import logging
 from src.operators.scrapers.cinema_list_scraper import cinema_list_scraper
@@ -21,7 +21,7 @@ def collect_and_save_cinemas(keyword: str = "影", city_id: int = 10):
 
     try:
         # 爬取影院数据
-        success, raw_content = cinema_list_scraper.scrape_cinema_page(
+        success, raw_content = cinema_list_scraper.scrape_cinema_list(
             keyword=keyword, city_id=city_id
         )
 
@@ -55,10 +55,6 @@ def collect_and_save_cinemas(keyword: str = "影", city_id: int = 10):
 
 
 if __name__ == "__main__":
-    # 设置日志级别为DEBUG以查看详细过程
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
 
-    print("=== 影院数据采集服务单元测试 ===\n")
-
-    # 采集并保存上海的影院数据
     collect_and_save_cinemas(keyword="影", city_id=10)

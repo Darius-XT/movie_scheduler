@@ -2,7 +2,7 @@
 
 from src.services.get_movie_list import get_movie_list
 from src.services.get_movie_details import get_movie_details
-from src.operators.favorate_movies_selecter import favorite_moviesselector
+from src.services.get_favorate_movies import get_favorite_movies
 from src.logger import logger
 import logging
 
@@ -22,7 +22,7 @@ def main():
 
         # 第三步：选择喜爱电影
         logger.info("=== 第三步：选择喜爱电影 ===")
-        favorite_moviesselector.get_favorite_movies_by_category()
+        get_favorite_movies()
 
     except Exception as e:
         logger.error(f"主流程异常: {e}")

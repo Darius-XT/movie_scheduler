@@ -142,6 +142,4 @@ def _perform_incremental_update(
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
 
-    print("=== 电影列表获取服务单元测试 ===\n")
-
     get_movie_list()

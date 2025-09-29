@@ -176,6 +176,69 @@ class DBOperator:
             self.session.rollback()
             return False
 
+    def update_movies_favorite_status(
+        self, favorite_movie_ids: List[int]
+    ) -> tuple[int, int]:
+        """更新电影的喜爱状态
+
+        Args:
+            favorite_movie_ids: 喜爱电影的ID列表
+
+        Returns:
+            tuple[int, int]: (成功更新的数量, 失败的数量)
+        """
+        success_count = 0
+        failure_count = 0
+
+        try:
+            # 首先将所有电影的 is_favorite 设置为 False
+            self.session.query(Movie).update({Movie.is_favorite: False})
+            logger.debug("已将所有电影的喜爱状态重置为False")
+
+            # 然后将指定ID的电影设置为喜爱
+            if favorite_movie_ids:
+                updated_count = (
+                    self.session.query(Movie)
+                    .filter(Movie.id.in_(favorite_movie_ids))
+                    .update({Movie.is_favorite: True}, synchronize_session=False)
+                )
+
+                success_count = updated_count
+                logger.debug(f"已将 {updated_count} 部电影标记为喜爱")
+
+            self.session.commit()
+            logger.debug(
+                f"喜爱状态更新完成: 成功 {success_count} 部，失败 {failure_count} 部"
+            )
+
+        except SQLAlchemyError as e:
+            logger.error(f"更新电影喜爱状态失败: {e}")
+            self.session.rollback()
+            failure_count = len(favorite_movie_ids) if favorite_movie_ids else 0
+            success_count = 0
+
+        return success_count, failure_count
+
+    def get_favorite_movies(self, limit: Optional[int] = None) -> List[Movie]:
+        """获取喜爱的电影列表
+
+        Args:
+            limit: 限制返回数量，None表示不限制
+
+        Returns:
+            List[Movie]: 喜爱的电影列表
+        """
+        try:
+            query = self.session.query(Movie).filter(Movie.is_favorite)
+            if limit:
+                query = query.limit(limit)
+            movies = query.all()
+            logger.debug(f"获取到 {len(movies)} 部喜爱电影")
+            return movies
+        except SQLAlchemyError as e:
+            logger.error(f"获取喜爱电影失败: {e}")
+            return []
+
     def print_statistics(self) -> None:
         """获取数据库统计信息"""
         try:

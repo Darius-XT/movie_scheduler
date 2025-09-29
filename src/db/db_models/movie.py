@@ -1,6 +1,6 @@
 """电影数据模型"""
 
-from sqlalchemy import Column, Integer, String, Text, DateTime
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
 from src.db.db_models import Base
 from sqlalchemy.sql import func
 
@@ -30,6 +30,11 @@ class Movie(Base):
     duration = Column(Integer, nullable=True, comment="时长(分钟)")
     description = Column(Text, nullable=True, comment="剧情简介")
 
+    # 喜爱标识
+    is_favorite = Column(
+        Boolean, default=False, nullable=False, comment="是否为喜爱电影"
+    )
+
     # 时间戳（东八区北京时间）
     updated_at = Column(
         DateTime,
@@ -57,4 +62,5 @@ class Movie(Base):
             language=data.get("language"),
             duration=data.get("duration"),
             description=data.get("description"),
+            is_favorite=data.get("is_favorite", False),
         )
