@@ -2,6 +2,7 @@
 
 import logging
 import requests
+from datetime import datetime
 from requests.cookies import create_cookie
 from src.logger import logger
 from src.config import settings
@@ -143,9 +144,9 @@ class MovieShowdateListScraper:
                 self._warm_up_session(movie_id, city)
                 self._warmed_up = True
 
-            url = (
-                f"https://www.maoyan.com/cinemas?movieId={movie_id}&showDate=2025-09-30"
-            )
+            # 获取当天日期
+            today = datetime.now().strftime("%Y-%m-%d")
+            url = f"https://www.maoyan.com/cinemas?movieId={movie_id}&showDate={today}"
             logger.debug(f"开始爬取影院页: movieId={movie_id}, city={city}")
 
             response = self.session.get(
@@ -180,7 +181,7 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     # 示例: 电影361（示例链接: https://www.maoyan.com/cinemas?movieId=361）
     success, content = movie_showdate_list_scraper.scrape_movie_showdate_list(
-        movie_id=361, city="上海"
+        movie_id=1490646, city="上海"
     )
     if success:
         file_saver.save_file(content, "html")

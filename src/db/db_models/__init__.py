@@ -8,3 +8,4 @@ Base = declarative_base()
 # 因此, 需要在建表之前导入, 进而触发定义与注册行为
 from .movie import Movie  # noqa
 from .cinema import Cinema  # noqa
+from .movie_cinema_schedule import MovieCinemaSchedule  # noqa

@@ -5,6 +5,7 @@ from types import TracebackType
 from sqlalchemy.exc import SQLAlchemyError
 from src.db.db_models.movie import Movie
 from src.db.db_models.cinema import Cinema
+from src.db.db_models.movie_cinema_schedule import MovieCinemaSchedule
 from src.db.db_connector import DBConnector, db_connector
 from src.logger import logger
 
@@ -359,5 +360,127 @@ class DBOperator:
                 return False
         except SQLAlchemyError as e:
             logger.error(f"删除影院失败: {e}")
+            self.session.rollback()
+            return False
+
+    # 电影-影院放映场次相关操作
+    def save_movie_cinema_schedule(self, schedule_data: Dict) -> bool:
+        """保存单个放映场次数据"""
+        try:
+            # 检查是否已存在相同的场次记录
+            existing_schedule = (
+                self.session.query(MovieCinemaSchedule)
+                .filter(
+                    MovieCinemaSchedule.movie_id == schedule_data["movie_id"],
+                    MovieCinemaSchedule.show_date == schedule_data["show_date"],
+                )
+                .first()
+            )
+
+            if existing_schedule:
+                # 更新已存在的场次记录
+                for key, value in schedule_data.items():
+                    if hasattr(existing_schedule, key):
+                        setattr(existing_schedule, key, value)
+                logger.debug(
+                    f"更新放映场次: 电影ID {schedule_data['movie_id']}, 日期 {schedule_data['show_date']}"
+                )
+            else:
+                # 创建新场次记录
+                schedule = MovieCinemaSchedule.from_dict(schedule_data)
+                self.session.add(schedule)
+                logger.debug(
+                    f"添加新放映场次: 电影ID {schedule_data['movie_id']}, 日期 {schedule_data['show_date']}"
+                )
+
+            self.session.commit()
+            return True
+
+        except SQLAlchemyError as e:
+            logger.error(f"保存放映场次数据失败: {e}")
+            self.session.rollback()
+            return False
+
+    def save_movie_cinema_schedules_batch(
+        self, schedules_data: List[Dict]
+    ) -> tuple[int, int]:
+        """批量保存放映场次数据
+
+        Returns:
+            tuple[int, int]: (成功保存数量, 失败数量)
+        """
+        logger.debug("批量保存放映场次数据")
+        success_count = 0
+        failure_count = 0
+
+        try:
+            for schedule_data in schedules_data:
+                if self.save_movie_cinema_schedule(schedule_data):
+                    success_count += 1
+                else:
+                    failure_count += 1
+
+            logger.debug(
+                f"批量保存放映场次完成: 成功 {success_count} 条，失败 {failure_count} 条"
+            )
+            return success_count, failure_count
+
+        except Exception as e:
+            logger.error(f"批量保存放映场次数据失败: {e}")
+            return success_count, failure_count
+
+    def get_movie_schedules_by_movie_id(
+        self, movie_id: int
+    ) -> List[MovieCinemaSchedule]:
+        """根据电影ID获取放映场次"""
+        try:
+            return (
+                self.session.query(MovieCinemaSchedule)
+                .filter(MovieCinemaSchedule.movie_id == movie_id)
+                .all()
+            )
+        except SQLAlchemyError as e:
+            logger.error(f"根据电影ID获取放映场次失败: {e}")
+            return []
+
+    def get_all_movie_schedules(
+        self, limit: Optional[int] = None
+    ) -> List[MovieCinemaSchedule]:
+        """获取所有放映场次"""
+        try:
+            query = self.session.query(MovieCinemaSchedule)
+            if limit:
+                query = query.limit(limit)
+            return query.all()
+        except SQLAlchemyError as e:
+            logger.error(f"获取所有放映场次失败: {e}")
+            return []
+
+    def get_movie_schedules_count(self) -> int:
+        """获取放映场次总数"""
+        try:
+            return self.session.query(MovieCinemaSchedule).count()
+        except SQLAlchemyError as e:
+            logger.error(f"获取放映场次数量失败: {e}")
+            return 0
+
+    def delete_movie_schedule(self, schedule_id: int) -> bool:
+        """删除放映场次"""
+        try:
+            schedule = (
+                self.session.query(MovieCinemaSchedule)
+                .filter(MovieCinemaSchedule.id == schedule_id)
+                .first()
+            )
+            if schedule:
+                self.session.delete(schedule)
+                self.session.commit()
+                logger.debug(f"放映场次删除成功: ID {schedule_id}")
+                return True
+            else:
+                logger.warning(f"未找到要删除的放映场次: ID {schedule_id}")
+                return False
+        except SQLAlchemyError as e:
+            logger.error(f"删除放映场次失败: {e}")
             self.session.rollback()
             return False
