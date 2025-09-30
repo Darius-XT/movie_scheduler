@@ -124,7 +124,7 @@ class CinemaListParser:
 
 
 # 创建解析器实例
-parser = CinemaListParser()
+cinema_list_parser = CinemaListParser()
 
 # 单元测试
 if __name__ == "__main__":
@@ -135,9 +135,9 @@ if __name__ == "__main__":
     with open("src/datas/demos/cinema_list_first.json", "r", encoding="utf-8") as f:
         first_page_content = f.read()
 
-    first_cinemas = parser.parse_cinema_list(first_page_content)
+    first_cinemas = cinema_list_parser.parse_cinema_list(first_page_content)
 
     with open("src/datas/demos/cinema_list_other.json", "r", encoding="utf-8") as f:
         other_page_content = f.read()
 
-    other_cinemas = parser.parse_cinema_list(other_page_content)
+    other_cinemas = cinema_list_parser.parse_cinema_list(other_page_content)

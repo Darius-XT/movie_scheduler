@@ -164,10 +164,10 @@ class MovieListParser:
 
 
 # 直接在模块级别实例化 parser
-parser = MovieListParser()
+movie_list_parser = MovieListParser()
 
 if __name__ == "__main__":
     with open("src/datas/demos/movie_list.html", "r", encoding="utf-8") as f:
         html_content = f.read()
-    movies = parser.parse_movie_list(html_content)
+    movies = movie_list_parser.parse_movie_list(html_content)
     print(movies)

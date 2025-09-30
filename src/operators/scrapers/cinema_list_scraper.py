@@ -31,21 +31,23 @@ class CinemaListScraper:
         }
 
     def scrape_cinema_list(
-        self, keyword: str, city_id: int, offset: int = 0
+        self, keyword: str, city_id: int, page: int = 1
     ) -> tuple[bool, str]:
         """爬取单页影院数据
 
         Args:
             keyword: 搜索关键词
             city_id: 城市ID
-            offset: 偏移量，默认为0
+            page: 页码，从1开始，每页20条
 
         Returns:
             tuple[bool, str]: (是否成功, 响应内容)
         """
         try:
+            # 每页20条，换算offset
+            offset = (page - 1) * 20
             url = f"{self.base_url}?keyword={keyword}&ci={city_id}&offset={offset}"
-            logger.debug(f"开始获取影院数据: {url}")
+            logger.debug(f"开始获取影院数据: page={page}, offset={offset}, url={url}")
 
             response = requests.get(
                 url, headers=self.headers, timeout=self.timeout, verify=False
@@ -75,6 +77,6 @@ if __name__ == "__main__":
 
     logger.setLevel(logging.DEBUG)
     success, content = cinema_list_scraper.scrape_cinema_list(
-        keyword="影", city_id=10, offset=40
+        keyword="影", city_id=10, page=3
     )
     file_saver.save_file(content, "json")

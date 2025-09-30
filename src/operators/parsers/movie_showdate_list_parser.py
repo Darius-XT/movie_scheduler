@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from src.logger import logger
 
 
-class SelectedMovieShowdateListParser:
+class MovieShowdateListParser:
     """从影院列表页面(含 movieId 的页面)解析日期筛选项"""
 
     def __init__(self):
@@ -89,7 +89,7 @@ class SelectedMovieShowdateListParser:
 
 
 # 创建解析器实例
-parser = SelectedMovieShowdateListParser()
+movie_showdate_list_parser = MovieShowdateListParser()
 
 
 if __name__ == "__main__":
@@ -98,5 +98,5 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     with open("src/datas/demos/movie_showdate_list.html", "r", encoding="utf-8") as f:
         html_content = f.read()
-    dates = parser.parse_movie_showdate_list(html_content)
+    dates = movie_showdate_list_parser.parse_movie_showdate_list(html_content)
     print(dates)

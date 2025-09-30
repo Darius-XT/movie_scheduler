@@ -2,7 +2,7 @@
 
 import logging
 from src.operators.scrapers.cinema_list_scraper import cinema_list_scraper
-from src.operators.parsers.cinema_list_parser import parser as cinema_parser
+from src.operators.parsers.cinema_list_parser import cinema_list_parser
 from src.db.db_operator import DBOperator
 from src.logger import logger
 
@@ -30,7 +30,7 @@ def collect_and_save_cinemas(keyword: str = "影", city_id: int = 10):
             return
 
         # 解析影院数据
-        cinemas_data = cinema_parser.parse_cinema_list(raw_content)
+        cinemas_data = cinema_list_parser.parse_cinema_list(raw_content)
 
         if not cinemas_data:
             logger.warning("解析后没有获取到影院数据")

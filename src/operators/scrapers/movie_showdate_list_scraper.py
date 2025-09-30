@@ -180,8 +180,7 @@ movie_showdate_list_scraper = MovieShowdateListScraper()
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     # 示例: 电影361（示例链接: https://www.maoyan.com/cinemas?movieId=361）
-    success, content = movie_showdate_list_scraper.scrape_movie_showdate_list(
+    _, content = movie_showdate_list_scraper.scrape_movie_showdate_list(
         movie_id=1490646, city="上海"
     )
-    if success:
-        file_saver.save_file(content, "html")
+    file_saver.save_file(content, "html")

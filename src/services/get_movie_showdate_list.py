@@ -5,9 +5,8 @@ from src.db.db_operator import DBOperator
 from src.operators.scrapers.movie_showdate_list_scraper import (
     movie_showdate_list_scraper,
 )
-from src.operators.parsers.movie_showdate_list_parser import (
-    parser as movie_showdate_parser,
-)
+from src.operators.parsers.movie_showdate_list_parser import movie_showdate_list_parser
+
 from src.logger import logger
 
 
@@ -55,7 +54,7 @@ def get_favorite_movies_showdate_lists() -> tuple[int, int, int]:
                     continue
 
                 # 解析放映日期列表
-                show_dates = movie_showdate_parser.parse_movie_showdate_list(
+                show_dates = movie_showdate_list_parser.parse_movie_showdate_list(
                     html_content
                 )
 

@@ -98,10 +98,10 @@ class MovieDetailsParser:
 
 
 # 创建解析器实例
-parser = MovieDetailsParser()
+movie_details_parser = MovieDetailsParser()
 
 if __name__ == "__main__":
     with open("src/datas/demos/movie_details.json", "r", encoding="utf-8") as f:
         json_content = f.read()
-    movie_details = parser.parse_movie_details(json_content)
+    movie_details = movie_details_parser.parse_movie_details(json_content)
     print(movie_details)
