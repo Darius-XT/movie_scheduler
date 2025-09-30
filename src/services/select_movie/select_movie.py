@@ -1,14 +1,13 @@
-"""喜爱电影选择服务"""
+"""选择喜爱电影并更新数据库标记"""
 
 import logging
 
-from src.operators.favorate_movies_selecter import FavoriteMovieSelector
+from .core.select_movie_selector import SelectMovieSelector
 from src.db.db_operator import DBOperator
 from src.logger import logger
 
 
-# 获取喜爱电影并更新数据库的标记字段, 返回成功和失败的数量
-def get_favorite_movies() -> tuple[int, int]:
+def select_movie() -> tuple[int, int]:
     filter_china_movies = True
     year_threshold = 2020
     logger.info(
@@ -16,11 +15,8 @@ def get_favorite_movies() -> tuple[int, int]:
     )
 
     try:
-        # 创建筛选器实例
-        selector = FavoriteMovieSelector()
-
-        # 筛选喜爱电影
-        favorite_movie_ids = selector.select_favorite_movies(
+        selector = SelectMovieSelector()
+        favorite_movie_ids = selector.select_movies(
             filter_china_movies=filter_china_movies, year_threshold=year_threshold
         )
 
@@ -30,7 +26,6 @@ def get_favorite_movies() -> tuple[int, int]:
 
         logger.info(f"筛选完成，找到 {len(favorite_movie_ids)} 部喜爱电影")
 
-        # 更新数据库中的喜爱状态
         with DBOperator() as db_op:
             success_count, failure_count = db_op.update_movies_favorite_status(
                 favorite_movie_ids
@@ -46,5 +41,4 @@ def get_favorite_movies() -> tuple[int, int]:
 
 if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
-
-    get_favorite_movies()
+    select_movie()

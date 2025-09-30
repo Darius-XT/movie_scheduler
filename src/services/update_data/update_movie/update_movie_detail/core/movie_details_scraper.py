@@ -1,29 +1,19 @@
-"""调用接口获取单个电影详情信息"""
+"""更新电影详情用爬取器(由 get_movie_details 迁移并内联)"""
 
-import logging
 import requests
 import urllib3
 from src.logger import logger
-from src.utils.file_saver import file_saver
 
-# 抑制 SSL 证书验证警告
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
-class MovieDetailsScraper:
+class UpdateMovieDetailScraper:
     def __init__(self):
         self.base_url = "https://apis.netstart.cn/maoyan/movie/intro"
         self.timeout = 30
 
     def scrape_movie_details(self, movie_id: int) -> tuple[bool, str]:
-        """获取电影详情信息
-
-        Args:
-            movie_id: 电影ID
-
-        Returns:
-            tuple[bool, str]: (是否成功, 响应内容)
-        """
         try:
             url = f"{self.base_url}?movieId={movie_id}"
             logger.debug(f"开始获取电影详情: {url}")
@@ -49,18 +39,9 @@ class MovieDetailsScraper:
             else:
                 logger.warning(f"请求失败，状态码: {response.status_code}")
                 return False, response.text
-
         except Exception as e:
             logger.error(f"获取电影详情失败: {e}")
             return False, ""
 
 
-# 直接在模块级别实例化 scraper
-movie_details_scraper = MovieDetailsScraper()
-
-# 单元测试
-if __name__ == "__main__":
-    logger.setLevel(logging.DEBUG)
-    movie_id = 1548780
-    _, content = movie_details_scraper.scrape_movie_details(movie_id)
-    file_saver.save_file(content, "json")
+update_movie_detail_scraper = UpdateMovieDetailScraper()

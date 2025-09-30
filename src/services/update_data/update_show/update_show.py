@@ -1,26 +1,17 @@
-"""获取喜爱电影的放映日期列表服务"""
+"""更新放映信息（由原 get_movie_showdate_list 与 get_movie_cinema_list 合并）"""
 
-import logging
 from src.db.db_operator import DBOperator
-from src.operators.scrapers.movie_showdate_list_scraper import (
-    movie_showdate_list_scraper,
-)
-from src.operators.parsers.movie_showdate_list_parser import movie_showdate_list_parser
-
+from .core.showdate_list_scraper import update_showdate_list_scraper
+from .core.showdate_list_parser import update_showdate_list_parser
+from .core.cinema_list_scraper import update_show_cinema_list_scraper
+from .core.cinema_list_parser import update_show_cinema_list_parser
 from src.logger import logger
 
 
-# 获取所有喜爱电影的放映日期列表并保存到数据库, 返回三种状态的数量
-def get_favorite_movies_showdate_lists() -> tuple[int, int, int]:
-    """获取所有喜爱电影的放映日期列表并保存到数据库
-
-    Returns:
-        tuple[int, int, int]: (成功且找到放映日期, 成功但暂未上映, 失败)
-    """
+def update_show_for_favorites() -> tuple[int, int, int]:
     logger.info("开始获取喜爱电影的放映日期列表...")
 
     try:
-        # 获取所有喜爱的电影
         with DBOperator() as db_op:
             favorite_movies = db_op.get_favorite_movies()
 
@@ -30,19 +21,16 @@ def get_favorite_movies_showdate_lists() -> tuple[int, int, int]:
 
         logger.info(f"找到 {len(favorite_movies)} 部喜爱的电影")
 
-        success_with_dates_count = 0  # 成功且找到放映日期
-        success_no_dates_count = 0  # 成功但暂未上映
-        failure_count = 0  # 失败
+        success_with_dates_count = 0
+        success_no_dates_count = 0
+        failure_count = 0
 
-        # 为每部喜爱电影获取放映日期列表
         for movie in favorite_movies:
             try:
                 logger.debug(f"处理电影: {movie.title} (ID: {movie.id})")
-
-                # 爬取该电影的放映日期页面
                 movie_id_value = movie.id
                 success, html_content = (
-                    movie_showdate_list_scraper.scrape_movie_showdate_list(
+                    update_showdate_list_scraper.scrape_movie_showdate_list(
                         movie_id=movie_id_value,  # type: ignore[arg-type]
                         city="上海",
                     )
@@ -53,8 +41,7 @@ def get_favorite_movies_showdate_lists() -> tuple[int, int, int]:
                     failure_count += 1
                     continue
 
-                # 解析放映日期列表
-                show_dates = movie_showdate_list_parser.parse_movie_showdate_list(
+                show_dates = update_showdate_list_parser.parse_movie_showdate_list(
                     html_content
                 )
 
@@ -67,7 +54,6 @@ def get_favorite_movies_showdate_lists() -> tuple[int, int, int]:
                     f"电影 {movie.title} 找到 {len(show_dates)} 个放映日期: {show_dates}"
                 )
 
-                # 构建放映场次数据（先用电影和放映日期占位，后续补充影院信息及详细时间信息）
                 schedules_data = []
                 movie_id_value = movie.id
                 movie_title_value = movie.title
@@ -75,14 +61,13 @@ def get_favorite_movies_showdate_lists() -> tuple[int, int, int]:
                     schedule_data = {
                         "movie_id": movie_id_value,
                         "movie_title": movie_title_value,
-                        "cinema_id": None,  # 先占位, 后续补充
-                        "cinema_name": None,  # 先占位, 后续补充
+                        "cinema_id": None,
+                        "cinema_name": None,
                         "show_date": show_date,
-                        "show_time": None,  # 先占位, 后续补充
+                        "show_time": None,
                     }
                     schedules_data.append(schedule_data)
 
-                # 批量保存到数据库
                 with DBOperator() as db_op:
                     success_saved, failure_saved = (
                         db_op.save_movie_cinema_schedules_batch(schedules_data)
@@ -112,7 +97,51 @@ def get_favorite_movies_showdate_lists() -> tuple[int, int, int]:
         return 0, 0, 0
 
 
-if __name__ == "__main__":
-    logger.setLevel(logging.INFO)
+def update_show_for_movie(
+    movie_id: int, show_date: str | None = None
+) -> tuple[int, int]:
+    logger.info(f"开始获取电影 {movie_id} 的影院放映信息...")
 
-    get_favorite_movies_showdate_lists()
+    try:
+        if show_date is None:
+            success, html_content = (
+                update_show_cinema_list_scraper.scrape_movie_cinema_list(
+                    movie_id=movie_id,
+                    show_date=None,
+                )
+            )
+        else:
+            success, html_content = (
+                update_show_cinema_list_scraper.scrape_movie_cinema_list(
+                    movie_id=movie_id,
+                    show_date=show_date,
+                )
+            )
+
+        if not success or not html_content:
+            logger.warning(f"获取电影 {movie_id} 的影院列表页面失败")
+            return 0, 1
+
+        cinema_list_data = update_show_cinema_list_parser.parse_movie_cinema_list(
+            html_content
+        )
+
+        if not cinema_list_data:
+            logger.warning(f"电影 {movie_id} 没有找到影院放映信息")
+            return 0, 1
+
+        logger.info(f"电影 {movie_id} 找到 {len(cinema_list_data)} 条影院放映信息")
+
+        with DBOperator() as db_op:
+            success_count, failure_count = db_op.save_movie_cinema_schedules_batch(
+                cinema_list_data
+            )
+
+        logger.info(
+            f"电影 {movie_id} 影院信息保存完成: 成功 {success_count} 条，失败 {failure_count} 条"
+        )
+        return success_count, failure_count
+
+    except Exception as e:
+        logger.error(f"获取电影 {movie_id} 影院放映信息时发生错误: {e}")
+        return 0, 1

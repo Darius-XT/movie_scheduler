@@ -1,22 +1,17 @@
-"""爬取电影对应的可售影院页面HTML"""
+"""更新影院放映信息用爬取器(由 get_movie_cinema_list 迁移并内联)"""
 
-import logging
 import requests
-from datetime import datetime
 from requests.cookies import create_cookie
 from src.logger import logger
 from src.config import settings
-from src.utils.file_saver import file_saver
 
 
-# 城市映射常量
 CITY_MAPPING = {
     "北京": 1,
     "上海": 10,
 }
 
 
-# 请求头配置基础模板（与电影列表保持一致）
 DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
     "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -35,20 +30,16 @@ DEFAULT_HEADERS = {
 }
 
 
-class MovieShowdateListScraper:
-    """电影-影院页爬取器"""
-
+class UpdateShowCinemaListScraper:
     def __init__(self):
         self.headers = DEFAULT_HEADERS.copy()
         self.session = requests.Session()
         self._warmed_up = False
         self._current_city = None
 
-    # 获取城市ID
     def _get_city_id(self, city: str) -> int:
         return CITY_MAPPING.get(city, CITY_MAPPING[settings.city])
 
-    # 在会话中预置城市相关Cookie，以及其它必要cookie（不含与movieId强相关的动态内容）
     def _preset_cookies(self, city: str):
         domain = "www.maoyan.com"
         path = "/"
@@ -83,14 +74,8 @@ class MovieShowdateListScraper:
             ("recentCis", recent_cis),
             ("old-moviepage-ci", city_id_str),
             ("global-guide-isclose", "true"),
-            (
-                "_ga_WN80P4PSY7",
-                "GS2.1.s1758166366$o42$g0$t1758166366$j60$l0$h0",
-            ),
-            (
-                "__mta",
-                "216316201.1756952460622.1758114293338.1758166366584.22",
-            ),
+            ("_ga_WN80P4PSY7", "GS2.1.s1758166366$o42$g0$t1758166366$j60$l0$h0"),
+            ("__mta", "216316201.1756952460622.1758114293338.1758166366584.22"),
             ("_lxsdk_s", "1995ae1b8be-4e1-3c1-d13%7C%7C2"),
         ]
 
@@ -99,7 +84,6 @@ class MovieShowdateListScraper:
                 create_cookie(name=name, value=value, domain=domain, path=path)
             )
 
-    # 预热，避免直接请求目标页触发风控
     def _warm_up_session(self, movie_id: int, city: str):
         try:
             warmup_url = f"https://www.maoyan.com/cinemas?movieId={movie_id}"
@@ -114,24 +98,17 @@ class MovieShowdateListScraper:
         except Exception as e:
             logger.debug(f"预热请求失败(忽略): {e}")
 
-    def scrape_movie_showdate_list(
-        self, movie_id: int, city: str | None = None
+    def scrape_movie_cinema_list(
+        self,
+        movie_id: int,
+        show_date: str | None,
+        page: int = 1,
+        city: str | None = None,
     ) -> tuple[bool, str]:
-        """获取电影对应的放映日期列表HTML
-
-        Args:
-            movie_id: 电影ID（即 URL 中的 movieId 参数）
-            city: 城市名称，如果为None则使用默认城市
-
-        Returns:
-            tuple[bool, str]: (是否成功, HTML内容)
-        """
         try:
-            # 处理城市参数
             if city is None:
                 city = settings.city
 
-            # 城市变化时重置Cookie与预热状态
             if self._current_city != city:
                 logger.debug(f"城市发生变化: {self._current_city} -> {city}")
                 self.session.cookies.clear()
@@ -139,15 +116,20 @@ class MovieShowdateListScraper:
                 self._current_city = city
                 self._warmed_up = False
 
-            # 首次或城市变化后进行预热
             if not self._warmed_up:
                 self._warm_up_session(movie_id, city)
                 self._warmed_up = True
 
-            # 获取当天日期
-            today = datetime.now().strftime("%Y-%m-%d")
-            url = f"https://www.maoyan.com/cinemas?movieId={movie_id}&showDate={today}"
-            logger.debug(f"开始爬取影院页: movieId={movie_id}, city={city}")
+            offset = (page - 1) * 12
+            if show_date is None:
+                from datetime import datetime
+
+                show_date = datetime.now().strftime("%Y-%m-%d")
+
+            url = f"https://www.maoyan.com/cinemas?movieId={movie_id}&showDate={show_date}&offset={offset}"
+            logger.debug(
+                f"开始爬取影院列表页: movieId={movie_id}, showDate={show_date}, page={page}, offset={offset}, city={city}"
+            )
 
             response = self.session.get(
                 url,
@@ -166,21 +148,9 @@ class MovieShowdateListScraper:
             else:
                 logger.warning(f"请求失败，状态码: {response.status_code}")
                 return False, ""
-
         except Exception as e:
-            logger.error(f"获取影院页HTML失败: {e}")
+            logger.error(f"获取影院列表页HTML失败: {e}")
             return False, ""
 
 
-# 直接在模块级别实例化 scraper
-movie_showdate_list_scraper = MovieShowdateListScraper()
-
-
-# 单元测试
-if __name__ == "__main__":
-    logger.setLevel(logging.DEBUG)
-    # 示例: 电影361（示例链接: https://www.maoyan.com/cinemas?movieId=361）
-    _, content = movie_showdate_list_scraper.scrape_movie_showdate_list(
-        movie_id=1490646, city="上海"
-    )
-    file_saver.save_file(content, "html")
+update_show_cinema_list_scraper = UpdateShowCinemaListScraper()
