@@ -11,5 +11,5 @@ wheels/
 logs/
 .git
 .claude
-datas/
+data/
 config.py

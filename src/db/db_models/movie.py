@@ -1,6 +1,6 @@
 """电影数据模型"""
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime
 from src.db.db_models import Base
 from sqlalchemy.sql import func
 
@@ -21,7 +21,7 @@ class Movie(Base):
     # 电影详情
     genres = Column(Text, nullable=True, comment="电影类型")
     actors = Column(Text, nullable=True, comment="主演")
-    release_date = Column(String(50), nullable=True, comment="上映时间")
+    release_year = Column(String(10), nullable=True, comment="上映年份")
 
     # 详细信息（从电影详情API获取）
     director = Column(Text, nullable=True, comment="导演")
@@ -29,11 +29,6 @@ class Movie(Base):
     language = Column(String(100), nullable=True, comment="语言")
     duration = Column(Integer, nullable=True, comment="时长(分钟)")
     description = Column(Text, nullable=True, comment="剧情简介")
-
-    # 喜爱标识
-    is_favorite = Column(
-        Boolean, default=False, nullable=False, comment="是否为喜爱电影"
-    )
 
     # 时间戳（东八区北京时间）
     updated_at = Column(
@@ -56,11 +51,10 @@ class Movie(Base):
             score=data.get("score"),
             genres=data.get("genres"),
             actors=data.get("actors"),
-            release_date=data.get("release_date"),
+            release_year=data.get("release_year"),
             director=data.get("director"),
             country=data.get("country"),
             language=data.get("language"),
             duration=data.get("duration"),
             description=data.get("description"),
-            is_favorite=data.get("is_favorite", False),
         )

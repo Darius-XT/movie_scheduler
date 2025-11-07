@@ -1,0 +1,59 @@
+# 电影调度器配置文件
+
+# 日志配置
+log:
+  # 日志等级: debug, info, warning, error
+  level: debug
+  # 日志文件目录
+  dir: data/log
+  # 日志文件名
+  logger_name: movie_scheduler
+  # 控制台日志格式
+  console_format: "%(asctime)s - %(levelname)s - %(message)s"
+  # 文件日志格式
+  file_format: "%(asctime)s - %(levelname)s - %(message)s"
+  # 保留的日志文件数量
+  max_count: 7
+
+# 文件路径配置
+paths:
+  # 输入文件目录（用于存放测试数据、示例文件等）
+  input:
+    demo_dir: data/demo
+  
+  # 输出文件目录（用于存放爬取结果、保存的文件等）
+  output:
+    result_dir: data/result
+  
+  # 数据库文件路径
+  database: data/movies.db
+
+# 文件保存配置
+file_saver:
+  # 最大保留文件数量
+  max_count: 10
+
+# 城市配置
+city:
+  # 城市ID（10=上海）
+  id: 10
+
+# 电影筛选配置
+movie_filter:
+  # 是否过滤中国大陆电影
+  # true: 过滤掉中国大陆电影
+  # false: 不过滤
+  filter_china_movies: true
+  
+  # 年份阈值
+  # 如果电影的上映年份小于此阈值，即使是中国大陆电影也会被选中
+  # 如果为 null，则默认为当前年份+1
+  year_threshold: null
+
+# 爬虫配置
+scraper:
+  # 是否允许HTTP重定向
+  allow_redirects: true
+  # 请求超时时间（秒）
+  timeout: 60
+

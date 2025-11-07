@@ -1,39 +1,25 @@
 # 主函数, 调用需要的业务逻辑
 
-from src.services.update_data.update_movie.update_movie_item.update_movie_item import (
-    update_movie_item,
+from src.core.info_update_manager.info_update_manager import info_update_manager
+from src.core.movie_selector.movie_selector import movie_selector
+from src.core.show_for_selected_movie_fetcher.show_for_selected_movie_fetcher import (
+    show_for_selected_movie_fetcher,
 )
-from src.services.update_data.update_movie.update_movie_detail.update_movie_detail import (
-    update_movie_detail,
-)
-from src.services.select_movie.select_movie import select_movie
-from src.logger import logger
-import logging
 
 
 def main():
-    # 设置城市与日志级别
-    logger.setLevel(logging.INFO)
+    # # 更新全部信息
+    info_update_manager.update_movie_info()
+    info_update_manager.update_cinema_info()
 
-    try:
-        # 第一步：获取电影列表
-        logger.info("=== 第一步：获取电影列表 ===")
-        update_movie_item()
+    # 筛选电影
+    movie_ids = movie_selector.select_movie(
+        filter_china_movies=True, year_threshold=2020
+    )
 
-        # 第二步：获取电影详情
-        logger.info("=== 第二步：获取电影详情 ===")
-        update_movie_detail()
-
-        # 第三步：选择喜爱电影
-        logger.info("=== 第三步：选择喜爱电影 ===")
-        select_movie()
-
-    except Exception as e:
-        logger.error(f"主流程异常: {e}")
-        return
+    # 获取所有场次信息
+    show_for_selected_movie_fetcher.fetch_shows_for_selected_movies(movie_ids)
 
 
 if __name__ == "__main__":
     main()
-
-# TODO: 重构整个项目, 按

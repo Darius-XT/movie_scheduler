@@ -13,4 +13,6 @@ dependencies = [
     "toml>=0.10.2",
     "singleton-decorator>=1.0.0",
     "tqdm>=4.66.0",
+    "pyyaml>=6.0.0",
+    "colorlog>=6.8.0",
 ]
