@@ -1,6 +1,6 @@
 """选择电影（喜爱电影）核心选择器"""
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from src.db.db_operate_manager import db_operate_manager
 from src.utils.logger import logger
 from datetime import datetime
@@ -15,8 +15,8 @@ class MovieSelector:
 
     def select_movie(
         self, filter_china_movies: bool = True, year_threshold: Optional[int] = None
-    ) -> List[int]:
-        """根据筛选条件选择喜爱的电影ID列表
+    ) -> List[Dict[str, Any]]:
+        """根据筛选条件选择喜爱的电影（返回完整电影信息字典列表）
 
         Args:
             filter_china_movies (bool): 是否过滤掉中国大陆电影。
@@ -30,9 +30,10 @@ class MovieSelector:
                 示例值: None, 2020, 2025
 
         Returns:
-            List[int]: 符合条件的电影ID列表。
+            List[Dict[str, Any]]: 符合条件的电影完整信息字典列表（来自数据库）。
                 如果未找到符合条件的电影，返回空列表 []。
-                示例返回值: [123456, 789012, 345678]
+                列表中每个元素包含电影的各个字段（id, title, score, genres, actors, release_year, is_showing,
+                director, country, language, duration, description）。
         """
         logger.debug("开始筛选喜爱电影...")
 
@@ -48,22 +49,39 @@ class MovieSelector:
 
             logger.debug(f"数据库中总共有 {len(all_movies)} 部电影")
 
-            favorite_ids: List[int] = []
+            favorite_movies: List[Dict[str, Any]] = []
             for movie in all_movies:
-                movie_id = int(movie.id)  # type: ignore
                 if self._is_favorite_movie(movie, filter_china_movies, year_threshold):
-                    favorite_ids.append(movie_id)
-                    logger.debug(f"选中喜爱电影: {movie.title} (ID: {movie_id})")
+                    movie_dict = self._movie_to_dict(movie)
+                    favorite_movies.append(movie_dict)
+                    logger.debug(f"选中喜爱电影: {movie.title} (ID: {movie.id})")
 
-            logger.debug(f"筛选完成，共找到 {len(favorite_ids)} 部喜爱电影")
+            logger.debug(f"筛选完成，共找到 {len(favorite_movies)} 部喜爱电影")
             logger.debug(
                 f"筛选条件: 过滤中国大陆电影={filter_china_movies}, 年份阈值={year_threshold}"
             )
-            return favorite_ids
+            return favorite_movies
 
         except Exception as e:
             logger.error(f"筛选喜爱电影时发生异常: {e}")
             return []
+
+    def _movie_to_dict(self, movie) -> Dict[str, Any]:
+        """将数据库中的 Movie 实例转换为字典"""
+        return {
+            "id": int(movie.id) if getattr(movie, "id", None) is not None else None,
+            "title": getattr(movie, "title", None),
+            "score": getattr(movie, "score", None),
+            "genres": getattr(movie, "genres", None),
+            "actors": getattr(movie, "actors", None),
+            "release_year": getattr(movie, "release_year", None),
+            "is_showing": getattr(movie, "is_showing", False),
+            "director": getattr(movie, "director", None),
+            "country": getattr(movie, "country", None),
+            "language": getattr(movie, "language", None),
+            "duration": getattr(movie, "duration", None),
+            "description": getattr(movie, "description", None),
+        }
 
     def _is_favorite_movie(
         self, movie, filter_china_movies: bool, year_threshold: int

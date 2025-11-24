@@ -25,7 +25,7 @@ class JsonWithSingleMovieExtraInfoParser:
                 - director (str, 可选): 导演，例如: "向凯"
                 - country (str, 可选): 制片国家，例如: "中国大陆"
                 - language (str, 可选): 语言，例如: "国语"
-                - duration (int, 可选): 时长(分钟)，例如: 108
+                - duration (str, 可选): 时长，例如: "108min" 或 "暂无时长"
                 - description (str, 可选): 剧情简介
             如果解析失败或JSON格式不正确，返回 None。
             示例返回值: {
@@ -35,7 +35,7 @@ class JsonWithSingleMovieExtraInfoParser:
                 "director": "向凯",
                 "country": "中国大陆",
                 "language": "国语",
-                "duration": 108,
+                "duration": "108min",
                 "description": "季杰幼年丧母，他对父亲季十三心怀深深的积怨..."
             }
         """
@@ -97,20 +97,22 @@ class JsonWithSingleMovieExtraInfoParser:
         try:
             # 提取原始发行日期
             raw_release_date = (
-                movie_data.get("rt")
-                or movie_data.get("releaseDate")
+                movie_data.get("releaseDate")
                 or movie_data.get("frt")
                 or movie_data.get("time")
+                or movie_data.get("rt")
             )
             # 使用工具函数提取年份
             release_year = extract_year_from_release_date(raw_release_date)
             release_year = self._normalize_field(release_year, "暂无年份")
 
-            # 提取语言字段，去除开头的逗号
+            # 提取语言字段，去除开头的逗号，并将英文逗号替换为中文逗号
             language = movie_data.get("oriLang")
             if language and isinstance(language, str):
                 # * lstrip: 去除开头的字符
                 language = language.lstrip(",")
+                # 将英文逗号替换为中文逗号
+                language = language.replace(",", "，")
             language = self._normalize_field(language, "暂无语言")
 
             # 提取导演字段，如果为空，则标记为"暂无导演"
@@ -118,9 +120,12 @@ class JsonWithSingleMovieExtraInfoParser:
             director = self._normalize_field(director, "暂无导演")
 
             # 提取时长字段，如果为 0 或 None，则标记为"暂无时长"（特殊逻辑：0 也要标记）
+            # 如果时长是数字，在后面加上 "min"
             duration = movie_data.get("dur")
             if duration is None or duration == 0:
                 duration = "暂无时长"
+            elif isinstance(duration, (int, float)) and duration > 0:
+                duration = f"{int(duration)}min"
 
             # 提取国家字段
             country = (

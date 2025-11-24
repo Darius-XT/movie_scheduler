@@ -4,7 +4,6 @@ import requests
 import urllib3
 from src.utils.file_saver import file_saver
 from src.utils.logger import logger
-from src.config_manager import config_manager
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -18,7 +17,7 @@ class JsonWithBatchCinemaForMovieAndDateScraper:
         self,
         movie_id: int,
         show_date: str,
-        city_id: int | None = None,
+        city_id: int = 10,
         limit: int = 20,
         offset: int = 0,
     ) -> tuple[bool, str]:
@@ -46,12 +45,6 @@ class JsonWithBatchCinemaForMovieAndDateScraper:
                 示例返回值: (True, '{"data": {...}}') 或 (False, "")
         """
         try:
-            if city_id is None:
-                city_id = config_manager.city_id or 10
-
-            # 确保 city_id 是整数类型
-            if city_id is None:
-                city_id = 10
             city_id = int(city_id)
 
             url = f"{self.base_url}?limit={limit}&offset={offset}&showDate={show_date}&movieId={movie_id}&cityId={city_id}"
@@ -88,8 +81,8 @@ json_with_batch_cinema_for_movie_and_date_scraper = (
 )
 
 if __name__ == "__main__":
-    movie_id = 1505776
-    show_date = "2025-11-10"
+    movie_id = 1504105
+    show_date = "2025-11-30"
     city_id = 10
     limit = 20
     offset = 0

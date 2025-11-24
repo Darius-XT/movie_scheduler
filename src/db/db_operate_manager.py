@@ -53,7 +53,7 @@ class DBOperateManager:
                 - director (str, 可选): 导演，例如: "弗兰克·德拉邦特"
                 - country (str, 可选): 制片国家，例如: "美国"
                 - language (str, 可选): 语言，例如: "英语"
-                - duration (int, 可选): 时长（分钟），例如: 142
+                - duration (str, 可选): 时长，例如: "142min" 或 "暂无时长"
                 - description (str, 可选): 剧情简介
                 示例值: {
                     "id": 123456,
@@ -65,7 +65,7 @@ class DBOperateManager:
                     "director": "弗兰克·德拉邦特",
                     "country": "美国",
                     "language": "英语",
-                    "duration": 142
+                    "duration": "142min"
                 }
 
         Returns:
@@ -200,6 +200,24 @@ class DBOperateManager:
                 return False
         except SQLAlchemyError as e:
             logger.error(f"删除电影失败: {e}")
+            self.session.rollback()
+            return False
+
+    def delete_all_movies(self) -> bool:
+        """删除所有电影
+
+        Returns:
+            bool: 删除是否成功。
+                True 表示删除成功，
+                False 表示删除失败（数据库错误）。
+        """
+        try:
+            deleted_count = self.session.query(Movie).delete()
+            self.session.commit()
+            logger.info(f"已删除所有电影，共 {deleted_count} 部")
+            return True
+        except SQLAlchemyError as e:
+            logger.error(f"删除所有电影失败: {e}")
             self.session.rollback()
             return False
 

@@ -169,7 +169,7 @@ html_with_batch_movie_base_info_scraper = HtmlWithBatchMovieBaseInfoScraper()
 if __name__ == "__main__":
     success, html_content = (
         html_with_batch_movie_base_info_scraper.scrape_html_with_batch_movie_base_info(
-            1, 4
+            1, 100
         )
     )
     if success:

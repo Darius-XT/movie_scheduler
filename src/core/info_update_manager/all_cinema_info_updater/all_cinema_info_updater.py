@@ -1,5 +1,6 @@
 """影院数据更新器（由原 get_cinema_list 迁移）"""
 
+from typing import Callable, Optional
 from src.core.info_update_manager.all_cinema_info_updater.json_with_batch_cinema_info_scraper import (
     JsonWithBatchCinemaInfoScraper,
 )
@@ -16,17 +17,19 @@ class AllCinemaInfoUpdater:
         self.parser = JsonWithBatchCinemaInfoParser()
 
     def update_all_cinema_info(
-        self, keyword: str = "影", city_id: int = 10
+        self,
+        city_id: int = 10,
+        progress_callback: Optional[Callable[[str], None]] = None,
     ) -> tuple[int, int]:
         """更新所有影院信息（从猫眼API抓取影院数据）
 
         Args:
-            keyword (str): 影院搜索关键词，用于搜索影院名称。
-                默认为 "影"。
-                示例值: "影", "电影院", "影院"
             city_id (int): 影院所在城市的ID。
                 默认为 10。
                 示例值: 1, 10
+            progress_callback (callable, 可选): 进度回调函数。
+                回调函数接收一个参数: (message: str)
+                - message: 进度消息，如 "正在更新城市 10 的影院信息: 第 2 页"
 
         Returns:
             tuple[int, int]: (成功保存数量, 失败数量)
@@ -42,9 +45,13 @@ class AllCinemaInfoUpdater:
         while True:
             logger.debug(f"抓取第{page}页影院数据")
 
+            # 更新进度：显示当前页数
+            if progress_callback:
+                progress_callback(f"正在更新城市 {city_id} 的影院信息: 第 {page} 页")
+
             # 爬取影院数据
             success, raw_content = self.scraper.scrape_json_with_batch_cinema_info(
-                keyword=keyword, city_id=city_id, page=page
+                city_id=city_id, page=page
             )
 
             if not success or not raw_content:
@@ -52,12 +59,18 @@ class AllCinemaInfoUpdater:
                 break
 
             # 解析影院数据
-            cinemas_data = self.parser.parse_json_with_batch_cinema_info(raw_content)
+            cinemas_data, is_expected_empty = (
+                self.parser.parse_json_with_batch_cinema_info(raw_content)
+            )
 
-            if not cinemas_data:
-                logger.debug(
-                    f"第{page}页解析结果为空，影院数据抓取完毕，共{page - 1}页"
-                )
+            # 如果是预期中的空页面（已到最后一页），正常结束
+            if is_expected_empty:
+                logger.debug(f"影院数据抓取完毕，共{page - 1}页")
+                break
+
+            # 如果解析结果为空但不是预期中的空页面，说明出现异常
+            elif not cinemas_data:
+                logger.error(f"发生意外错误: 第{page}页没有抓取到数据，结束抓取")
                 break
 
             logger.debug(f"第{page}页: 解析到{len(cinemas_data)}家影院")
@@ -68,9 +81,15 @@ class AllCinemaInfoUpdater:
             logger.warning("没有获取到任何影院数据")
             return 0, 0
 
-        logger.info(f"成功解析到 {len(all_cinemas_data)} 家影院数据（共{page - 1}页）")
+        total_pages = page - 1
+        logger.info(
+            f"成功解析到 {len(all_cinemas_data)} 家影院数据（共{total_pages}页）"
+        )
 
         # 保存到数据库
+        if progress_callback:
+            progress_callback(f"正在更新城市 {city_id} 的影院信息: 保存中...")
+
         success_count, failure_count = db_operate_manager.save_cinemas_batch(
             all_cinemas_data
         )

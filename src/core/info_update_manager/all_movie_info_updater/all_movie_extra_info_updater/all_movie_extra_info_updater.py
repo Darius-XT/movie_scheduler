@@ -1,5 +1,6 @@
 """更新电影详情"""
 
+from typing import Callable, Optional
 from src.db.db_operate_manager import db_operate_manager
 from src.core.info_update_manager.all_movie_info_updater.all_movie_extra_info_updater.json_with_single_movie_extra_info_scraper import (
     JsonWithSingleMovieExtraInfoScraper,
@@ -16,7 +17,11 @@ class AllMovieExtraInfoUpdater:
         self.parser = JsonWithSingleMovieExtraInfoParser()
 
     # * 注意: 由于 M 站返回的发行日期格式不固定, 有时可以提取到日期列表, 有时只有一个日期, 有时甚至只有年份, 固统一仅提取年份, 并且在各版本列表中仅保留第一个
-    def update_all_movie_extra_info(self, force_update_all: bool = False) -> int:
+    def update_all_movie_extra_info(
+        self,
+        force_update_all: bool = False,
+        progress_callback: Optional[Callable[[str], None]] = None,
+    ) -> int:
         """更新所有电影的额外信息（导演、国家、语言、时长、简介等）
 
         Args:
@@ -24,6 +29,9 @@ class AllMovieExtraInfoUpdater:
                 如果为 True，将更新所有电影（不判断是否缺少详细信息）。
                 如果为 False（默认），只更新缺少详细信息的电影。
                 示例值: False, True
+            progress_callback (callable, 可选): 进度回调函数。
+                回调函数接收一个参数: (message: str)
+                - message: 进度消息，如 "正在补充详细信息 (5/10)"
 
         Returns:
             int: 成功更新详情的电影数量。
@@ -54,9 +62,14 @@ class AllMovieExtraInfoUpdater:
                     f"找到 {len(movies_to_update)} 部需要补充详情的电影，开始获取详情..."
                 )
 
-            for movie in movies_to_update:
+            total_movies = len(movies_to_update)
+            for idx, movie in enumerate(movies_to_update, 1):
                 movie_id = int(movie.id)  # type: ignore
                 logger.debug(f"正在获取电影详情: {movie.title} (ID: {movie_id})")
+
+                # 更新进度
+                if progress_callback:
+                    progress_callback(f"正在补充详细信息 ({idx}/{total_movies})")
 
                 try:
                     success, json_content = (
@@ -117,7 +130,7 @@ class AllMovieExtraInfoUpdater:
             return success_count
 
         logger.info(
-            "电影详情获取完成, 成功: %d 部, 失败: %d 部, 总计: %d 部",
+            "额外电影信息更新统计: 成功: %d 部, 失败: %d 部, 总计: %d 部",
             success_count,
             failure_count,
             success_count + failure_count,

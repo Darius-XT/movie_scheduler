@@ -64,7 +64,7 @@ json_with_single_movie_extra_info_scraper = JsonWithSingleMovieExtraInfoScraper(
 if __name__ == "__main__":
     success, json_content = (
         json_with_single_movie_extra_info_scraper.scrape_json_with_single_movie_extra_info(
-            1292180
+            336673
         )
     )
     if success:

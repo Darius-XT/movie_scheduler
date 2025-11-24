@@ -11,34 +11,44 @@ class HtmlWithBatchMovieBaseInfoParser:
         self.movies = []
 
     # * 注意, 源信息中可能不包括评分, 类型与导演等, 此时要标记为"暂无 xxx", 表示这个字段已经经过处理
-    def parse_html_with_batch_movie_base_info(self, html_content: str) -> List[Dict]:
+    def parse_html_with_batch_movie_base_info(
+        self, html_content: str
+    ) -> tuple[List[Dict], bool]:
         """解析HTML内容，提取电影基础信息列表
 
         Args:
             html_content (str): 猫眼电影列表页面的HTML内容。
                 示例值: "<html><body><dd>...</dd></body></html>"
+                或包含空页面提示的HTML: '<div class="no-movies">抱歉，当前城市暂未找到相关结果。</div>'
 
         Returns:
-            List[Dict]: 电影信息列表，每个字典包含以下字段：
-                - id (int): 电影ID，例如: 123456
-                - title (str): 电影标题，例如: "肖申克的救赎"
-                - score (str, 可选): 评分，例如: "9.7" 或 "暂无评分"
-                - genres (str, 可选): 类型，例如: "剧情/犯罪"
-                - actors (str, 可选): 主演，例如: "蒂姆·罗宾斯/摩根·弗里曼"
-            如果解析失败或HTML为空，返回空列表 []。
-            示例返回值: [
-                {
-                    "id": 123456,
-                    "title": "肖申克的救赎",
-                    "score": "9.7",
-                    "genres": "剧情/犯罪",
-                    "actors": "蒂姆·罗宾斯/摩根·弗里曼"
-                }
-            ]
+            tuple[List[Dict], bool]: (电影信息列表, 是否为预期中的空页面)
+                第一个元素是电影信息列表，每个字典包含以下字段：
+                    - id (int): 电影ID，例如: 123456
+                    - title (str): 电影标题，例如: "肖申克的救赎"
+                    - score (str, 可选): 评分，例如: "9.7" 或 "暂无评分"
+                    - genres (str, 可选): 类型，例如: "剧情/犯罪"
+                    - actors (str, 可选): 主演，例如: "蒂姆·罗宾斯/摩根·弗里曼"
+                第二个元素是布尔值，表示是否为预期中的空页面：
+                    - True: 表示这是预期中的空页面（包含 no-movies 提示，说明已到最后一页）
+                    - False: 表示出现异常或其他情况（HTML解析失败、数据格式错误等）
+                如果解析失败，返回 ([], False)。
+                如果解析成功且检测到空页面提示（预期中的空页面），返回 ([], True)。
+                示例返回值: ([{"id": 123456, ...}], False) 或 ([], True)
         """
         try:
             logger.debug("解析HTML内容")
             soup = BeautifulSoup(html_content, "html.parser")
+
+            # 检查是否为预期中的空页面（包含 no-movies 提示）
+            no_movies_div = soup.find("div", class_="no-movies")
+            if no_movies_div:
+                no_movies_text = no_movies_div.get_text().strip()
+                if "抱歉，当前城市暂未找到相关结果。" in no_movies_text:
+                    logger.debug(
+                        "检测到 no-movies 提示，这是预期中的空页面（已到最后一页）"
+                    )
+                    return [], True  # 预期中的空页面
 
             movies: List[Dict] = []
 
@@ -49,10 +59,10 @@ class HtmlWithBatchMovieBaseInfoParser:
                     movies.append(movie_info)
 
             logger.debug(f"成功解析 {len(movies)} 部电影信息")
-            return movies
+            return movies, False  # 解析成功
         except Exception as e:
             logger.error(f"解析HTML内容失败: {e}")
-            return []
+            return [], False
 
     def _normalize_field(self, value, default_text: str):
         """统一处理字段：如果为空则设置为"暂无 xxx"

@@ -2,6 +2,7 @@
 
 import requests
 import urllib3
+from src.utils.file_saver import file_saver
 from src.utils.logger import logger
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -27,13 +28,11 @@ class JsonWithBatchCinemaInfoScraper:
         }
 
     def scrape_json_with_batch_cinema_info(
-        self, keyword: str, city_id: int, page: int = 1
+        self, city_id: int, page: int = 1
     ) -> tuple[bool, str]:
         """爬取影院搜索API的JSON数据
 
         Args:
-            keyword (str): 影院搜索关键词，用于搜索影院名称。
-                示例值: "影", "电影院", "影院"
             city_id (int): 城市ID。
                 示例值: 1, 10
             page (int): 页码，从1开始。
@@ -49,7 +48,7 @@ class JsonWithBatchCinemaInfoScraper:
         """
         try:
             offset = (page - 1) * 20
-            url = f"{self.base_url}?keyword={keyword}&ci={city_id}&offset={offset}"
+            url = f"{self.base_url}?keyword='影'&ci={city_id}&offset={offset}"
             logger.debug(f"开始获取影院数据: page={page}, offset={offset}, url={url}")
 
             response = requests.get(
@@ -71,3 +70,12 @@ class JsonWithBatchCinemaInfoScraper:
 
 
 json_with_batch_cinema_info_scraper = JsonWithBatchCinemaInfoScraper()
+
+if __name__ == "__main__":
+    success, raw_content = (
+        json_with_batch_cinema_info_scraper.scrape_json_with_batch_cinema_info(
+            city_id=10, page=2
+        )
+    )
+    if success:
+        file_saver.save_file(raw_content, file_type="json")

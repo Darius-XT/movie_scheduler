@@ -4,16 +4,8 @@
 log:
   # 日志等级: debug, info, warning, error
   level: debug
-  # 日志文件目录
-  dir: data/log
-  # 日志文件名
-  logger_name: movie_scheduler
   # 控制台日志格式
   console_format: "%(asctime)s - %(levelname)s - %(message)s"
-  # 文件日志格式
-  file_format: "%(asctime)s - %(levelname)s - %(message)s"
-  # 保留的日志文件数量
-  max_count: 7
 
 # 文件路径配置
 paths:
@@ -34,9 +26,15 @@ file_saver:
   max_count: 10
 
 # 城市配置
-city:
+default_city:
   # 城市ID（10=上海）
   id: 10
+
+# 城市名称到城市ID的映射表
+city_mapping:
+  # 格式: 城市名称: 城市ID
+  北京: 1
+  上海: 10
 
 # 电影筛选配置
 movie_filter:
