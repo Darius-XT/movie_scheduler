@@ -38,11 +38,7 @@ city_mapping:
 
 # 电影筛选配置
 movie_filter:
-  # 年份阈值（仅对中国大陆电影生效）
-  # 所有国外电影默认都会被选中
-  # 中国大陆电影：只有当上映年份小于此阈值时才会被选中
-  # 如果为 null，则默认为当前年份+1
-  year_threshold: null
+  year_threshold: 2020
 
 # 爬虫配置
 scraper:
