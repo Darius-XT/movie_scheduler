@@ -16,7 +16,6 @@ class ConfigManager:
         self.result_dir = None
         self.db_path = None
         self.city_id = None
-        self.filter_china_movies = None
         self.year_threshold = None
         # 爬虫配置
         self.allow_redirects = None
@@ -70,7 +69,6 @@ class ConfigManager:
 
             # 加载电影筛选配置
             filter_config = config_data.get("movie_filter", {})
-            self.filter_china_movies = filter_config.get("filter_china_movies", True)
             year_threshold = filter_config.get("year_threshold")
             if year_threshold is None:
                 self.year_threshold = datetime.now().year + 1

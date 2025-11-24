@@ -15,7 +15,7 @@ def main():
     info_update_manager.update_cinema_info(city_id=city_id)
 
     # 筛选电影
-    movies = movie_selector.select_movie(filter_china_movies=True, year_threshold=1800)
+    movies = movie_selector.select_movie(year_threshold=1800)
 
     # 提取电影ID列表
     movie_ids = [movie["id"] for movie in movies if movie.get("id") is not None]
