@@ -1,0 +1,31 @@
+{
+  "include": [
+    "backend/src",
+    "backend/tests",
+    "backend/migrations"
+  ],
+  "venvPath": "backend",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "strict",
+  "executionEnvironments": [
+    {
+      "root": "backend/src",
+      "extraPaths": [
+        "backend/src"
+      ]
+    },
+    {
+      "root": "backend/tests",
+      "extraPaths": [
+        "backend/src"
+      ]
+    },
+    {
+      "root": "backend/migrations",
+      "extraPaths": [
+        "backend/src"
+      ]
+    }
+  ]
+}

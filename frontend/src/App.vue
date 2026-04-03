@@ -14,7 +14,7 @@
 </template>
 
 <script setup>
-// 由于只有一个页面，不再需要路由导航逻辑
+// 页面壳层仅负责承载路由页面。
 </script>
 
 <style>

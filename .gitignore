@@ -1,15 +1,30 @@
-# Python-generated files
+# Python generated files
 __pycache__/
 *.py[oc]
 build/
 dist/
 wheels/
-*.egg-info
-.venv
-*.html
-.vscode
+*.egg-info/
+
+# Virtual environments and tool caches
+.venv/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.vs/
+.vscode/
+
+# Local runtime outputs
 logs/
-.git
-.claude
 data/
-config.py
+backend/.env
+backend/.venv/
+backend/.ruff_cache/
+backend/.pytest_cache/
+backend/.runtime/
+
+# Frontend dependencies
+frontend/node_modules/
+
+# Local assistant metadata
+.claude/

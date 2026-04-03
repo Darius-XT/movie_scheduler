@@ -1,0 +1,40 @@
+[project]
+name = "movie-scheduler-backend"
+version = "0.1.0"
+description = "电影排片项目后端服务"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.18.4",
+    "beautifulsoup4>=4.13.5",
+    "colorlog>=6.8.0",
+    "fastapi>=0.121.3",
+    "pydantic>=2.0.0",
+    "requests>=2.31.0",
+    "sqlalchemy>=2.0.0",
+    "urllib3>=2.0.0",
+    "uvicorn>=0.38.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.0",
+    "pytest>=8.0.0",
+    "ruff>=0.11.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 115
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
+const apiProxyTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000'
+
 export default defineConfig({
   plugins: [vue()],
   resolve: {
@@ -10,11 +12,12 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173, // 设置前端端口号: 所有前端的请求都会通过这个端口号转发到后端
+    port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000', // 设置后端地址: 所有前端的请求都会转发到这个地址
-        changeOrigin: true, // 修改请求头中的 Origin，将端口改为与后端一致(否则浏览器会拒绝请求)
+        // 本地开发默认转发到宿主机后端，Docker 开发环境则通过环境变量改为 backend 服务。
+        target: apiProxyTarget,
+        changeOrigin: true
       }
     }
   }

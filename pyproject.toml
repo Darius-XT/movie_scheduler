@@ -1,25 +1,14 @@
 [project]
-name = "movie"
+name = "movie-scheduler-workspace"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "电影排片项目工作区配置"
 requires-python = ">=3.11"
-dependencies = [
-    "requests>=2.31.0",
-    "fake-useragent>=1.4.0",
-    "beautifulsoup4>=4.13.5",
-    "sqlalchemy>=2.0.0",
-    "requests-html>=0.10.0",
-    "toml>=0.10.2",
-    "singleton-decorator>=1.0.0",
-    "tqdm>=4.66.0",
-    "pyyaml>=6.0.0",
-    "colorlog>=6.8.0",
-    "gradio>=5.49.1",
-    "fastapi>=0.121.3",
-    "uvicorn>=0.38.0",
-]
+dependencies = []
 
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/"
 default = true
+
+[tool.pytest.ini_options]
+pythonpath = ["backend/src"]
+testpaths = ["backend/tests"]
