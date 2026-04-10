@@ -53,11 +53,28 @@ class MovieBaseInfoUpdater:
         for show_type in range(1, 3):
             show_type_name = "正在热映" if show_type == 1 else "即将上映"
             logger.debug("开始抓取 %s 电影", show_type_name)
+            if progress_callback is not None:
+                progress_callback(
+                    UpdateProgressEvent(
+                        message=f"开始抓取{show_type_name}电影列表",
+                        stage="fetching_movie_list",
+                        city_id=city_id,
+                    )
+                )
 
             page = 1
             type_movies: list[ScrapedMovieBaseInfo] = []
             while True:
                 logger.debug("抓取 %s 第 %s 页", show_type_name, page)
+                if progress_callback is not None:
+                    progress_callback(
+                        UpdateProgressEvent(
+                            message=f"正在抓取{show_type_name}第 {page} 页",
+                            stage="fetching_movie_list",
+                            city_id=city_id,
+                            page=page,
+                        )
+                    )
                 success, html_content = self.scraper.scrape_movies(show_type, page, city_id)
                 if not success or not html_content:
                     logger.warning("获取页面失败，跳过 page=%s", page)
@@ -80,6 +97,14 @@ class MovieBaseInfoUpdater:
                 page += 1
 
             logger.info("%s 列表抓取完成，共抓取 %s 部电影", show_type_name, len(type_movies))
+            if progress_callback is not None:
+                progress_callback(
+                    UpdateProgressEvent(
+                        message=f"{show_type_name}列表抓取完成，共 {len(type_movies)} 部电影",
+                        stage="fetching_movie_list",
+                        city_id=city_id,
+                    )
+                )
             all_scraped_movies.extend(type_movies)
 
         for movie in all_scraped_movies:
@@ -108,6 +133,19 @@ class MovieBaseInfoUpdater:
             stats.result_stats.removed,
             stats.result_stats.total,
         )
+        if progress_callback is not None:
+            progress_callback(
+                UpdateProgressEvent(
+                    message=(
+                        f"基础信息更新完成：新增 {stats.result_stats.added} 部，"
+                        f"更新 {stats.result_stats.updated} 部，删除 {stats.result_stats.removed} 部"
+                    ),
+                    stage="base_info_completed",
+                    current=stats.input_stats.deduplicated_total,
+                    total=stats.input_stats.deduplicated_total,
+                    city_id=city_id,
+                )
+            )
         return stats
 
     def _build_input_stats(

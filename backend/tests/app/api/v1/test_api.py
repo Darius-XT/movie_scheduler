@@ -42,29 +42,42 @@ def test_city_endpoint_returns_city_list(monkeypatch: pytest.MonkeyPatch) -> Non
     assert response.json() == {"cities": [{"name": "上海", "id": 10}]}
 
 
-def test_update_cinema_endpoint_returns_service_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    """影院更新接口应透传服务结果。"""
+def test_update_cinema_stream_endpoint_returns_progress_and_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """影院更新流式接口应输出进度事件与最终结果。"""
 
     async def update_cinema(
         city_id: int,
         progress_callback: UpdateProgressCallback | None = None,
     ) -> UpdateCinemaResult:
         assert city_id == 10
-        assert progress_callback is None
+        assert progress_callback is not None
+        progress_callback(
+            UpdateProgressEvent(
+                message="正在更新城市 10 的影院信息，第 1 页",
+                stage="fetching_cinema_page",
+                city_id=10,
+                page=1,
+            )
+        )
         return UpdateCinemaResult(success_count=2, failure_count=0)
 
     monkeypatch.setattr(update_service, "update_cinema", update_cinema)
-    response = client.post("/api/v1/update/cinema", json={"city_id": 10})
+    with client.stream("GET", "/api/v1/update/cinema-stream?city_id=10") as response:
+        body = "".join(response.iter_text())
 
     assert response.status_code == 200
-    assert response.json() == {
-        "success": True,
-        "data": {"success_count": 2, "failure_count": 0},
-    }
+    assert '"type":"progress"' in body
+    assert '"message":"正在更新城市 10 的影院信息，第 1 页"' in body
+    assert '"type":"complete"' in body
+    assert '"success_count":2' in body
 
 
-def test_update_movie_endpoint_returns_service_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    """电影更新接口应透传服务结果。"""
+def test_update_movie_stream_endpoint_returns_progress_and_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """电影更新流式接口应输出进度事件与最终结果。"""
 
     async def update_movie(
         city_id: int,
@@ -72,8 +85,15 @@ def test_update_movie_endpoint_returns_service_result(monkeypatch: pytest.Monkey
         progress_callback: UpdateProgressCallback | None = None,
     ) -> UpdateMovieResult:
         assert city_id == 10
-        assert force_update_all is True
-        assert progress_callback is None
+        assert force_update_all is False
+        assert progress_callback is not None
+        progress_callback(
+            UpdateProgressEvent(
+                message="正在抓取电影列表",
+                stage="fetching_movie_list",
+                page=1,
+            )
+        )
         return UpdateMovieResult(
             base_info=UpdateMovieBaseInfoResult(
                 input_stats=UpdateMovieInputStatsResult(
@@ -97,33 +117,14 @@ def test_update_movie_endpoint_returns_service_result(monkeypatch: pytest.Monkey
         )
 
     monkeypatch.setattr(update_service, "update_movie", update_movie)
-    response = client.post("/api/v1/update/movie", json={"city_id": 10, "force_update_all": True})
+    with client.stream("GET", "/api/v1/update/movie-stream?city_id=10&force_update_all=false") as response:
+        body = "".join(response.iter_text())
 
     assert response.status_code == 200
-    assert response.json() == {
-        "success": True,
-        "data": {
-            "base_info": {
-                "input_stats": {
-                    "scraped_total": 12,
-                    "showing": 5,
-                    "upcoming": 6,
-                    "duplicate": 1,
-                    "deduplicated_total": 11,
-                },
-                "result_stats": {
-                    "existing": 9,
-                    "added": 1,
-                    "added_movie_ids": [1001],
-                    "updated": 4,
-                    "updated_movie_ids": [2, 3, 4, 5],
-                    "removed": 0,
-                    "total": 10,
-                },
-            },
-            "extra_info": {"updated_count": 1},
-        },
-    }
+    assert '"type":"progress"' in body
+    assert '"message":"正在抓取电影列表"' in body
+    assert '"type":"complete"' in body
+    assert '"added_movie_ids":[1001]' in body
 
 
 def test_select_movie_endpoint_returns_movie_list(monkeypatch: pytest.MonkeyPatch) -> None:

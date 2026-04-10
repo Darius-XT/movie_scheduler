@@ -15,12 +15,12 @@
             <el-icon><Setting /></el-icon>
             <span>信息更新</span>
           </h3>
-          <el-form :model="updateForm" label-width="100px" size="default">
+          <el-form :model="updateForm" label-width="84px" size="default">
             <el-form-item label="选择城市">
               <el-select
                 v-model="updateForm.cityId"
                 placeholder="请选择城市"
-                style="width: 200px"
+                style="width: 80px"
               >
                 <el-option
                   v-for="city in cities"
@@ -31,49 +31,81 @@
               </el-select>
             </el-form-item>
 
-            <el-form-item>
-              <el-space direction="vertical" :size="8">
-                <el-button
-                  type="primary"
+            <el-form-item class="update-action-form-item">
+              <div class="update-action-list">
+                <div class="update-action-row">
+                  <div class="update-action-meta update-action-meta--left">
+                    <span v-if="cinemaUpdateMeta.lastUpdatedAt">
+                      <el-tooltip
+                        :content="`更新用时 ${formatDurationMs(cinemaUpdateMeta.durationMs)}`"
+                        placement="top"
+                      >
+                        <span class="update-meta-trigger">
+                          {{ formatUpdateTimestamp(cinemaUpdateMeta.lastUpdatedAt) }}
+                        </span>
+                      </el-tooltip>
+                    </span>
+                    <span v-else>暂无更新记录</span>
+                  </div>
+                  <el-button
+                    type="primary"
                   :loading="cinemaLoading"
                   :disabled="!updateForm.cityId"
                   @click="handleUpdateCinema"
-                  style="width: 200px"
+                  style="width: 120px"
                 >
-                  更新影院信息
-                </el-button>
-                <el-button
-                  type="success"
+                    更新影院信息
+                  </el-button>
+                  <div class="update-action-meta update-action-meta--right">
+                    {{ getCinemaUpdateSummary() }}
+                  </div>
+                </div>
+                <div class="update-action-row">
+                  <div class="update-action-meta update-action-meta--left">
+                    <span v-if="movieUpdateMeta.lastUpdatedAt">
+                      <el-tooltip
+                        :content="`更新用时 ${formatDurationMs(movieUpdateMeta.durationMs)}`"
+                        placement="top"
+                      >
+                        <span class="update-meta-trigger">
+                          {{ formatUpdateTimestamp(movieUpdateMeta.lastUpdatedAt) }}
+                        </span>
+                      </el-tooltip>
+                    </span>
+                    <span v-else>暂无更新记录</span>
+                  </div>
+                  <el-button
+                    type="success"
                   :loading="movieLoading"
                   :disabled="!updateForm.cityId"
                   @click="handleUpdateMovie"
-                  style="width: 200px"
+                  style="width: 120px"
                 >
-                  更新电影信息
-                </el-button>
-              </el-space>
+                    更新电影信息
+                  </el-button>
+                  <div class="update-action-meta update-action-meta--right">
+                    {{ getMovieUpdateSummary() }}
+                  </div>
+                </div>
+              </div>
             </el-form-item>
           </el-form>
 
           <!-- 更新结果 -->
-          <div v-if="cinemaResult || movieResult" class="update-results">
+          <div v-if="cinemaUpdateProgress || movieUpdateProgress" class="update-results">
             <el-divider style="margin: 12px 0" />
 
-            <div v-if="cinemaResult" class="result-item">
-              <div class="result-label">影院更新:</div>
-              <div class="result-value">
-                成功 {{ cinemaResult.success_count }} / 失败 {{ cinemaResult.failure_count }}
+            <div v-if="cinemaUpdateProgress" class="fetch-progress">
+              <div class="progress-content">
+                <div class="progress-label">影院更新进度</div>
+                <div class="progress-text">{{ cinemaUpdateProgress }}</div>
               </div>
             </div>
 
-            <div v-if="movieResult" class="result-item">
-              <div class="result-label">电影更新:</div>
-              <div class="result-value">
-                抓取 {{ movieResult.base_info?.input_stats?.scraped_total || 0 }} /
-                去重后 {{ movieResult.base_info?.input_stats?.deduplicated_total || 0 }} /
-                新增 {{ movieResult.base_info?.result_stats?.added || 0 }} /
-                更新 {{ movieResult.base_info?.result_stats?.updated || 0 }} /
-                删除 {{ movieResult.base_info?.result_stats?.removed || 0 }}
+            <div v-if="movieUpdateProgress" class="fetch-progress">
+              <div class="progress-content">
+                <div class="progress-label">电影更新进度</div>
+                <div class="progress-text">{{ movieUpdateProgress }}</div>
               </div>
             </div>
           </div>
@@ -85,13 +117,13 @@
             <el-icon><Filter /></el-icon>
             <span>电影筛选</span>
           </h3>
-          <el-form :model="form" label-width="100px" size="default">
+          <el-form :model="form" label-width="84px" size="default">
             <el-form-item label="上映状态">
               <div class="threshold-input-wrapper">
                 <el-select
                   v-model="form.selectionMode"
                   placeholder="请选择上映状态"
-                  style="width: 200px"
+                  style="width: 100px"
                 >
                   <el-option
                     v-for="option in selectionModeOptions"
@@ -104,13 +136,13 @@
             </el-form-item>
 
 
-            <el-form-item>
+            <el-form-item class="movie-selector-action-form-item">
               <el-space direction="vertical" :size="8">
                 <el-button
                   type="primary"
                   :loading="selectLoading"
                   @click="handleSelectMovies"
-                  style="width: 200px"
+                  style="width: 130px"
                 >
                   筛选喜欢的电影
                 </el-button>
@@ -119,7 +151,7 @@
                   :loading="fetchLoading"
                   :disabled="selectedMovies.length === 0"
                   @click="handleFetchShows"
-                  style="width: 200px"
+                  style="width: 130px"
                 >
                   批量获取所有场次
                 </el-button>
@@ -506,7 +538,7 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Setting, Filter, ArrowUp, Check } from '@element-plus/icons-vue'
-import { selectMovies, getCities, updateCinema, updateMovie } from '@/api'
+import { selectMovies, getCities } from '@/api'
 
 // LocalStorage 键名
 const STORAGE_KEY = 'movie_selector_data'
@@ -522,6 +554,16 @@ const cinemaLoading = ref(false)
 const movieLoading = ref(false)
 const cinemaResult = ref(null)
 const movieResult = ref(null)
+const cinemaUpdateProgress = ref('')
+const movieUpdateProgress = ref('')
+const cinemaUpdateMeta = ref({
+  lastUpdatedAt: null,
+  durationMs: null
+})
+const movieUpdateMeta = ref({
+  lastUpdatedAt: null,
+  durationMs: null
+})
 const lastAddedMovieIds = ref(new Set())
 const lastUpdatedMovieIds = ref(new Set())
 
@@ -594,6 +636,20 @@ const loadFromStorage = () => {
       if (data.scheduleItems) {
         scheduleItems.value = data.scheduleItems
       }
+      if (data.cinemaResult) {
+        cinemaResult.value = data.cinemaResult
+      }
+      if (data.movieResult) {
+        movieResult.value = data.movieResult
+        lastAddedMovieIds.value = new Set(data.movieResult.base_info?.result_stats?.added_movie_ids || [])
+        lastUpdatedMovieIds.value = new Set(data.movieResult.base_info?.result_stats?.updated_movie_ids || [])
+      }
+      if (data.cinemaUpdateMeta) {
+        cinemaUpdateMeta.value = data.cinemaUpdateMeta
+      }
+      if (data.movieUpdateMeta) {
+        movieUpdateMeta.value = data.movieUpdateMeta
+      }
       pruneExpiredMovieShows()
     }
   } catch (error) {
@@ -613,7 +669,11 @@ const saveToStorage = () => {
       expandedShows: Array.from(expandedShows.value),
       collapsedWishMovieIds: Array.from(collapsedWishMovieIds.value),
       wishPool: wishPool.value,
-      scheduleItems: scheduleItems.value
+      scheduleItems: scheduleItems.value,
+      cinemaResult: cinemaResult.value,
+      movieResult: movieResult.value,
+      cinemaUpdateMeta: cinemaUpdateMeta.value,
+      movieUpdateMeta: movieUpdateMeta.value
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
   } catch (error) {
@@ -647,7 +707,7 @@ onBeforeUnmount(() => {
 })
 
 // 监听数据变化并保存
-watch([selectedMovies, movieShowsMap, expandedDescriptions, expandedShows, collapsedWishMovieIds, wishPool, scheduleItems, () => form.value.selectionMode], () => {
+watch([selectedMovies, movieShowsMap, expandedDescriptions, expandedShows, collapsedWishMovieIds, wishPool, scheduleItems, cinemaResult, movieResult, cinemaUpdateMeta, movieUpdateMeta, () => form.value.selectionMode], () => {
   saveToStorage()
 }, { deep: true })
 
@@ -655,17 +715,73 @@ watch([selectedMovies, movieShowsMap, expandedDescriptions, expandedShows, colla
 const handleUpdateCinema = async () => {
   cinemaLoading.value = true
   cinemaResult.value = null
+  cinemaUpdateProgress.value = ''
+  const startedAt = Date.now()
   try {
-    const response = await updateCinema(updateForm.value.cityId)
-    if (response.data.success) {
-      cinemaResult.value = response.data.data
-      ElMessage.success('影院信息更新成功')
-    } else {
-      ElMessage.error('更新失败: ' + response.data.error)
+    const cityQuery = updateForm.value.cityId ? `city_id=${updateForm.value.cityId}` : ''
+    const response = await fetch(`/api/v1/update/cinema-stream?${cityQuery}`, {
+      headers: {
+        Accept: 'text/event-stream'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    if (!response.body) {
+      throw new Error('未收到更新响应流')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+
+        const data = JSON.parse(line.substring(6))
+        if (data.type === 'progress') {
+          cinemaUpdateProgress.value = data.message || '正在更新影院信息'
+          continue
+        }
+
+        if (data.type === 'complete') {
+          cinemaResult.value = data.data
+          cinemaUpdateProgress.value = '影院信息更新完成'
+          cinemaUpdateMeta.value = {
+            lastUpdatedAt: Date.now(),
+            durationMs: Date.now() - startedAt
+          }
+          ElMessage.success('影院信息更新成功')
+          continue
+        }
+
+        if (data.type === 'error') {
+          cinemaUpdateProgress.value = ''
+          ElMessage.error('更新失败: ' + data.error)
+        }
+      }
     }
   } catch (error) {
     ElMessage.error('更新失败: ' + error.message)
   } finally {
+    if (cinemaResult.value) {
+      window.setTimeout(() => {
+        cinemaUpdateProgress.value = ''
+      }, 1200)
+    } else {
+      cinemaUpdateProgress.value = ''
+    }
     cinemaLoading.value = false
   }
 }
@@ -673,21 +789,77 @@ const handleUpdateCinema = async () => {
 const handleUpdateMovie = async () => {
   movieLoading.value = true
   movieResult.value = null
+  movieUpdateProgress.value = ''
   lastAddedMovieIds.value = new Set()
   lastUpdatedMovieIds.value = new Set()
+  const startedAt = Date.now()
   try {
-    const response = await updateMovie(updateForm.value.cityId, false)
-    if (response.data.success) {
-      movieResult.value = response.data.data
-      lastAddedMovieIds.value = new Set(response.data.data.base_info?.result_stats?.added_movie_ids || [])
-      lastUpdatedMovieIds.value = new Set(response.data.data.base_info?.result_stats?.updated_movie_ids || [])
-      ElMessage.success('电影信息更新成功')
-    } else {
-      ElMessage.error('更新失败: ' + response.data.error)
+    const cityQuery = updateForm.value.cityId ? `city_id=${updateForm.value.cityId}` : ''
+    const response = await fetch(`/api/v1/update/movie-stream?${cityQuery}&force_update_all=false`, {
+      headers: {
+        Accept: 'text/event-stream'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    if (!response.body) {
+      throw new Error('未收到更新响应流')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+
+        const data = JSON.parse(line.substring(6))
+        if (data.type === 'progress') {
+          movieUpdateProgress.value = data.message || '正在更新电影信息'
+          continue
+        }
+
+        if (data.type === 'complete') {
+          movieResult.value = data.data
+          lastAddedMovieIds.value = new Set(data.data.base_info?.result_stats?.added_movie_ids || [])
+          lastUpdatedMovieIds.value = new Set(data.data.base_info?.result_stats?.updated_movie_ids || [])
+          movieUpdateProgress.value = '电影信息更新完成'
+          movieUpdateMeta.value = {
+            lastUpdatedAt: Date.now(),
+            durationMs: Date.now() - startedAt
+          }
+          ElMessage.success('电影信息更新成功')
+          continue
+        }
+
+        if (data.type === 'error') {
+          movieUpdateProgress.value = ''
+          ElMessage.error('更新失败: ' + data.error)
+        }
+      }
     }
   } catch (error) {
     ElMessage.error('更新失败: ' + error.message)
   } finally {
+    if (movieResult.value) {
+      window.setTimeout(() => {
+        movieUpdateProgress.value = ''
+      }, 1200)
+    } else {
+      movieUpdateProgress.value = ''
+    }
     movieLoading.value = false
   }
 }
@@ -938,6 +1110,55 @@ const formatDateWithRelativeWeek = (dateText) => {
   }
 
   return `${dateText}（${suffix}）`
+}
+
+const formatUpdateTimestamp = (timestamp) => {
+  if (!timestamp) return '暂无'
+
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return '暂无'
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+}
+
+const formatDurationMs = (durationMs) => {
+  if (typeof durationMs !== 'number' || Number.isNaN(durationMs) || durationMs < 0) {
+    return '暂无'
+  }
+
+  if (durationMs < 1000) {
+    return `${durationMs} 毫秒`
+  }
+
+  const totalSeconds = Math.round(durationMs / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes === 0) {
+    return `${seconds} 秒`
+  }
+  return `${minutes} 分 ${seconds} 秒`
+}
+
+const getCinemaUpdateSummary = () => {
+  if (!cinemaResult.value) return '暂无结果'
+  return `成功 ${cinemaResult.value.success_count} / 失败 ${cinemaResult.value.failure_count}`
+}
+
+const getMovieUpdateSummary = () => {
+  if (!movieResult.value) return '暂无结果'
+  return [
+    `抓取 ${movieResult.value.base_info?.input_stats?.scraped_total || 0}`,
+    `去重后 ${movieResult.value.base_info?.input_stats?.deduplicated_total || 0}`,
+    `新增 ${movieResult.value.base_info?.result_stats?.added || 0}`,
+    `更新 ${movieResult.value.base_info?.result_stats?.updated || 0}`,
+    `删除 ${movieResult.value.base_info?.result_stats?.removed || 0}`
+  ].join(' / ')
 }
 
 const isInWishPool = (showEntry) => {
@@ -1605,8 +1826,8 @@ const getMovieShowDisplayGroups = (movie, movieShowData, mode = 'time') => {
 /* 顶部左右布局 */
 .top-section {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 60px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 40px;
   margin-bottom: 20px;
   align-items: start;
 }
@@ -1616,11 +1837,16 @@ const getMovieShowDisplayGroups = (movie, movieShowData, mode = 'time') => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
+}
+
+.info-update-section {
+  align-items: flex-start;
 }
 
 .info-update-section .el-form,
 .movie-selector-section .el-form {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1636,6 +1862,12 @@ const getMovieShowDisplayGroups = (movie, movieShowData, mode = 'time') => {
   color: #333;
 }
 
+.info-update-section .section-title,
+.movie-selector-section .section-title {
+  width: 100%;
+  justify-content: flex-start;
+}
+
 /* 年份阈值输入框包装 */
 .threshold-input-wrapper {
   display: flex;
@@ -1643,17 +1875,85 @@ const getMovieShowDisplayGroups = (movie, movieShowData, mode = 'time') => {
   gap: 8px;
 }
 
+.info-update-section :deep(.el-form-item),
 .movie-selector-section :deep(.el-form-item) {
   width: 100%;
   justify-content: flex-start;
 }
 
+.info-update-section :deep(.el-form-item__content),
 .movie-selector-section :deep(.el-form-item__content) {
+  width: 100%;
   justify-content: flex-start;
+}
+
+.info-update-section :deep(.el-form-item__label) {
+  white-space: nowrap;
+}
+
+.info-update-section :deep(.el-form-item__label),
+.movie-selector-section :deep(.el-form-item__label) {
+  justify-content: flex-start;
+  text-align: left;
+  padding-right: 12px;
+}
+
+.info-update-section :deep(.update-action-form-item .el-form-item__label) {
+  display: none;
+}
+
+.info-update-section :deep(.update-action-form-item .el-form-item__content) {
+  margin-left: 0 !important;
+}
+
+.movie-selector-section :deep(.movie-selector-action-form-item .el-form-item__content) {
+  margin-left: 0 !important;
 }
 
 .movie-selector-section :deep(.el-space) {
   align-items: flex-start;
+}
+
+.movie-selector-section :deep(.el-form-item__label) {
+  white-space: nowrap;
+}
+
+.update-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.update-action-row {
+  display: grid;
+  grid-template-columns: max-content auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.update-action-meta {
+  min-width: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.update-action-meta--left {
+  width: 110px;
+  flex: 0 0 110px;
+  text-align: left;
+}
+
+.update-action-meta--right {
+  color: #409eff;
+}
+
+.update-meta-trigger {
+  cursor: default;
+  border-bottom: 1px dashed rgba(100, 116, 139, 0.45);
 }
 
 /* 更新结果样式 */
@@ -1752,28 +2052,6 @@ const getMovieShowDisplayGroups = (movie, movieShowData, mode = 'time') => {
 
 .date-progress-count {
   color: #606266;
-}
-
-.result-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-.result-item:last-child {
-  margin-bottom: 0;
-}
-
-.result-label {
-  font-weight: 500;
-  color: #606266;
-  margin-right: 8px;
-  min-width: 80px;
-}
-
-.result-value {
-  color: #409eff;
 }
 
 .movies-section {

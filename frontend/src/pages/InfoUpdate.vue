@@ -47,6 +47,12 @@
 
       <el-divider />
 
+      <div v-if="cinemaUpdateProgress || movieUpdateProgress" class="result-section">
+        <h3>更新进度</h3>
+        <div v-if="cinemaUpdateProgress" class="progress-box">{{ cinemaUpdateProgress }}</div>
+        <div v-if="movieUpdateProgress" class="progress-box">{{ movieUpdateProgress }}</div>
+      </div>
+
       <div v-if="cinemaResult" class="result-section">
         <h3>影院更新结果</h3>
         <el-descriptions :column="2" border>
@@ -110,7 +116,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getCities, updateCinema, updateMovie } from '@/api'
+import { getCities } from '@/api'
 
 const cities = ref([])
 const form = ref({
@@ -121,6 +127,8 @@ const cinemaLoading = ref(false)
 const movieLoading = ref(false)
 const cinemaResult = ref(null)
 const movieResult = ref(null)
+const cinemaUpdateProgress = ref('')
+const movieUpdateProgress = ref('')
 
 onMounted(async () => {
   try {
@@ -140,17 +148,55 @@ onMounted(async () => {
 const handleUpdateCinema = async () => {
   cinemaLoading.value = true
   cinemaResult.value = null
+  cinemaUpdateProgress.value = ''
   try {
-    const response = await updateCinema(form.value.cityId)
-    if (response.data.success) {
-      cinemaResult.value = response.data.data
-      ElMessage.success('影院信息更新成功')
-    } else {
-      ElMessage.error(`更新失败: ${response.data.error}`)
+    const response = await fetch(`/api/v1/update/cinema-stream?city_id=${form.value.cityId}`, {
+      headers: { Accept: 'text/event-stream' },
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    if (!response.body) {
+      throw new Error('未收到更新响应流')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = JSON.parse(line.substring(6))
+        if (data.type === 'progress') {
+          cinemaUpdateProgress.value = data.message || '正在更新影院信息'
+        } else if (data.type === 'complete') {
+          cinemaResult.value = data.data
+          cinemaUpdateProgress.value = '影院信息更新完成'
+          ElMessage.success('影院信息更新成功')
+        } else if (data.type === 'error') {
+          cinemaUpdateProgress.value = ''
+          ElMessage.error(`更新失败: ${data.error}`)
+        }
+      }
     }
   } catch (error) {
     ElMessage.error(`更新失败: ${error.message}`)
   } finally {
+    if (cinemaResult.value) {
+      window.setTimeout(() => {
+        cinemaUpdateProgress.value = ''
+      }, 1200)
+    } else {
+      cinemaUpdateProgress.value = ''
+    }
     cinemaLoading.value = false
   }
 }
@@ -158,17 +204,55 @@ const handleUpdateCinema = async () => {
 const handleUpdateMovie = async () => {
   movieLoading.value = true
   movieResult.value = null
+  movieUpdateProgress.value = ''
   try {
-    const response = await updateMovie(form.value.cityId, false)
-    if (response.data.success) {
-      movieResult.value = response.data.data
-      ElMessage.success('电影信息更新成功')
-    } else {
-      ElMessage.error(`更新失败: ${response.data.error}`)
+    const response = await fetch(`/api/v1/update/movie-stream?city_id=${form.value.cityId}&force_update_all=false`, {
+      headers: { Accept: 'text/event-stream' },
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    if (!response.body) {
+      throw new Error('未收到更新响应流')
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        const data = JSON.parse(line.substring(6))
+        if (data.type === 'progress') {
+          movieUpdateProgress.value = data.message || '正在更新电影信息'
+        } else if (data.type === 'complete') {
+          movieResult.value = data.data
+          movieUpdateProgress.value = '电影信息更新完成'
+          ElMessage.success('电影信息更新成功')
+        } else if (data.type === 'error') {
+          movieUpdateProgress.value = ''
+          ElMessage.error(`更新失败: ${data.error}`)
+        }
+      }
     }
   } catch (error) {
     ElMessage.error(`更新失败: ${error.message}`)
   } finally {
+    if (movieResult.value) {
+      window.setTimeout(() => {
+        movieUpdateProgress.value = ''
+      }, 1200)
+    } else {
+      movieUpdateProgress.value = ''
+    }
     movieLoading.value = false
   }
 }
@@ -201,5 +285,15 @@ const handleUpdateMovie = async () => {
 .result-section h4 {
   margin: 16px 0 10px;
   color: #606266;
+}
+
+.progress-box {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-left: 3px solid #409eff;
+  border-radius: 8px;
+  background: #f0f9ff;
+  color: #1d4ed8;
+  line-height: 1.6;
 }
 </style>

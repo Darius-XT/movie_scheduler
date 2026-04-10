@@ -47,6 +47,13 @@ class MovieInfoUpdater:
             force_update_all=force_update_all,
             progress_callback=progress_callback,
         )
+        if progress_callback is not None:
+            progress_callback(
+                UpdateProgressEvent(
+                    message="正在汇总电影更新结果",
+                    stage="finalizing_movie_update",
+                )
+            )
 
         result = self.result_builder.build_movie_update_result(
             base_info_stats=base_info_stats,
