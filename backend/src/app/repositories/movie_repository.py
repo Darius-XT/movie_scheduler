@@ -81,6 +81,22 @@ class MovieRepository:
             logger.error("获取没有详细信息的电影失败: %s", error)
             raise RepositoryError("读取待补充详情电影失败") from error
 
+    def get_movies_without_douban_info(self) -> list[Movie]:
+        """获取缺少豆瓣信息的电影。"""
+        try:
+            with database_manager.session() as session:
+                return (
+                    session.query(Movie)
+                    .filter(
+                        ((Movie.score.is_(None)) | (Movie.score == "") | (Movie.score == "暂无评分"))
+                        | ((Movie.douban_url.is_(None)) | (Movie.douban_url == ""))
+                    )
+                    .all()
+                )
+        except SQLAlchemyError as error:
+            logger.error("获取没有豆瓣信息的电影失败: %s", error)
+            raise RepositoryError("读取待补充豆瓣信息电影失败") from error
+
     def delete_movie(self, movie_id: int) -> bool:
         """删除单部电影。"""
         try:

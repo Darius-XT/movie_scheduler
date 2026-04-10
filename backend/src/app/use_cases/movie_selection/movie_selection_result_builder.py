@@ -14,6 +14,7 @@ class MovieSelectionItem:
     id: int | None
     title: str | None
     score: str | None
+    douban_url: str | None
     genres: str | None
     actors: str | None
     release_date: str | None
@@ -31,6 +32,7 @@ class MovieRecord(Protocol):
     id: int | None
     title: str | None
     score: str | None
+    douban_url: str | None
     genres: str | None
     actors: str | None
     release_date: str | None
@@ -51,6 +53,7 @@ class MovieSelectionResultBuilder:
             id=int(movie.id) if movie.id is not None else None,
             title=movie.title,
             score=movie.score,
+            douban_url=movie.douban_url,
             genres=movie.genres,
             actors=movie.actors,
             release_date=movie.release_date,

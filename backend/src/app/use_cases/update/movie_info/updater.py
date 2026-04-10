@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 
 from app.core.logger import logger
 from app.use_cases.update.models import UpdateProgressEvent
 from app.use_cases.update.movie_info.base_info.base_info_updater import movie_base_info_updater
+from app.use_cases.update.movie_info.douban.douban_info_updater import movie_douban_info_updater
 from app.use_cases.update.movie_info.extra_info.extra_info_updater import movie_extra_info_updater
 from app.use_cases.update.movie_update_reset_helper import MovieUpdateResetHelper
 from app.use_cases.update.update_result_builder import UpdateMovieResult, UpdateResultBuilder
@@ -22,6 +24,7 @@ class MovieInfoUpdater:
     ) -> None:
         self.base_info_updater = movie_base_info_updater
         self.extra_info_updater = movie_extra_info_updater
+        self.douban_info_updater = movie_douban_info_updater
         self.reset_helper = reset_helper or MovieUpdateResetHelper()
         self.result_builder = result_builder or UpdateResultBuilder()
 
@@ -43,9 +46,15 @@ class MovieInfoUpdater:
             city_id,
             progress_callback=progress_callback,
         )
-        extra_info_updated_count = await self.extra_info_updater.update_all_movie_extra_info(
-            force_update_all=force_update_all,
-            progress_callback=progress_callback,
+        extra_info_updated_count, douban_info_updated_count = await asyncio.gather(
+            self.extra_info_updater.update_all_movie_extra_info(
+                force_update_all=force_update_all,
+                progress_callback=progress_callback,
+            ),
+            self.douban_info_updater.update_all_movie_douban_info(
+                force_update_all=force_update_all,
+                progress_callback=progress_callback,
+            ),
         )
         if progress_callback is not None:
             progress_callback(
@@ -58,6 +67,7 @@ class MovieInfoUpdater:
         result = self.result_builder.build_movie_update_result(
             base_info_stats=base_info_stats,
             extra_info_updated_count=extra_info_updated_count,
+            douban_info_updated_count=douban_info_updated_count,
         )
         logger.info("所有电影信息更新完成")
         return result

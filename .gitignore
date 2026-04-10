@@ -26,5 +26,8 @@ backend/.runtime/
 # Frontend dependencies
 frontend/node_modules/
 
+# macOS
+.DS_Store
+
 # Local assistant metadata
 .claude/

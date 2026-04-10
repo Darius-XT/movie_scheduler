@@ -19,6 +19,7 @@ class FakeMovie:
     country: str | None
     release_date: str | None
     score: str | None = None
+    douban_url: str | None = None
     genres: str | None = None
     actors: str | None = None
     is_showing: bool = False
@@ -46,6 +47,7 @@ class FakeMovieSelectionResultBuilder:
             id=movie.id,
             title=movie.title,
             score=None,
+            douban_url=None,
             genres=None,
             actors=None,
             release_date=None,
@@ -76,6 +78,7 @@ def test_movie_selector_filters_showing_movies() -> None:
             "id": 1,
             "title": "正在上映",
             "score": None,
+            "douban_url": None,
             "genres": None,
             "actors": None,
             "release_date": None,
@@ -107,6 +110,7 @@ def test_movie_selector_filters_upcoming_movies() -> None:
             "id": 2,
             "title": "即将上映",
             "score": None,
+            "douban_url": None,
             "genres": None,
             "actors": None,
             "release_date": None,

@@ -35,6 +35,7 @@ class ConfigManager:
         self.host = "0.0.0.0"
         self.port = 8000
         self.cors_origins = ["*"]
+        self.douban_api_base_url = "http://localhost:8085"
         self.database_url = f"sqlite:///{self.db_path}"
 
     def reload_from_env(self) -> None:
@@ -52,6 +53,7 @@ class ConfigManager:
         self.host = self._get_str("MOVIE_SCHEDULER_HOST", self.host)
         self.port = self._get_int("MOVIE_SCHEDULER_PORT", self.port)
         self.cors_origins = self._get_json_list("MOVIE_SCHEDULER_CORS_ORIGINS", self.cors_origins)
+        self.douban_api_base_url = self._get_url("MOVIE_SCHEDULER_DOUBAN_API_BASE_URL", self.douban_api_base_url)
         self.database_url = f"sqlite:///{self.db_path}"
 
     def ensure_runtime_dirs(self) -> None:
@@ -77,6 +79,10 @@ class ConfigManager:
 
     def _get_str(self, key: str, default: str) -> str:
         return os.getenv(key, default)
+
+    def _get_url(self, key: str, default: str) -> str:
+        """读取 URL 配置并移除末尾斜杠。"""
+        return os.getenv(key, default).strip().rstrip("/")
 
     def _get_int(self, key: str, default: int) -> int:
         value = os.getenv(key)

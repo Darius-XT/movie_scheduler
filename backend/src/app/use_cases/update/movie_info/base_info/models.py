@@ -11,7 +11,6 @@ class ScrapedMovieBaseInfo:
 
     id: int
     title: str | None
-    score: str
     genres: str
     actors: str
     release_date: str | None = None

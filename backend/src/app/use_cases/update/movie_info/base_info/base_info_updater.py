@@ -199,7 +199,6 @@ class MovieBaseInfoUpdater:
                 "id": movie.id,
                 "is_showing": movie.is_showing,
                 "title": movie.title,
-                "score": movie.score,
                 "genres": movie.genres,
                 "actors": movie.actors,
                 "release_date": movie.release_date,

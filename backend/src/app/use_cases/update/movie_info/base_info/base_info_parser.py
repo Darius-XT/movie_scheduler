@@ -77,27 +77,6 @@ class MovieBaseInfoParser:
             else:
                 logger.warning("没有在电影条目中找到标题")
 
-            score = "暂无评分"
-            score_container = item.find("span", class_="score") or item.find(
-                "div",
-                class_="channel-detail channel-detail-orange",
-            )
-            if score_container:
-                container_text = score_container.get_text().strip()
-                if any(keyword in container_text for keyword in ["暂无评分", "人想看"]):
-                    logger.debug("当前电影暂无评分: 容器内容=%s", container_text)
-                else:
-                    integer_elem = score_container.find("i", class_="integer")
-                    fraction_elem = score_container.find("i", class_="fraction")
-                    if integer_elem and fraction_elem:
-                        integer_part = integer_elem.get_text().strip().rstrip(".")
-                        fraction_part = fraction_elem.get_text().strip()
-                        score = f"{integer_part}.{fraction_part}"
-                    else:
-                        logger.warning("没有在评分容器中找到有效评分信息: %s", container_text)
-            else:
-                logger.warning("没有在电影条目中找到评分容器")
-
             genres = "暂无类型"
             actors = "暂无主演"
             release_date: str | None = None
@@ -120,7 +99,6 @@ class MovieBaseInfoParser:
             return ScrapedMovieBaseInfo(
                 id=movie_id,
                 title=title,
-                score=score,
                 genres=genres,
                 actors=actors,
                 release_date=release_date,

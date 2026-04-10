@@ -30,6 +30,7 @@ class MovieSelectionItem(BaseModel):
     id: int | None = None
     title: str | None = None
     score: str | None = None
+    douban_url: str | None = None
     genres: str | None = None
     actors: str | None = None
     release_date: str | None = None
@@ -101,11 +102,18 @@ class UpdateMovieExtraInfo(BaseModel):
     updated_count: int
 
 
+class UpdateMovieDoubanInfo(BaseModel):
+    """电影豆瓣信息更新统计。"""
+
+    updated_count: int
+
+
 class UpdateMovieData(BaseModel):
     """电影更新结果数据。"""
 
     base_info: UpdateMovieBaseInfo
     extra_info: UpdateMovieExtraInfo
+    douban_info: UpdateMovieDoubanInfo
 
 
 class UpdateMovieResponse(SuccessEnvelope):

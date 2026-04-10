@@ -16,6 +16,7 @@ class MovieWriteData(TypedDict, total=False):
     id: Required[int]
     title: NotRequired[str | None]
     score: NotRequired[str | None]
+    douban_url: NotRequired[str | None]
     genres: NotRequired[str | None]
     actors: NotRequired[str | None]
     release_date: NotRequired[str | None]
@@ -39,6 +40,7 @@ class Movie(Base):
 
     # 评分信息
     score = Column(String(10), nullable=True, comment="完整评分")
+    douban_url = Column(String(255), nullable=True, comment="豆瓣详情链接")
 
     # 电影详情
     genres = Column(Text, nullable=True, comment="电影类型")
@@ -72,6 +74,7 @@ class Movie(Base):
             id=data.get("id"),
             title=data.get("title"),
             score=data.get("score"),
+            douban_url=data.get("douban_url"),
             genres=data.get("genres"),
             actors=data.get("actors"),
             release_date=data.get("release_date"),

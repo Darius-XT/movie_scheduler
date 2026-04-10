@@ -24,6 +24,7 @@ async def test_movie_service_uses_default_selection_mode(monkeypatch: pytest.Mon
                 id=1,
                 title=None,
                 score=None,
+                douban_url=None,
                 genres=None,
                 actors=None,
                 release_date=None,
