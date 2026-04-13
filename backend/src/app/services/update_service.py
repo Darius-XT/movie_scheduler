@@ -32,6 +32,7 @@ class UpdateService:
     async def update_cinema(
         self,
         city_id: int | None,
+        force_update_all: bool = False,
         progress_callback: Callable[[UpdateProgressEvent], None] | None = None,
     ) -> UpdateCinemaResult:
         """异步更新影院信息。"""
@@ -39,6 +40,7 @@ class UpdateService:
         return await asyncio.to_thread(
             info_update_use_case.update_cinema_info,
             normalized_city_id,
+            force_update_all,
             progress_callback,
         )
 

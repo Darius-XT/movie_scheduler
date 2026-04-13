@@ -13,6 +13,7 @@ from app.repositories.movie_repository import movie_repository
 from app.use_cases.update.cinema_info.cinema_parser import CinemaInfoParser
 from app.use_cases.update.cinema_info.cinema_scraper import CinemaInfoScraper
 from app.use_cases.update.cinema_info.models import CinemaUpsertData
+from app.use_cases.update.cinema_update_reset_helper import CinemaUpdateResetHelper
 from app.use_cases.update.models import UpdateProgressEvent
 
 
@@ -22,13 +23,16 @@ class CinemaInfoUpdater:
     def __init__(self) -> None:
         self.scraper = CinemaInfoScraper()
         self.parser = CinemaInfoParser()
+        self.reset_helper = CinemaUpdateResetHelper()
 
     def update_all_cinema_info(
         self,
         city_id: int,
+        force_update_all: bool = False,
         progress_callback: Callable[[UpdateProgressEvent], None] | None = None,
     ) -> tuple[int, int]:
         """更新指定城市的全部影院信息。"""
+        self.reset_helper.reset_cinemas_if_needed(force_update_all)
         logger.info("开始采集城市 ID=%s 的影院数据", city_id)
 
         all_cinemas_data: list[CinemaUpsertData] = []

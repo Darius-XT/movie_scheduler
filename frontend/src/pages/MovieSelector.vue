@@ -29,6 +29,7 @@
                   :value="city.id"
                 />
               </el-select>
+              <el-checkbox v-model="updateForm.forceUpdate" style="margin-left: 28px">强制更新</el-checkbox>
             </el-form-item>
 
             <el-form-item class="update-action-form-item">
@@ -535,10 +536,10 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { getCities, selectMovies } from '@/api'
+import { ArrowUp, Check, Filter, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { Setting, Filter, ArrowUp, Check } from '@element-plus/icons-vue'
-import { selectMovies, getCities } from '@/api'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 // LocalStorage 键名
 const STORAGE_KEY = 'movie_selector_data'
@@ -548,7 +549,8 @@ const CACHE_CLEANUP_INTERVAL_MS = 1000
 // 信息更新相关状态
 const cities = ref([])
 const updateForm = ref({
-  cityId: null
+  cityId: null,
+  forceUpdate: false,
 })
 const cinemaLoading = ref(false)
 const movieLoading = ref(false)
@@ -719,7 +721,7 @@ const handleUpdateCinema = async () => {
   const startedAt = Date.now()
   try {
     const cityQuery = updateForm.value.cityId ? `city_id=${updateForm.value.cityId}` : ''
-    const response = await fetch(`/api/v1/update/cinema-stream?${cityQuery}`, {
+    const response = await fetch(`/api/v1/update/cinema-stream?${cityQuery}&force_update_all=${updateForm.value.forceUpdate}`, {
       headers: {
         Accept: 'text/event-stream'
       }
@@ -795,7 +797,7 @@ const handleUpdateMovie = async () => {
   const startedAt = Date.now()
   try {
     const cityQuery = updateForm.value.cityId ? `city_id=${updateForm.value.cityId}` : ''
-    const response = await fetch(`/api/v1/update/movie-stream?${cityQuery}&force_update_all=false`, {
+    const response = await fetch(`/api/v1/update/movie-stream?${cityQuery}&force_update_all=${updateForm.value.forceUpdate}`, {
       headers: {
         Accept: 'text/event-stream'
       }

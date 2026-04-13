@@ -48,6 +48,17 @@ class CinemaRepository:
         logger.debug("批量保存影院完成: 成功 %s 家，失败 %s 家", success_count, failure_count)
         return success_count, failure_count
 
+    def delete_all_cinemas(self) -> bool:
+        """删除全部影院。"""
+        try:
+            with database_manager.transaction() as session:
+                deleted_count = session.query(Cinema).delete()
+                logger.info("已删除所有影院，共 %s 家", deleted_count)
+            return True
+        except SQLAlchemyError as error:
+            logger.error("删除所有影院失败: %s", error)
+            raise RepositoryError("删除所有影院失败") from error
+
     def get_cinemas_count(self) -> int:
         """获取影院总数。"""
         try:

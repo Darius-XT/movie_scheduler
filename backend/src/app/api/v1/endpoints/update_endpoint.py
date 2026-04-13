@@ -125,7 +125,7 @@ async def encode_update_movie_stream(
             update_task.cancel()
 
 
-async def encode_update_cinema_stream(city_id: int) -> AsyncIterator[str]:
+async def encode_update_cinema_stream(city_id: int, force_update_all: bool) -> AsyncIterator[str]:
     """将影院更新过程编码为 SSE 文本帧。"""
     event_queue: asyncio.Queue[dict[str, object] | None] = asyncio.Queue()
 
@@ -146,6 +146,7 @@ async def encode_update_cinema_stream(city_id: int) -> AsyncIterator[str]:
         try:
             result = await update_service.update_cinema(
                 city_id=city_id,
+                force_update_all=force_update_all,
                 progress_callback=push_progress,
             )
             await event_queue.put(
@@ -190,9 +191,12 @@ async def update_movie_stream(
 
 
 @router.get("/update/cinema-stream")
-async def update_cinema_stream(city_id: int) -> StreamingResponse:
+async def update_cinema_stream(
+    city_id: int,
+    force_update_all: bool = False,
+) -> StreamingResponse:
     """以 SSE 方式流式返回影院更新文案进度。"""
     return StreamingResponse(
-        encode_update_cinema_stream(city_id=city_id),
+        encode_update_cinema_stream(city_id=city_id, force_update_all=force_update_all),
         media_type="text/event-stream",
     )
