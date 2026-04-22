@@ -67,7 +67,7 @@ class DoubanInfoEnricher:
                 best_score = score
                 best_candidate = candidate
 
-        if best_score < 60:
+        if best_score < 50:
             return None
         return best_candidate
 
@@ -86,7 +86,7 @@ class DoubanInfoEnricher:
         if movie_title == candidate_title:
             score += 80
         elif movie_title in candidate_title or candidate_title in movie_title:
-            score += 55
+            score += 70
 
         movie_year = self._extract_year(movie.release_date)
         candidate_year = self._extract_year(candidate.year)

@@ -14,7 +14,8 @@ from app.use_cases.update.movie_info.douban.models import DoubanMovieSearchItem
 class DoubanApiClient:
     """负责调用已部署的 douban_api 服务。"""
 
-    def __init__(self) -> None:
+    def __init__(self, base_url: str | None = None) -> None:
+        self.base_url = base_url or config_manager.douban_api_base_url
         self.timeout = config_manager.timeout or 60
 
     def search_movies(self, title: str, page: int = 1) -> list[DoubanMovieSearchItem]:
@@ -23,7 +24,7 @@ class DoubanApiClient:
         if not normalized_title:
             return []
 
-        url = f"{config_manager.douban_api_base_url}/movie/list"
+        url = f"{self.base_url}/movie/list"
         try:
             response = requests.get(
                 url,

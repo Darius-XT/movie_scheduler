@@ -42,6 +42,20 @@ class FileSaver:
             logger.error("保存文件失败: %s", error)
             return False
 
+    def save_demo(self, file_content: str, filename: str) -> bool:
+        """按固定文件名保存调试样本到 demo 目录。"""
+        try:
+            demo_dir = config_manager.demo_dir
+            os.makedirs(demo_dir, exist_ok=True)
+            filepath = os.path.join(demo_dir, filename)
+            with open(filepath, "w", encoding="utf-8") as file:
+                file.write(file_content)
+            logger.debug("样本文件已保存到: %s", filename)
+            return True
+        except Exception as error:
+            logger.error("保存样本文件失败: %s", error)
+            return False
+
     def save_example(self, file_content: str, filename: str) -> bool:
         """按固定文件名保存抓取结果示例。"""
         try:

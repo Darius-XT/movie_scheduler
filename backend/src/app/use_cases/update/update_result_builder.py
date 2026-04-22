@@ -51,19 +51,11 @@ class UpdateMovieExtraInfoResult:
 
 
 @dataclass(slots=True)
-class UpdateMovieDoubanInfoResult:
-    """电影豆瓣信息更新统计。"""
-
-    updated_count: int
-
-
-@dataclass(slots=True)
 class UpdateMovieResult:
     """电影更新结果。"""
 
     base_info: UpdateMovieBaseInfoResult
     extra_info: UpdateMovieExtraInfoResult
-    douban_info: UpdateMovieDoubanInfoResult
 
 
 @dataclass(slots=True)
@@ -81,7 +73,6 @@ class UpdateResultBuilder:
         self,
         base_info_stats: MovieBaseInfoUpdateStats,
         extra_info_updated_count: int,
-        douban_info_updated_count: int,
     ) -> UpdateMovieResult:
         """组装电影更新结果。"""
         return UpdateMovieResult(
@@ -90,7 +81,6 @@ class UpdateResultBuilder:
                 result_stats=self._build_movie_result_stats(base_info_stats.result_stats),
             ),
             extra_info=UpdateMovieExtraInfoResult(updated_count=extra_info_updated_count),
-            douban_info=UpdateMovieDoubanInfoResult(updated_count=douban_info_updated_count),
         )
 
     def build_cinema_update_result(

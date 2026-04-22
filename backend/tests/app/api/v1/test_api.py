@@ -18,7 +18,6 @@ from app.use_cases.update.models import UpdateProgressEvent
 from app.use_cases.update.update_result_builder import (
     UpdateCinemaResult,
     UpdateMovieBaseInfoResult,
-    UpdateMovieDoubanInfoResult,
     UpdateMovieExtraInfoResult,
     UpdateMovieInputStatsResult,
     UpdateMovieResult,
@@ -115,7 +114,6 @@ def test_update_movie_stream_endpoint_returns_progress_and_result(
                 ),
             ),
             extra_info=UpdateMovieExtraInfoResult(updated_count=1),
-            douban_info=UpdateMovieDoubanInfoResult(updated_count=2),
         )
 
     monkeypatch.setattr(update_service, "update_movie", update_movie)
@@ -127,7 +125,6 @@ def test_update_movie_stream_endpoint_returns_progress_and_result(
     assert '"message":"正在抓取电影列表"' in body
     assert '"type":"complete"' in body
     assert '"added_movie_ids":[1001]' in body
-    assert '"douban_info":{"updated_count":2}' in body
 
 
 def test_select_movie_endpoint_returns_movie_list(monkeypatch: pytest.MonkeyPatch) -> None:

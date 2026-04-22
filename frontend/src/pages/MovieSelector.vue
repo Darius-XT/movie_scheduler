@@ -124,7 +124,7 @@
                 <el-select
                   v-model="form.selectionMode"
                   placeholder="请选择上映状态"
-                  style="width: 100px"
+                  style="width: 105px"
                 >
                   <el-option
                     v-for="option in selectionModeOptions"
@@ -389,6 +389,14 @@
                 >
                   {{ expandedShows.has(movie.id) ? '收起' : '展开' }}场次信息
                 </el-button>
+                <el-button
+                  v-if="!movie.score || movie.score === '暂无评分'"
+                  size="small"
+                  :loading="doubanFetchingIds.has(movie.id)"
+                  @click="handleFetchDouban(movie)"
+                >
+                  获取豆瓣
+                </el-button>
               </div>
             </div>
 
@@ -536,7 +544,7 @@
 </template>
 
 <script setup>
-import { getCities, selectMovies } from '@/api'
+import { fetchMovieDouban, getCities, selectMovies } from '@/api'
 import { ArrowUp, Check, Filter, Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -585,6 +593,7 @@ const fetchLoading = ref(false)
 const selectedMovies = ref([])
 const movieSearchKeyword = ref('')
 const fetchingMovieIds = ref(new Set()) // 跟踪正在获取场次的电影ID
+const doubanFetchingIds = ref(new Set()) // 跟踪正在获取豆瓣信息的电影ID
 const movieShowsMap = ref(new Map()) // 存储每部电影的场次信息 Map<movieId, showsData>
 const movieFetchDetails = ref(new Map()) // 抓取中的日期进度 Map<movieId, { dates: Record<string, {...}> }>
 const expandedDescriptions = ref(new Set()) // 展开简介的电影ID集合
@@ -1605,6 +1614,22 @@ const handleFetchShows = async () => {
     clearMovieFetchProgress(moviesToFetch.map(movie => movie.id))
   } finally {
     fetchLoading.value = false
+  }
+}
+
+const handleFetchDouban = async (movie) => {
+  if (!movie.id) return
+  doubanFetchingIds.value = new Set([...doubanFetchingIds.value, movie.id])
+  try {
+    const res = await fetchMovieDouban(movie.id)
+    movie.score = res.data.score
+    movie.douban_url = res.data.douban_url
+  } catch {
+    ElMessage.error('获取豆瓣信息失败')
+  } finally {
+    const next = new Set(doubanFetchingIds.value)
+    next.delete(movie.id)
+    doubanFetchingIds.value = next
   }
 }
 

@@ -34,7 +34,6 @@ def test_build_movie_update_result():
             ),
         ),
         extra_info_updated_count=4,
-        douban_info_updated_count=6,
     )
 
     assert asdict(result) == {
@@ -57,7 +56,6 @@ def test_build_movie_update_result():
             },
         },
         "extra_info": {"updated_count": 4},
-        "douban_info": {"updated_count": 6},
     }
 
 

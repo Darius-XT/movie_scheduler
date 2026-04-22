@@ -14,7 +14,6 @@ from app.schemas import (
     UpdateCinemaData,
     UpdateMovieBaseInfo,
     UpdateMovieData,
-    UpdateMovieDoubanInfo,
     UpdateMovieExtraInfo,
     UpdateMovieInputStats,
     UpdateMovieResultStats,
@@ -48,7 +47,6 @@ def build_update_movie_data(result: UpdateMovieResult) -> UpdateMovieData:
             ),
         ),
         extra_info=UpdateMovieExtraInfo(updated_count=result.extra_info.updated_count),
-        douban_info=UpdateMovieDoubanInfo(updated_count=result.douban_info.updated_count),
     )
 
 

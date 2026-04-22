@@ -102,18 +102,11 @@ class UpdateMovieExtraInfo(BaseModel):
     updated_count: int
 
 
-class UpdateMovieDoubanInfo(BaseModel):
-    """电影豆瓣信息更新统计。"""
-
-    updated_count: int
-
-
 class UpdateMovieData(BaseModel):
     """电影更新结果数据。"""
 
     base_info: UpdateMovieBaseInfo
     extra_info: UpdateMovieExtraInfo
-    douban_info: UpdateMovieDoubanInfo
 
 
 class UpdateMovieResponse(SuccessEnvelope):

@@ -21,7 +21,9 @@ backend/.env
 backend/.venv/
 backend/.ruff_cache/
 backend/.pytest_cache/
-backend/.runtime/
+backend/.runtime/*.db
+backend/.runtime/*.db-shm
+backend/.runtime/*.db-wal
 
 # Frontend dependencies
 frontend/node_modules/

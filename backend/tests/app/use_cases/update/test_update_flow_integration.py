@@ -21,13 +21,11 @@ from app.use_cases.update.movie_info.base_info.models import (
     MovieBaseInfoUpdateStats,
     ScrapedMovieBaseInfo,
 )
-from app.use_cases.update.movie_info.douban.douban_info_updater import MovieDoubanInfoUpdater
 from app.use_cases.update.movie_info.extra_info.extra_info_updater import MovieExtraInfoUpdater
 from app.use_cases.update.movie_info.updater import MovieInfoUpdater
 from app.use_cases.update.movie_update_reset_helper import MovieUpdateResetHelper
 from app.use_cases.update.update_result_builder import (
     UpdateMovieBaseInfoResult,
-    UpdateMovieDoubanInfoResult,
     UpdateMovieExtraInfoResult,
     UpdateMovieInputStatsResult,
     UpdateMovieResult,
@@ -91,19 +89,6 @@ class FakeExtraInfoUpdater:
         return 3
 
 
-class FakeDoubanInfoUpdater:
-    """用于测试的豆瓣信息更新器。"""
-
-    async def update_all_movie_douban_info(
-        self,
-        force_update_all: bool = False,
-        progress_callback: UpdateProgressCallback | None = None,
-    ) -> int:
-        assert force_update_all is True
-        assert progress_callback is None
-        return 5
-
-
 class FakeMovieInfoUpdater:
     """用于测试的电影更新器。"""
 
@@ -136,7 +121,6 @@ class FakeMovieInfoUpdater:
                 ),
             ),
             extra_info=UpdateMovieExtraInfoResult(updated_count=2),
-            douban_info=UpdateMovieDoubanInfoResult(updated_count=4),
         )
 
 
@@ -213,7 +197,6 @@ def test_all_movie_info_updater_orchestrates_full_flow() -> None:
     )
     updater.base_info_updater = cast(MovieBaseInfoUpdater, FakeBaseInfoUpdater())
     updater.extra_info_updater = cast(MovieExtraInfoUpdater, FakeExtraInfoUpdater())
-    updater.douban_info_updater = cast(MovieDoubanInfoUpdater, FakeDoubanInfoUpdater())
 
     result = asyncio.run(updater.update_all_movie_info(city_id=10, force_update_all=True))
 
@@ -238,7 +221,6 @@ def test_all_movie_info_updater_orchestrates_full_flow() -> None:
             },
         },
         "extra_info": {"updated_count": 3},
-        "douban_info": {"updated_count": 5},
     }
 
 
@@ -271,6 +253,5 @@ def test_info_update_use_case_orchestrates_cinema_result_building() -> None:
             },
         },
         "extra_info": {"updated_count": 2},
-        "douban_info": {"updated_count": 4},
     }
     assert asdict(cinema_result) == {"success_count": 5, "failure_count": 1}

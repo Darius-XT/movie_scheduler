@@ -20,11 +20,21 @@ dev = [
     "httpx>=0.28.0",
     "pytest>=8.0.0",
     "ruff>=0.11.0",
+    "taskipy>=1.13.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src"]
+
+[tool.taskipy.tasks]
+export-sample = { cmd = "PYTHONPATH=src python scripts/export_sample.py", help = "导出调试样本到 .runtime/demo，用法: task export-sample <样本名>" }
 
 [tool.ruff]
 line-length = 115

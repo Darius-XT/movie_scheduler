@@ -2,7 +2,8 @@
   "include": [
     "backend/src",
     "backend/tests",
-    "backend/migrations"
+    "backend/migrations",
+    "backend/scripts"
   ],
   "venvPath": "backend",
   "venv": ".venv",
@@ -23,6 +24,12 @@
     },
     {
       "root": "backend/migrations",
+      "extraPaths": [
+        "backend/src"
+      ]
+    },
+    {
+      "root": "backend/scripts",
       "extraPaths": [
         "backend/src"
       ]
