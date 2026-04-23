@@ -9,13 +9,13 @@ from typing import Literal
 
 from app.core.bootstrap import bootstrap_runtime
 from app.core.file_saver import file_saver
-from app.use_cases.show_fetching.scrapers.cinema_scraper import cinema_scraper
-from app.use_cases.show_fetching.scrapers.cinema_show_scraper import cinema_show_scraper
-from app.use_cases.show_fetching.scrapers.show_date_scraper import show_date_scraper
-from app.use_cases.update.cinema_info.cinema_scraper import cinema_info_scraper
-from app.use_cases.update.movie_info.base_info.base_info_scraper import movie_base_info_scraper
-from app.use_cases.update.movie_info.douban.douban_api_client import DoubanApiClient
-from app.use_cases.update.movie_info.extra_info.extra_info_scraper import movie_extra_info_scraper
+from app.services.show_fetching.cinema_client import CinemaClient
+from app.services.show_fetching.cinema_show_client import CinemaShowClient
+from app.services.show_fetching.show_date_client import ShowDateClient
+from app.services.update.cinema.client import CinemaInfoClient
+from app.services.update.movie.base.client import MovieBaseInfoClient
+from app.services.update.movie.douban.client import DoubanApiClient
+from app.services.update.movie.extra.client import MovieExtraInfoClient
 
 # ── 调试参数统一在此处修改 ──────────────────────────────────────────────────────
 DEMO_MOVIE_ID = 1324725
@@ -74,40 +74,66 @@ SAMPLE_GROUPS: dict[str, list[SampleName]] = {
 def export_sample(sample_name: SampleName) -> dict[str, str]:
     """根据预设抓取并保存单个调试样本到 demo 目录。"""
     filename = SAMPLE_FILENAMES[sample_name]
+    content = _fetch_sample(sample_name)
 
-    if sample_name == "show_dates":
-        success, content = show_date_scraper.scrape_showdate(DEMO_MOVIE_ID, DEMO_CITY_ID)
-    elif sample_name == "cinemas":
-        success, content = cinema_scraper.scrape_cinemas(
-            DEMO_MOVIE_ID, DEMO_SHOW_DATE, DEMO_CITY_ID, DEMO_CINEMA_LIMIT, DEMO_CINEMA_OFFSET
-        )
-    elif sample_name == "cinema_shows":
-        success, content = cinema_show_scraper.scrape_cinema_shows(DEMO_CINEMA_ID, DEMO_CITY_ID)
-    elif sample_name == "movie_base_info":
-        success, content = movie_base_info_scraper.scrape_movies(1, DEMO_PAGE, DEMO_CITY_ID)
-    elif sample_name == "movie_extra_info":
-        success, content = movie_extra_info_scraper.scrape_details(DEMO_MOVIE_ID)
-    elif sample_name == "cinema_info":
-        success, content = cinema_info_scraper.scrape_cinemas(DEMO_CITY_ID, DEMO_PAGE)
-    else:
-        local_client = DoubanApiClient(base_url=DEMO_DOUBAN_BASE_URL)
-        candidates = local_client.search_movies(title=DEMO_MOVIE_TITLE, page=1)
-        content = json.dumps(
-            [
-                {"title": c.title, "rating": c.rating, "cover_link": c.cover_link, "year": c.year}
-                for c in candidates
-            ],
-            ensure_ascii=False,
-            indent=2,
-        )
-        success = bool(candidates)
-
-    if not success or not content:
+    if not content:
         raise ValueError(f"{sample_name} 样本抓取失败")
     if not file_saver.save_demo(content, filename):
         raise ValueError(f"{sample_name} 样本保存失败")
 
     return {"sample_name": sample_name, "filename": filename}
+
+
+def _fetch_sample(sample_name: SampleName) -> str:
+    """根据样本类型抓取原始内容。"""
+    if sample_name == "show_dates":
+        client = ShowDateClient()
+        dates = client.get_show_dates(DEMO_MOVIE_ID, DEMO_CITY_ID)
+        return json.dumps(dates, ensure_ascii=False, indent=2)
+
+    if sample_name == "cinemas":
+        client = CinemaClient()
+        cinema_ids, _ = client.get_cinema_ids(
+            DEMO_MOVIE_ID, DEMO_SHOW_DATE, DEMO_CITY_ID, DEMO_CINEMA_LIMIT, DEMO_CINEMA_OFFSET
+        )
+        return json.dumps(cinema_ids, ensure_ascii=False, indent=2)
+
+    if sample_name == "cinema_shows":
+        client = CinemaShowClient()
+        return client.fetch_raw(DEMO_CINEMA_ID, DEMO_CITY_ID) or ""
+
+    if sample_name == "movie_base_info":
+        client = MovieBaseInfoClient()
+        result = client.fetch_page(1, DEMO_PAGE, DEMO_CITY_ID)
+        if result is None:
+            return ""
+        movies, _ = result
+        return json.dumps([m.__dict__ for m in movies], ensure_ascii=False, indent=2, default=str)
+
+    if sample_name == "movie_extra_info":
+        client = MovieExtraInfoClient()
+        info = client.fetch_details(DEMO_MOVIE_ID)
+        if info is None:
+            return ""
+        return json.dumps(info.__dict__, ensure_ascii=False, indent=2, default=str)
+
+    if sample_name == "cinema_info":
+        client = CinemaInfoClient()
+        result = client.fetch_page(DEMO_CITY_ID, DEMO_PAGE)
+        if result is None:
+            return ""
+        cinemas, _ = result
+        return json.dumps([c.__dict__ for c in cinemas], ensure_ascii=False, indent=2, default=str)
+
+    # douban
+    local_client = DoubanApiClient(base_url=DEMO_DOUBAN_BASE_URL)
+    candidates = local_client.search_movies(title=DEMO_MOVIE_TITLE, page=1)
+    return json.dumps(
+        [{"title": c.title, "rating": c.rating, "cover_link": c.cover_link, "year": c.year}
+         for c in candidates],
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

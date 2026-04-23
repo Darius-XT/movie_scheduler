@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.exceptions import AppError
-from app.services.show_service import show_service
+from app.services.show_fetching.service import show_service
 
 
 def test_show_service_normalizes_movie_ids() -> None:

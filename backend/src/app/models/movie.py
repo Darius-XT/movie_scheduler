@@ -56,6 +56,12 @@ class Movie(Base):
     description = Column(Text, nullable=True, comment="剧情简介")
 
     # 时间戳（东八区北京时间）
+    first_seen_at = Column(
+        DateTime,
+        server_default=func.datetime("now", "+8 hours"),
+        nullable=False,
+        comment="首次抓取时间（北京时间，不随更新变化）",
+    )
     updated_at = Column(
         DateTime,
         server_default=func.datetime("now", "+8 hours"),

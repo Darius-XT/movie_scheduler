@@ -2,42 +2,28 @@
 
 from __future__ import annotations
 
-import importlib
-
 import pytest
 
 from app.core.exceptions import AppError
-from app.services.movie_service import movie_service
-from app.use_cases.movie_selection.movie_selection_result_builder import MovieSelectionItem
-
-movie_service_module = importlib.import_module("app.services.movie_service")
+from app.services.movie_selection.result_builder import MovieSelectionItem
+from app.services.movie_selection.service import movie_service
 
 
 @pytest.mark.anyio
 async def test_movie_service_uses_default_selection_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     """未传上映状态时应回退到全部模式。"""
 
-    def select_movie(selection_mode: str) -> list[MovieSelectionItem]:
+    def select_all(selection_mode: str) -> list[MovieSelectionItem]:
         assert selection_mode == "all"
         return [
             MovieSelectionItem(
-                id=1,
-                title=None,
-                score=None,
-                douban_url=None,
-                genres=None,
-                actors=None,
-                release_date=None,
-                is_showing=False,
-                director=None,
-                country=None,
-                language=None,
-                duration=None,
-                description=None,
+                id=1, title=None, score=None, douban_url=None, genres=None, actors=None,
+                release_date=None, is_showing=False, director=None, country=None,
+                language=None, duration=None, description=None, first_seen_at=None,
             )
         ]
 
-    monkeypatch.setattr(movie_service_module.movie_selector, "select_movie", select_movie)
+    monkeypatch.setattr(movie_service.selector, "select_movie", select_all)
     result = await movie_service.select_movie()
 
     assert len(result) == 1

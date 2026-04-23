@@ -1,0 +1,27 @@
+"""放映日期解析器测试。"""
+
+from app.services.show_fetching.show_date_client import show_date_client
+
+
+def test_show_date_parser_extracts_dates_from_json_payload() -> None:
+    """解析器应从新接口返回的 JSON 中提取全部日期。"""
+    payload = """
+    {
+      "code": 0,
+      "data": {
+        "dates": [
+          {"date": "2026-04-08", "isPredate": 1, "labelResource": []},
+          {"date": "2026-04-14", "isPredate": 0, "labelResource": []},
+          {"date": "2026-04-15", "isPredate": 0, "labelResource": []}
+        ]
+      },
+      "errMsg": "",
+      "success": true
+    }
+    """
+
+    assert show_date_client.parse(payload) == [
+        "2026-04-08",
+        "2026-04-14",
+        "2026-04-15",
+    ]
