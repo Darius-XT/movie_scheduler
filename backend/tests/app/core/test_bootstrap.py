@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core import bootstrap
+import app.core.bootstrap as bootstrap
 
 
 def test_bootstrap_runtime_runs_explicit_initializers_in_order(monkeypatch: pytest.MonkeyPatch) -> None:

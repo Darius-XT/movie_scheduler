@@ -13,15 +13,36 @@
 
 ## API 层
 
-所有 API 调用在 `src/api/index.js` 中定义并导出，组件不直接使用 axios 或 fetch：
+所有 API 调用在 `src/api/index.js` 中定义并导出。组件**禁止**直接使用 `axios` 或 `fetch`，也禁止在组件中拼接绝对 URL：
 
 ```javascript
+const api = axios.create({
+  baseURL: '/api',
+  timeout: 300000,
+})
+
 export const selectMovies = (selectionMode = 'all') =>
   api.post('/movies/select', { selection_mode: selectionMode })
 
 // SSE 流式请求同样封装在这里
 export const streamMovieUpdate = (cityId, forceUpdate) =>
-  fetch(`/api/v1/update/movie-stream?city_id=${cityId}&force_update_all=${forceUpdate}`)
+  fetch(`/api/update/movie-stream?city_id=${cityId}&force_update_all=${forceUpdate}`)
 ```
 
 后端长时任务通过 **SSE** 推送进度，前端用 `fetch` stream 接收，不用轮询。
+
+## 响应解包
+
+后端所有 JSON 响应都使用统一的 `success/data` 包装。组件中需要从 `response.data.data` 取业务数据：
+
+```javascript
+const response = await getCities()
+const cities = response.data.data.cities  // axios 第一层 .data 是 HTTP body, 第二层 .data 是业务数据
+```
+
+错误情况下后端返回 `{success: false, error: "..."}`，axios 会按状态码自动抛出，可在 catch 中读 `error.response.data.error`。
+
+## URL 命名
+
+- 永远只有 `/api`，不引入 `/api/v1` / `/api/v2` 这类版本前缀。
+- 路径在 `api/index.js` 中相对 `baseURL` 写，不在组件中拼接绝对 URL。

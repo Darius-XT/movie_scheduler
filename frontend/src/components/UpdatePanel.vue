@@ -104,9 +104,10 @@
 
 <script setup>
 import { streamCinemaUpdate, streamMovieUpdate } from '@/api'
+import { useScheduleStore } from '@/stores/scheduleStore'
 import { Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   cities: {
@@ -121,14 +122,17 @@ const props = defineProps({
 
 const emit = defineEmits(['update:lastAddedMovieIds', 'update:lastUpdatedMovieIds'])
 
+const store = useScheduleStore()
+
 const cinemaLoading = ref(false)
 const movieLoading = ref(false)
-const cinemaResult = ref(null)
-const movieResult = ref(null)
 const cinemaUpdateProgress = ref('')
 const movieUpdateProgress = ref('')
-const cinemaUpdateMeta = ref({ lastUpdatedAt: null, durationMs: null })
-const movieUpdateMeta = ref({ lastUpdatedAt: null, durationMs: null })
+
+const cinemaResult = computed(() => store.cinemaUpdateResult)
+const movieResult = computed(() => store.movieUpdateResult)
+const cinemaUpdateMeta = computed(() => store.cinemaUpdateMeta)
+const movieUpdateMeta = computed(() => store.movieUpdateMeta)
 
 const formatUpdateTimestamp = (timestamp) => {
   if (!timestamp) return '暂无'
@@ -189,7 +193,7 @@ const readSseStream = async (response, onData) => {
 
 const handleUpdateCinema = async () => {
   cinemaLoading.value = true
-  cinemaResult.value = null
+  store.recordCinemaUpdate(null, null)
   cinemaUpdateProgress.value = ''
   const startedAt = Date.now()
   try {
@@ -201,9 +205,8 @@ const handleUpdateCinema = async () => {
       if (data.type === 'progress') {
         cinemaUpdateProgress.value = data.message || '正在更新影院信息'
       } else if (data.type === 'complete') {
-        cinemaResult.value = data.data
+        store.recordCinemaUpdate(data.data, Date.now() - startedAt)
         cinemaUpdateProgress.value = '影院信息更新完成'
-        cinemaUpdateMeta.value = { lastUpdatedAt: Date.now(), durationMs: Date.now() - startedAt }
         ElMessage.success('影院信息更新成功')
       } else if (data.type === 'error') {
         cinemaUpdateProgress.value = ''
@@ -224,7 +227,7 @@ const handleUpdateCinema = async () => {
 
 const handleUpdateMovie = async () => {
   movieLoading.value = true
-  movieResult.value = null
+  store.recordMovieUpdate(null, null)
   movieUpdateProgress.value = ''
   const startedAt = Date.now()
   try {
@@ -236,9 +239,8 @@ const handleUpdateMovie = async () => {
       if (data.type === 'progress') {
         movieUpdateProgress.value = data.message || '正在更新电影信息'
       } else if (data.type === 'complete') {
-        movieResult.value = data.data
+        store.recordMovieUpdate(data.data, Date.now() - startedAt)
         movieUpdateProgress.value = '电影信息更新完成'
-        movieUpdateMeta.value = { lastUpdatedAt: Date.now(), durationMs: Date.now() - startedAt }
         const addedIds = new Set(data.data.base_info?.result_stats?.added_movie_ids || [])
         const updatedIds = new Set(data.data.base_info?.result_stats?.updated_movie_ids || [])
         emit('update:lastAddedMovieIds', addedIds)

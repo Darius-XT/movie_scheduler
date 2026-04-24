@@ -9,13 +9,13 @@ from typing import Literal
 
 from app.core.bootstrap import bootstrap_runtime
 from app.core.file_saver import file_saver
-from app.services.show_fetching.cinema_client import CinemaClient
-from app.services.show_fetching.cinema_show_client import CinemaShowClient
-from app.services.show_fetching.show_date_client import ShowDateClient
-from app.services.update.cinema.client import CinemaInfoClient
-from app.services.update.movie.base.client import MovieBaseInfoClient
-from app.services.update.movie.douban.client import DoubanApiClient
-from app.services.update.movie.extra.client import MovieExtraInfoClient
+from app.show.cinema_client import CinemaClient
+from app.show.cinema_show_client import CinemaShowClient
+from app.show.show_date_client import ShowDateClient
+from app.update.cinema.client import CinemaInfoClient
+from app.update.movie.base.client import MovieBaseInfoClient
+from app.update.movie.douban.client import DoubanApiClient
+from app.update.movie.extra.client import MovieExtraInfoClient
 
 # ── 调试参数统一在此处修改 ──────────────────────────────────────────────────────
 DEMO_MOVIE_ID = 1324725

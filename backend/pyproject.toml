@@ -18,6 +18,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "httpx>=0.28.0",
+    "mypy>=1.11.0",
     "pytest>=8.0.0",
     "ruff>=0.11.0",
     "taskipy>=1.13.0",
@@ -32,6 +33,14 @@ pythonVersion = "3.11"
 venvPath = "."
 venv = ".venv"
 extraPaths = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "src"
+explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = true
+files = ["src", "tests"]
 
 [tool.taskipy.tasks]
 export-sample = { cmd = "PYTHONPATH=src python scripts/export_sample.py", help = "导出调试样本到 .runtime/demo，用法: task export-sample <样本名>" }

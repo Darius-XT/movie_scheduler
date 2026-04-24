@@ -122,7 +122,7 @@ onMounted(async () => {
   startCacheCleanupTimer()
   try {
     const response = await getCities()
-    cities.value = response.data.cities
+    cities.value = response.data.data.cities
     const shanghaiCity = cities.value.find((city) => city.id === 10)
     if (shanghaiCity) updateForm.value.cityId = shanghaiCity.id
     else if (cities.value.length > 0) updateForm.value.cityId = cities.value[0].id
@@ -333,7 +333,7 @@ const handleFetchDouban = async (movie) => {
   doubanFetchingIds.value = new Set([...doubanFetchingIds.value, movie.id])
   try {
     const res = await fetchMovieDouban(movie.id)
-    const { score, douban_url } = res.data
+    const { score, douban_url } = res.data.data
     store.updateMovieScore(movie.id, score, douban_url)
     if (douban_url) {
       ElMessage.success(`《${movie.title}》豆瓣评分：${score}`)

@@ -4,6 +4,12 @@ import { ref, watch } from 'vue'
 const WISH_POOL_KEY = 'wishPool'
 const SCHEDULE_ITEMS_KEY = 'scheduleItems'
 const SELECTED_MOVIES_KEY = 'selectedMovies'
+const CINEMA_UPDATE_META_KEY = 'cinemaUpdateMeta'
+const MOVIE_UPDATE_META_KEY = 'movieUpdateMeta'
+const CINEMA_UPDATE_RESULT_KEY = 'cinemaUpdateResult'
+const MOVIE_UPDATE_RESULT_KEY = 'movieUpdateResult'
+
+const EMPTY_UPDATE_META = { lastUpdatedAt: null, durationMs: null }
 
 const loadFromStorage = (key, defaultValue) => {
   try {
@@ -28,6 +34,10 @@ export const useScheduleStore = defineStore('schedule', () => {
   const selectedMovies = ref(loadFromStorage(SELECTED_MOVIES_KEY, []))
   const wishPool = ref(loadFromStorage(WISH_POOL_KEY, []))
   const scheduleItems = ref(loadFromStorage(SCHEDULE_ITEMS_KEY, []))
+  const cinemaUpdateMeta = ref(loadFromStorage(CINEMA_UPDATE_META_KEY, EMPTY_UPDATE_META))
+  const movieUpdateMeta = ref(loadFromStorage(MOVIE_UPDATE_META_KEY, EMPTY_UPDATE_META))
+  const cinemaUpdateResult = ref(loadFromStorage(CINEMA_UPDATE_RESULT_KEY, null))
+  const movieUpdateResult = ref(loadFromStorage(MOVIE_UPDATE_RESULT_KEY, null))
 
   // Non-persisted cache: Map<movieId, showData>
   const movieShowsMap = ref(new Map())
@@ -36,6 +46,21 @@ export const useScheduleStore = defineStore('schedule', () => {
   watch(selectedMovies, (val) => saveToStorage(SELECTED_MOVIES_KEY, val), { deep: true })
   watch(wishPool, (val) => saveToStorage(WISH_POOL_KEY, val), { deep: true })
   watch(scheduleItems, (val) => saveToStorage(SCHEDULE_ITEMS_KEY, val), { deep: true })
+  watch(cinemaUpdateMeta, (val) => saveToStorage(CINEMA_UPDATE_META_KEY, val), { deep: true })
+  watch(movieUpdateMeta, (val) => saveToStorage(MOVIE_UPDATE_META_KEY, val), { deep: true })
+  watch(cinemaUpdateResult, (val) => saveToStorage(CINEMA_UPDATE_RESULT_KEY, val), { deep: true })
+  watch(movieUpdateResult, (val) => saveToStorage(MOVIE_UPDATE_RESULT_KEY, val), { deep: true })
+
+  // ===== update meta/result actions =====
+  const recordCinemaUpdate = (result, durationMs) => {
+    cinemaUpdateResult.value = result
+    cinemaUpdateMeta.value = { lastUpdatedAt: Date.now(), durationMs }
+  }
+
+  const recordMovieUpdate = (result, durationMs) => {
+    movieUpdateResult.value = result
+    movieUpdateMeta.value = { lastUpdatedAt: Date.now(), durationMs }
+  }
 
   // ===== selectedMovies actions =====
   const setSelectedMovies = (movies) => {
@@ -140,6 +165,10 @@ export const useScheduleStore = defineStore('schedule', () => {
     wishPool,
     scheduleItems,
     movieShowsMap,
+    cinemaUpdateMeta,
+    movieUpdateMeta,
+    cinemaUpdateResult,
+    movieUpdateResult,
     // selectedMovies
     setSelectedMovies,
     updateMovieScore,
@@ -161,5 +190,8 @@ export const useScheduleStore = defineStore('schedule', () => {
     moveFromScheduleToWishPool,
     toggleSchedulePurchased,
     removePastSchedules,
+    // update meta/result
+    recordCinemaUpdate,
+    recordMovieUpdate,
   }
 })

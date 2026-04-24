@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY backend/pyproject.toml ./pyproject.toml
 RUN pip install --no-cache-dir \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    --default-timeout=120 \
     "alembic>=1.18.4" \
     "beautifulsoup4>=4.13.5" \
     "colorlog>=6.8.0" \

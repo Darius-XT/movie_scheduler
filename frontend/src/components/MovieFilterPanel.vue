@@ -94,7 +94,7 @@ const emit = defineEmits([
 
 const store = useScheduleStore()
 
-const form = ref({ selectionMode: 'all' })
+const form = ref({ selectionMode: 'showing' })
 const selectLoading = ref(false)
 const fetchLoading = ref(false)
 const fetchProgress = ref({
