@@ -56,7 +56,7 @@ class CinemaInfoClient:
         self.timeout = 30
         self.headers = {
             "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate, br",
+            "Accept-Encoding": "gzip, deflate",
             "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
             "Connection": "keep-alive",
             "Host": "apis.netstart.cn",
@@ -91,9 +91,9 @@ class CinemaInfoClient:
 
     def _fetch(self, city_id: int, page: int) -> str | None:
         """发起 HTTP 请求，失败返回 None。"""
+        offset = (page - 1) * 20
+        url = f"{self.base_url}?keyword='影'&ci={city_id}&offset={offset}"
         try:
-            offset = (page - 1) * 20
-            url = f"{self.base_url}?keyword='影'&ci={city_id}&offset={offset}"
             logger.debug("开始获取影院数据: page=%s, offset=%s, url=%s", page, offset, url)
 
             response = requests.get(url, headers=self.headers, timeout=self.timeout, verify=False)
@@ -105,10 +105,15 @@ class CinemaInfoClient:
                 logger.debug("成功获取影院数据")
                 return response.text
 
-            logger.warning("请求失败，状态码: %s", response.status_code)
+            logger.error(
+                "获取影院数据请求失败: status=%s, url=%s, response=%s",
+                response.status_code,
+                url,
+                response.text[:1000],
+            )
             return None
         except Exception as error:
-            logger.error("获取影院数据失败: %s", error)
+            logger.error("获取影院数据异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
     # ------------------------------------------------------------------

@@ -99,10 +99,9 @@ class CinemaShowClient:
 
     def _fetch(self, cinema_id: int, city_id: int | None) -> str | None:
         """发起 HTTP 请求，失败返回 None。"""
+        normalized_city_id = int(city_id if city_id is not None else (config_manager.city_id or 10))
+        url = f"{self.base_url}?cinemaId={cinema_id}&ci={normalized_city_id}"
         try:
-            normalized_city_id = int(city_id if city_id is not None else (config_manager.city_id or 10))
-
-            url = f"{self.base_url}?cinemaId={cinema_id}&ci={normalized_city_id}"
             logger.debug("开始获取影院场次信息: %s", url)
 
             headers = {
@@ -121,10 +120,15 @@ class CinemaShowClient:
                 logger.debug("成功获取影院场次 JSON")
                 return response.text
 
-            logger.warning("请求失败，状态码: %s", response.status_code)
+            logger.error(
+                "获取影院场次请求失败: status=%s, url=%s, response=%s",
+                response.status_code,
+                url,
+                response.text[:1000],
+            )
             return None
         except Exception as error:
-            logger.error("获取影院场次信息失败: %s", error)
+            logger.error("获取影院场次异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
     # ------------------------------------------------------------------

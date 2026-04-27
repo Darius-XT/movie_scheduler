@@ -46,8 +46,8 @@ class MovieExtraInfoClient:
 
     def _fetch(self, movie_id: int) -> str | None:
         """发起 HTTP 请求，失败返回 None。"""
+        url = f"{self.base_url}?movieId={movie_id}"
         try:
-            url = f"{self.base_url}?movieId={movie_id}"
             logger.debug("开始获取电影详情: %s", url)
 
             response = requests.get(url, headers=self.headers, timeout=self.timeout, verify=False)
@@ -59,10 +59,15 @@ class MovieExtraInfoClient:
                 logger.debug("成功获取电影详情信息")
                 return response.text
 
-            logger.warning("请求失败，状态码: %s", response.status_code)
+            logger.error(
+                "获取电影详情请求失败: status=%s, url=%s, response=%s",
+                response.status_code,
+                url,
+                response.text[:1000],
+            )
             return None
         except Exception as error:
-            logger.error("获取电影详情失败: %s", error)
+            logger.error("获取电影详情异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
     # ------------------------------------------------------------------

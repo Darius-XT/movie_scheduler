@@ -55,9 +55,9 @@ class ShowDateClient:
 
     def _fetch(self, movie_id: int, city_id: int) -> str | None:
         """发起 HTTP 请求，失败返回 None。"""
+        normalized_city_id = int(city_id)
+        url = f"{self.base_url}?movieId={movie_id}&cityId={normalized_city_id}"
         try:
-            normalized_city_id = int(city_id)
-            url = f"{self.base_url}?movieId={movie_id}&cityId={normalized_city_id}"
             logger.debug(
                 "开始抓取放映日期信息: movieId=%s, cityId=%s, url=%s",
                 movie_id,
@@ -79,10 +79,15 @@ class ShowDateClient:
                 logger.debug("成功获取放映日期 JSON")
                 return response.text
 
-            logger.warning("请求失败，状态码: %s", response.status_code)
+            logger.error(
+                "获取放映日期请求失败: status=%s, url=%s, response=%s",
+                response.status_code,
+                url,
+                response.text[:1000],
+            )
             return None
         except Exception as error:
-            logger.error("获取放映日期信息失败: %s", error)
+            logger.error("获取放映日期异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
     # ------------------------------------------------------------------

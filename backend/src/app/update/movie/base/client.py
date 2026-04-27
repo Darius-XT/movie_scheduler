@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 
 DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Encoding": "gzip, deflate",
     "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
     "Connection": "keep-alive",
     "Host": "www.maoyan.com",
@@ -64,6 +64,8 @@ class MovieBaseInfoClient:
 
     def _fetch(self, show_type: int, page: int, city_id: int) -> str | None:
         """发起 HTTP 请求，失败返回 None。"""
+        offset = (page - 1) * 18
+        url = f"https://www.maoyan.com/films?showType={show_type}&offset={offset}"
         try:
             if self._current_city_id != city_id:
                 logger.debug("城市发生变化: %s -> %s", self._current_city_id, city_id)
@@ -76,8 +78,6 @@ class MovieBaseInfoClient:
                 self._warm_up_session(show_type, city_id)
                 self._warmed_up = True
 
-            offset = (page - 1) * 18
-            url = f"https://www.maoyan.com/films?showType={show_type}&offset={offset}"
             logger.debug(
                 "开始抓取电影列表: showType=%s, page=%s, offset=%s, city_id=%s",
                 show_type,
@@ -101,10 +101,15 @@ class MovieBaseInfoClient:
                 logger.debug("成功获取 HTML 内容")
                 return response.text
 
-            logger.warning("请求失败，状态码: %s", response.status_code)
+            logger.error(
+                "获取电影列表 HTML 请求失败: status=%s, url=%s, response=%s",
+                response.status_code,
+                url,
+                response.text[:1000],
+            )
             return None
         except Exception as error:
-            logger.error("获取 HTML 失败: %s", error)
+            logger.error("获取电影列表 HTML 异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
     def _preset_cookies(self, city_id: int) -> None:

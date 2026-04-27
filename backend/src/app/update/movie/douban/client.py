@@ -39,10 +39,37 @@ class DoubanApiClient:
                 data={"key": normalized_title},
                 timeout=self.timeout,
             )
-            response.raise_for_status()
+        except Exception as error:
+            logger.error(
+                "调用豆瓣 API 搜索异常: title=%s, url=%s, error=%s",
+                normalized_title,
+                url,
+                error,
+                exc_info=True,
+            )
+            return []
+
+        if not response.ok:
+            logger.error(
+                "调用豆瓣 API 搜索请求失败: title=%s, status=%s, url=%s, response=%s",
+                normalized_title,
+                response.status_code,
+                url,
+                response.text[:1000],
+            )
+            return []
+
+        try:
             payload = cast(object, response.json())
         except Exception as error:
-            logger.warning("调用豆瓣 API 搜索失败: title=%s, error=%s", normalized_title, error)
+            logger.error(
+                "豆瓣 API 响应 JSON 解析失败: title=%s, url=%s, response=%s, error=%s",
+                normalized_title,
+                url,
+                response.text[:1000],
+                error,
+                exc_info=True,
+            )
             return []
 
         if not isinstance(payload, dict):

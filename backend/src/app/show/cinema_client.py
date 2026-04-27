@@ -98,20 +98,25 @@ class CinemaClient:
         offset: int,
     ) -> str | None:
         """发起 HTTP 请求，失败返回 None。"""
+        url = (
+            f"{self.base_url}?limit={limit}&offset={offset}"
+            f"&showDate={show_date}&movieId={movie_id}&cityId={int(city_id)}"
+        )
         try:
-            url = (
-                f"{self.base_url}?limit={limit}&offset={offset}"
-                f"&showDate={show_date}&movieId={movie_id}&cityId={int(city_id)}"
-            )
             logger.debug("开始获取影院信息: %s", url)
             response = requests.get(url, headers=_HEADERS, timeout=self.timeout, verify=False)
             logger.debug("响应状态码: %s，响应长度: %s 字符", response.status_code, len(response.text))
             if response.status_code == 200:
                 return response.text
-            logger.warning("请求失败，状态码: %s", response.status_code)
+            logger.error(
+                "获取影院信息请求失败: status=%s, url=%s, response=%s",
+                response.status_code,
+                url,
+                response.text[:1000],
+            )
             return None
         except Exception as error:
-            logger.error("获取影院信息失败: %s", error)
+            logger.error("获取影院信息异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
     # ------------------------------------------------------------------
