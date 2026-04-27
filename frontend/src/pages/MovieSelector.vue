@@ -379,15 +379,17 @@ const handleToggleWishPoolEntry = (entry) => {
   ElMessage.success(`已将《${entry.movieTitle}》加入想看`)
 }
 
-const handleAddAllToWishPool = (movie) => {
-  const showsData = getMovieShowsData(movie.id)
-  if (!showsData?.cinemas) return
-
-  const entries = showsData.cinemas.flatMap((cinema) =>
-    (cinema.shows || [])
-      .map((show) => createShowEntry(movie, cinema, show))
-      .filter((entry) => !store.isInSchedule(entry.key))
-  )
+const handleAddAllToWishPool = (movie, providedEntries) => {
+  let entries = providedEntries
+  if (!entries) {
+    const showsData = getMovieShowsData(movie.id)
+    if (!showsData?.cinemas) return
+    entries = showsData.cinemas.flatMap((cinema) =>
+      (cinema.shows || [])
+        .map((show) => createShowEntry(movie, cinema, show))
+        .filter((entry) => !store.isInSchedule(entry.key))
+    )
+  }
 
   if (entries.length === 0) {
     ElMessage.warning(`《${movie.title}》的场次已全部加入想看或行程`)

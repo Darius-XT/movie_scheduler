@@ -142,14 +142,14 @@
           <el-tag type="info" size="small">
             {{ showsData?.cinemas?.length || 0 }} 个影院
           </el-tag>
-          <el-tag type="success" size="small" style="margin-left: 8px">
-            {{ getTotalShows(showsData) }} 个场次
+          <el-tag type="success" size="small">
+            {{ filteredShowCount }} / {{ getTotalShows(showsData) }} 个场次
           </el-tag>
           <el-button
             size="small"
             plain
             :disabled="availableEntries.length === 0"
-            @click="$emit('add-all-to-wish-pool', movie)"
+            @click="$emit('add-all-to-wish-pool', movie, availableEntries)"
           >
             全部想看
           </el-button>
@@ -161,6 +161,32 @@
             <el-radio-button label="time">按日期</el-radio-button>
             <el-radio-button label="cinema">按影院</el-radio-button>
           </el-radio-group>
+        </div>
+        <div class="shows-filter-bar">
+          <el-input
+            v-model="cinemaKeyword"
+            class="shows-filter-input"
+            size="small"
+            clearable
+            placeholder="搜索影院名"
+          />
+          <el-select
+            v-model="selectedShowDate"
+            class="shows-filter-select"
+            size="small"
+            clearable
+            placeholder="全部日期"
+          >
+            <el-option
+              v-for="option in availableDateOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </div>
+        <div v-if="displayGroups.length === 0" class="shows-empty">
+          没有匹配的场次
         </div>
         <div
           v-for="group in displayGroups"
@@ -264,6 +290,8 @@ const store = useScheduleStore()
 const descriptionExpanded = ref(false)
 const showsExpanded = ref(false)
 const showViewMode = ref('time')
+const cinemaKeyword = ref('')
+const selectedShowDate = ref('')
 
 const movieRegion = computed(() => String(props.movie?.country || '').trim())
 
@@ -356,22 +384,61 @@ const createShowEntry = (cinema, show) => ({
   durationMinutes: parseMovieDurationMinutes(props.movie?.duration),
 })
 
-const availableEntries = computed(() => {
+const availableDateOptions = computed(() => {
   if (!props.showsData?.cinemas) return []
-  return props.showsData.cinemas.flatMap((cinema) =>
-    (cinema.shows || [])
+  const dateSet = new Set()
+  props.showsData.cinemas.forEach((cinema) => {
+    ;(cinema.shows || []).forEach((show) => {
+      if (show.date) dateSet.add(show.date)
+    })
+  })
+  return Array.from(dateSet)
+    .sort((a, b) => String(a).localeCompare(String(b)))
+    .map((date) => ({ value: date, label: formatDateWithRelativeWeek(date) }))
+})
+
+const matchesCinemaKeyword = (cinemaName) => {
+  const keyword = cinemaKeyword.value.trim().toLowerCase()
+  if (!keyword) return true
+  return String(cinemaName || '').toLowerCase().includes(keyword)
+}
+
+const matchesSelectedDate = (date) => {
+  if (!selectedShowDate.value) return true
+  return date === selectedShowDate.value
+}
+
+const filteredCinemaShows = computed(() => {
+  if (!props.showsData?.cinemas) return []
+  return props.showsData.cinemas
+    .filter((cinema) => matchesCinemaKeyword(cinema.cinema_name))
+    .map((cinema) => ({
+      ...cinema,
+      shows: (cinema.shows || []).filter((show) => matchesSelectedDate(show.date)),
+    }))
+    .filter((cinema) => cinema.shows.length > 0)
+})
+
+const filteredShowCount = computed(() =>
+  filteredCinemaShows.value.reduce((total, cinema) => total + cinema.shows.length, 0),
+)
+
+const availableEntries = computed(() => {
+  return filteredCinemaShows.value.flatMap((cinema) =>
+    cinema.shows
       .map((show) => createShowEntry(cinema, show))
       .filter((entry) => !isEntryUnavailable(entry))
   )
 })
 
 const displayGroups = computed(() => {
-  if (!props.showsData?.cinemas) return []
+  const cinemas = filteredCinemaShows.value
+  if (cinemas.length === 0) return []
   const mode = showViewMode.value
   const groups = new Map()
 
-  props.showsData.cinemas.forEach((cinema) => {
-    ;(cinema.shows || []).forEach((show) => {
+  cinemas.forEach((cinema) => {
+    cinema.shows.forEach((show) => {
       const date = show.date || '未标注日期'
       const groupKey = mode === 'cinema' ? `${cinema.cinema_id}` : date
 
@@ -542,6 +609,33 @@ const displayGroups = computed(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.shows-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.shows-filter-input {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 320px;
+}
+
+.shows-filter-select {
+  flex: 0 0 200px;
+}
+
+.shows-empty {
+  padding: 24px 12px;
+  background-color: #fafbff;
+  border: 1px dashed #d7e6ff;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
 }
 
 .show-view-mode {
@@ -758,6 +852,18 @@ const displayGroups = computed(() => {
 
   .shows-summary {
     align-items: flex-start;
+  }
+
+  .shows-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .shows-filter-input,
+  .shows-filter-select {
+    width: 100%;
+    max-width: none;
+    flex: none;
   }
 
   .time-group-header,
