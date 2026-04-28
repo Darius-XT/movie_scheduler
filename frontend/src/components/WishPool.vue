@@ -29,7 +29,7 @@
             </span>
           </div>
           <div class="wish-pool-group-actions">
-            <el-button text size="small" @click="store.removeWishMovieGroup(group.movieId)">
+            <el-button text size="small" @click="handleRemoveWishGroup(group.movieId)">
               全部移除
             </el-button>
             <el-button text size="small" @click="toggleWishGroup(group.movieId)">
@@ -69,7 +69,9 @@ import { useScheduleStore } from '@/stores/scheduleStore'
 
 const store = useScheduleStore()
 
-const collapsedWishMovieIds = ref(new Set())
+const WISH_GROUP_AUTO_COLLAPSE_THRESHOLD = 3
+
+const wishGroupCollapseOverrides = ref(new Map())
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
@@ -198,21 +200,46 @@ const getWishGroupMovieMeta = (movieId) => {
   return metaParts.join(' · ')
 }
 
-const isWishGroupCollapsed = (movieId) => collapsedWishMovieIds.value.has(movieId)
+const getWishGroupItemsCount = (movieId) => {
+  const group = groupedWishPool.value.find((item) => item.movieId === movieId)
+  return group ? group.items.length : 0
+}
+
+const isWishGroupCollapsed = (movieId) => {
+  if (wishGroupCollapseOverrides.value.has(movieId)) {
+    return wishGroupCollapseOverrides.value.get(movieId)
+  }
+  return getWishGroupItemsCount(movieId) > WISH_GROUP_AUTO_COLLAPSE_THRESHOLD
+}
 
 const toggleWishGroup = (movieId) => {
-  const next = new Set(collapsedWishMovieIds.value)
-  if (next.has(movieId)) next.delete(movieId)
-  else next.add(movieId)
-  collapsedWishMovieIds.value = next
+  const next = new Map(wishGroupCollapseOverrides.value)
+  next.set(movieId, !isWishGroupCollapsed(movieId))
+  wishGroupCollapseOverrides.value = next
+}
+
+const handleRemoveWishGroup = (movieId) => {
+  store.removeWishMovieGroup(movieId)
+  if (!wishGroupCollapseOverrides.value.has(movieId)) return
+  const next = new Map(wishGroupCollapseOverrides.value)
+  next.delete(movieId)
+  wishGroupCollapseOverrides.value = next
 }
 
 const expandAllWishGroups = () => {
-  collapsedWishMovieIds.value = new Set()
+  const next = new Map()
+  groupedWishPool.value.forEach((group) => {
+    next.set(group.movieId, false)
+  })
+  wishGroupCollapseOverrides.value = next
 }
 
 const collapseAllWishGroups = () => {
-  collapsedWishMovieIds.value = new Set(groupedWishPool.value.map((group) => group.movieId))
+  const next = new Map()
+  groupedWishPool.value.forEach((group) => {
+    next.set(group.movieId, true)
+  })
+  wishGroupCollapseOverrides.value = next
 }
 </script>
 
