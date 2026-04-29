@@ -8,8 +8,24 @@ const CINEMA_UPDATE_META_KEY = 'cinemaUpdateMeta'
 const MOVIE_UPDATE_META_KEY = 'movieUpdateMeta'
 const CINEMA_UPDATE_RESULT_KEY = 'cinemaUpdateResult'
 const MOVIE_UPDATE_RESULT_KEY = 'movieUpdateResult'
+const MOVIE_SHOWS_MAP_KEY = 'movieShowsMap'
 
 const EMPTY_UPDATE_META = { lastUpdatedAt: null, durationMs: null }
+
+const getLocalDateKey = (timestamp) => {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const isShowCacheFromToday = (cachedAt) => {
+  if (!cachedAt) return false
+  return getLocalDateKey(cachedAt) === getLocalDateKey(Date.now())
+}
 
 const loadFromStorage = (key, defaultValue) => {
   try {
@@ -29,6 +45,24 @@ const saveToStorage = (key, value) => {
   }
 }
 
+const loadMovieShowsMap = () => {
+  const raw = loadFromStorage(MOVIE_SHOWS_MAP_KEY, null)
+  if (!Array.isArray(raw)) return new Map()
+  const restored = new Map()
+  raw.forEach((entry) => {
+    if (!Array.isArray(entry) || entry.length !== 2) return
+    const [movieId, showData] = entry
+    if (isShowCacheFromToday(showData?.cachedAt)) {
+      restored.set(movieId, showData)
+    }
+  })
+  return restored
+}
+
+const saveMovieShowsMap = (map) => {
+  saveToStorage(MOVIE_SHOWS_MAP_KEY, Array.from(map.entries()))
+}
+
 export const useScheduleStore = defineStore('schedule', () => {
   // Persisted state
   const selectedMovies = ref(loadFromStorage(SELECTED_MOVIES_KEY, []))
@@ -39,8 +73,8 @@ export const useScheduleStore = defineStore('schedule', () => {
   const cinemaUpdateResult = ref(loadFromStorage(CINEMA_UPDATE_RESULT_KEY, null))
   const movieUpdateResult = ref(loadFromStorage(MOVIE_UPDATE_RESULT_KEY, null))
 
-  // Non-persisted cache: Map<movieId, showData>
-  const movieShowsMap = ref(new Map())
+  // Persisted cache: Map<movieId, showData> —— 同一自然日内有效，跨 0 点失效。
+  const movieShowsMap = ref(loadMovieShowsMap())
 
   // Persist on change
   watch(selectedMovies, (val) => saveToStorage(SELECTED_MOVIES_KEY, val), { deep: true })
@@ -78,18 +112,35 @@ export const useScheduleStore = defineStore('schedule', () => {
   // ===== movieShowsMap actions =====
   const setMovieShowsData = (movieId, showData) => {
     movieShowsMap.value.set(movieId, showData)
+    saveMovieShowsMap(movieShowsMap.value)
   }
 
   const removeMovieShowsData = (movieId) => {
+    if (!movieShowsMap.value.has(movieId)) return
     movieShowsMap.value.delete(movieId)
+    saveMovieShowsMap(movieShowsMap.value)
   }
 
   const getMovieShowsData = (movieId) => {
-    return movieShowsMap.value.get(movieId) || null
+    const showData = movieShowsMap.value.get(movieId)
+    if (!showData) return null
+    if (!isShowCacheFromToday(showData.cachedAt)) return null
+    return showData
   }
 
   const hasMovieShowsData = (movieId) => {
-    return movieShowsMap.value.has(movieId)
+    return getMovieShowsData(movieId) !== null
+  }
+
+  const pruneStaleMovieShows = () => {
+    let changed = false
+    movieShowsMap.value.forEach((showData, movieId) => {
+      if (!isShowCacheFromToday(showData?.cachedAt)) {
+        movieShowsMap.value.delete(movieId)
+        changed = true
+      }
+    })
+    if (changed) saveMovieShowsMap(movieShowsMap.value)
   }
 
   // ===== wishPool actions =====
@@ -177,6 +228,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     removeMovieShowsData,
     getMovieShowsData,
     hasMovieShowsData,
+    pruneStaleMovieShows,
     // wishPool
     isInWishPool,
     addToWishPool,

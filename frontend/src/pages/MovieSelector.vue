@@ -103,11 +103,9 @@ const updateForm = ref({ cityId: null, forceUpdate: false })
 const lastAddedMovieIds = ref(new Set())
 const lastUpdatedMovieIds = ref(new Set())
 
-// ===== 场次缓存 TTL =====
-const SHOW_CACHE_TTL_MS = 60 * 60 * 1000
-const CACHE_CLEANUP_INTERVAL_MS = 1000
-const currentTime = ref(Date.now())
-let cacheCleanupTimer = null
+// ===== 场次缓存跨天失效定时器 =====
+// 场次按自然日缓存：同一天内保留，跨过 0 点自动失效（由 store 负责判断）。
+let midnightCleanupTimer = null
 
 // ===== 电影列表状态 =====
 const movieSearchKeyword = ref('')
@@ -119,7 +117,8 @@ const movieFetchDetails = ref(new Map())       // Map<movieId, { dates: Record<s
 
 // ===== 初始化 =====
 onMounted(async () => {
-  startCacheCleanupTimer()
+  store.pruneStaleMovieShows()
+  scheduleMidnightCleanup()
   try {
     const response = await getCities()
     cities.value = response.data.data.cities
@@ -132,47 +131,37 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  stopCacheCleanupTimer()
+  stopMidnightCleanup()
 })
 
-// ===== 缓存清理定时器 =====
-const isMovieShowCacheExpired = (cachedAt) => {
-  if (!cachedAt) return true
-  return currentTime.value - cachedAt >= SHOW_CACHE_TTL_MS
+// ===== 跨天失效：定时到下一个 0 点触发一次 prune，然后重新排期 =====
+const MIDNIGHT_BUFFER_MS = 100
+
+const msUntilNextMidnight = () => {
+  const now = new Date()
+  const next = new Date(now)
+  next.setHours(24, 0, 0, MIDNIGHT_BUFFER_MS)
+  return Math.max(next.getTime() - now.getTime(), MIDNIGHT_BUFFER_MS)
 }
 
-const pruneExpiredMovieShows = () => {
-  store.movieShowsMap.forEach((showData, movieId) => {
-    if (isMovieShowCacheExpired(showData?.cachedAt)) {
-      store.removeMovieShowsData(movieId)
-    }
-  })
+const scheduleMidnightCleanup = () => {
+  stopMidnightCleanup()
+  midnightCleanupTimer = window.setTimeout(() => {
+    store.pruneStaleMovieShows()
+    scheduleMidnightCleanup()
+  }, msUntilNextMidnight())
 }
 
-const startCacheCleanupTimer = () => {
-  stopCacheCleanupTimer()
-  cacheCleanupTimer = window.setInterval(() => {
-    currentTime.value = Date.now()
-    pruneExpiredMovieShows()
-  }, CACHE_CLEANUP_INTERVAL_MS)
-}
-
-const stopCacheCleanupTimer = () => {
-  if (cacheCleanupTimer != null) {
-    window.clearInterval(cacheCleanupTimer)
-    cacheCleanupTimer = null
+const stopMidnightCleanup = () => {
+  if (midnightCleanupTimer != null) {
+    window.clearTimeout(midnightCleanupTimer)
+    midnightCleanupTimer = null
   }
 }
 
-const hasValidMovieShows = (movieId) => {
-  const showData = store.movieShowsMap.get(movieId)
-  return Boolean(showData && !isMovieShowCacheExpired(showData.cachedAt))
-}
+const hasValidMovieShows = (movieId) => store.hasMovieShowsData(movieId)
 
-const getMovieShowsData = (movieId) => {
-  if (!hasValidMovieShows(movieId)) return null
-  return store.movieShowsMap.get(movieId)
-}
+const getMovieShowsData = (movieId) => store.getMovieShowsData(movieId)
 
 // ===== 抓取进度辅助 =====
 const ensureMovieFetchDetails = (movieId) => {
