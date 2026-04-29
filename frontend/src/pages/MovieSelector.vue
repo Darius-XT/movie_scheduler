@@ -18,7 +18,6 @@
         <MovieFilterPanel
           :update-form="updateForm"
           @movies-selected="handleMoviesSelected"
-          @fetch-progress-update="handleFetchProgressUpdate"
         />
       </div>
 
@@ -210,22 +209,6 @@ const handleMoviesSelected = () => {
   // 清除过期的场次进度
   movieFetchDetails.value.clear()
   movieProgress.value.clear()
-}
-
-const handleFetchProgressUpdate = (event) => {
-  if (event.type === 'dates_found') {
-    initializeMovieDates(event.movieId, event.dates)
-  } else if (event.type === 'processing_date') {
-    updateMovieDateProgress(event.movieId, event.date, { active: true })
-  } else if (event.type === 'processing_cinema') {
-    updateMovieDateProgress(event.movieId, event.date, {
-      done: event.cinemaIdx,
-      total: event.totalCinemas,
-      active: true,
-    })
-  } else if (event.type === 'complete' || event.type === 'error') {
-    clearMovieFetchProgress(event.movieIds || [])
-  }
 }
 
 // ===== 单个电影获取场次 =====
