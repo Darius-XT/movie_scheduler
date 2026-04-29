@@ -75,26 +75,39 @@
           >
             没有符合筛选条件的场次
           </div>
-          <div v-else class="wish-pool-group-list">
-            <div
-              v-for="item in getFilteredWishItems(group)"
-              :key="item.key"
-              class="wish-pool-item"
-            >
-              <div class="wish-pool-main">
-                <div class="wish-pool-meta">
-                  <span>{{ formatDateWithRelativeWeek(item.date) }}</span>
-                  <span>{{ item.time }}</span>
-                  <span>{{ item.cinemaName }}</span>
-                  <span>{{ formatShowPrice(item.price) }}</span>
+          <template v-else>
+            <div class="wish-pool-group-list">
+              <div
+                v-for="item in getPagedWishItems(group)"
+                :key="item.key"
+                class="wish-pool-item"
+              >
+                <div class="wish-pool-main">
+                  <div class="wish-pool-meta">
+                    <span>{{ formatDateWithRelativeWeek(item.date) }}</span>
+                    <span>{{ item.time }}</span>
+                    <span>{{ item.cinemaName }}</span>
+                    <span>{{ formatShowPrice(item.price) }}</span>
+                  </div>
+                </div>
+                <div class="wish-pool-actions">
+                  <el-button size="small" type="success" @click="handleAddToSchedule(item)">加入行程</el-button>
+                  <el-button size="small" @click="store.removeFromWishPool(item.key)">移除</el-button>
                 </div>
               </div>
-              <div class="wish-pool-actions">
-                <el-button size="small" type="success" @click="handleAddToSchedule(item)">加入行程</el-button>
-                <el-button size="small" @click="store.removeFromWishPool(item.key)">移除</el-button>
-              </div>
             </div>
-          </div>
+            <el-pagination
+              v-if="getFilteredWishItems(group).length > SHOWS_PAGE_SIZE"
+              class="wish-pool-group-pagination"
+              small
+              background
+              layout="prev, pager, next, total"
+              :page-size="SHOWS_PAGE_SIZE"
+              :total="getFilteredWishItems(group).length"
+              :current-page="getWishGroupPage(group.movieId)"
+              @current-change="(page) => setWishGroupPage(group.movieId, page)"
+            />
+          </template>
         </div>
       </div>
     </div>
@@ -109,11 +122,13 @@ import { useScheduleStore } from '@/stores/scheduleStore'
 const store = useScheduleStore()
 
 const WISH_GROUP_AUTO_COLLAPSE_THRESHOLD = 3
+const SHOWS_PAGE_SIZE = 8
 
 const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinema: '', date: '' })
 
 const wishGroupCollapseOverrides = ref(new Map())
 const wishGroupFilters = ref(new Map())
+const wishGroupPages = ref(new Map())
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
@@ -272,6 +287,11 @@ const handleRemoveWishGroup = (movieId) => {
     nextFilters.delete(movieId)
     wishGroupFilters.value = nextFilters
   }
+  if (wishGroupPages.value.has(movieId)) {
+    const nextPages = new Map(wishGroupPages.value)
+    nextPages.delete(movieId)
+    wishGroupPages.value = nextPages
+  }
 }
 
 const getWishGroupFilter = (movieId) => {
@@ -288,6 +308,11 @@ const updateWishGroupFilter = (movieId, patch) => {
     next.set(movieId, nextFilter)
   }
   wishGroupFilters.value = next
+  if (wishGroupPages.value.has(movieId)) {
+    const nextPages = new Map(wishGroupPages.value)
+    nextPages.delete(movieId)
+    wishGroupPages.value = nextPages
+  }
 }
 
 const getWishGroupDateOptions = (movieId) => {
@@ -307,6 +332,21 @@ const getFilteredWishItems = (group) => {
     if (cinemaKeyword && !String(item.cinemaName || '').toLowerCase().includes(cinemaKeyword)) return false
     return true
   })
+}
+
+const getWishGroupPage = (movieId) => wishGroupPages.value.get(movieId) || 1
+
+const setWishGroupPage = (movieId, page) => {
+  const next = new Map(wishGroupPages.value)
+  next.set(movieId, page)
+  wishGroupPages.value = next
+}
+
+const getPagedWishItems = (group) => {
+  const filtered = getFilteredWishItems(group)
+  const page = getWishGroupPage(group.movieId)
+  const start = (page - 1) * SHOWS_PAGE_SIZE
+  return filtered.slice(start, start + SHOWS_PAGE_SIZE)
 }
 
 const expandAllWishGroups = () => {
@@ -440,6 +480,11 @@ const collapseAllWishGroups = () => {
   color: #94a3b8;
   font-size: 13px;
   padding: 8px 0;
+}
+
+.wish-pool-group-pagination {
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .wish-pool-item {

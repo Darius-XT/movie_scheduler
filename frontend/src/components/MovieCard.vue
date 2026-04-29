@@ -188,19 +188,11 @@
         <div v-if="displayGroups.length === 0" class="shows-empty">
           没有匹配的场次
         </div>
-        <div
-          v-for="group in displayGroups"
-          :key="`${movie.id}-${showViewMode}-${group.groupKey}`"
-          class="time-group-item"
-        >
-          <div class="time-group-header">
-            <span class="time-group-title">{{ group.groupTitle }}</span>
-            <el-tag size="small" type="info">{{ group.entries.length }} 个场次</el-tag>
-          </div>
+        <template v-else>
           <div class="time-group-list">
             <div
-              v-for="(entry, entryIndex) in group.entries"
-              :key="`${group.groupKey}-${entry.cinemaId}-${entry.time}-${entryIndex}`"
+              v-for="(entry, entryIndex) in getPagedEntries()"
+              :key="`${entry.cinemaId}-${entry.date}-${entry.time}-${entryIndex}`"
               class="time-group-row"
             >
               <div class="time-group-main">
@@ -226,7 +218,18 @@
               </div>
             </div>
           </div>
-        </div>
+          <el-pagination
+            v-if="allEntries.length > SHOWS_PAGE_SIZE"
+            class="time-group-pagination"
+            small
+            background
+            layout="prev, pager, next, total"
+            :page-size="SHOWS_PAGE_SIZE"
+            :total="allEntries.length"
+            :current-page="currentPage"
+            @current-change="(page) => (currentPage = page)"
+          />
+        </template>
         <div class="shows-collapse-footer">
           <el-button text type="primary" @click="toggleShows">
             <el-icon><ArrowUp /></el-icon>
@@ -240,7 +243,7 @@
 
 <script setup>
 import { ArrowUp } from '@element-plus/icons-vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 
 const props = defineProps({
@@ -478,6 +481,23 @@ const displayGroups = computed(() => {
           secondaryText: entry.time,
         })),
     }))
+})
+
+// ===== 分页 =====
+const SHOWS_PAGE_SIZE = 8
+const currentPage = ref(1)
+
+const allEntries = computed(() =>
+  displayGroups.value.flatMap((group) => group.entries),
+)
+
+const getPagedEntries = () => {
+  const start = (currentPage.value - 1) * SHOWS_PAGE_SIZE
+  return allEntries.value.slice(start, start + SHOWS_PAGE_SIZE)
+}
+
+watch([showViewMode, cinemaKeyword, selectedShowDate], () => {
+  currentPage.value = 1
 })
 </script>
 
@@ -726,32 +746,6 @@ const displayGroups = computed(() => {
   color: #606266;
 }
 
-.time-group-item {
-  margin-bottom: 16px;
-  padding: 12px;
-  background-color: #fbfcff;
-  border-radius: 6px;
-  border: 1px solid #e6ecf5;
-}
-
-.time-group-item:last-child {
-  margin-bottom: 0;
-}
-
-.time-group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.time-group-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-}
-
 .time-group-list {
   display: flex;
   flex-direction: column;
@@ -800,6 +794,11 @@ const displayGroups = computed(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.time-group-pagination {
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .shows-collapse-footer {
@@ -866,7 +865,6 @@ const displayGroups = computed(() => {
     flex: none;
   }
 
-  .time-group-header,
   .time-group-row {
     flex-direction: column;
     align-items: flex-start;
