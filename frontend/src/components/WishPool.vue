@@ -37,23 +37,62 @@
             </el-button>
           </div>
         </div>
-        <div v-if="!isWishGroupCollapsed(group.movieId)" class="wish-pool-group-list">
+        <div v-if="!isWishGroupCollapsed(group.movieId)" class="wish-pool-group-body">
+          <div v-if="group.items.length > 1" class="wish-pool-group-filter">
+            <el-input
+              :model-value="getWishGroupFilter(group.movieId).cinema"
+              class="wish-pool-group-filter-input"
+              size="small"
+              clearable
+              placeholder="搜索影院名"
+              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { cinema: value })"
+            />
+            <el-select
+              :model-value="getWishGroupFilter(group.movieId).date"
+              class="wish-pool-group-filter-select"
+              size="small"
+              clearable
+              placeholder="全部日期"
+              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { date: value ?? '' })"
+            >
+              <el-option
+                v-for="dateOption in getWishGroupDateOptions(group.movieId)"
+                :key="dateOption.value"
+                :label="dateOption.label"
+                :value="dateOption.value"
+              />
+            </el-select>
+            <span
+              v-if="getFilteredWishItems(group).length !== group.items.length"
+              class="wish-pool-group-filter-summary"
+            >
+              {{ getFilteredWishItems(group).length }} / {{ group.items.length }}
+            </span>
+          </div>
           <div
-            v-for="item in group.items"
-            :key="item.key"
-            class="wish-pool-item"
+            v-if="getFilteredWishItems(group).length === 0"
+            class="wish-pool-group-empty"
           >
-            <div class="wish-pool-main">
-              <div class="wish-pool-meta">
-                <span>{{ formatDateWithRelativeWeek(item.date) }}</span>
-                <span>{{ item.time }}</span>
-                <span>{{ item.cinemaName }}</span>
-                <span>{{ formatShowPrice(item.price) }}</span>
+            没有符合筛选条件的场次
+          </div>
+          <div v-else class="wish-pool-group-list">
+            <div
+              v-for="item in getFilteredWishItems(group)"
+              :key="item.key"
+              class="wish-pool-item"
+            >
+              <div class="wish-pool-main">
+                <div class="wish-pool-meta">
+                  <span>{{ formatDateWithRelativeWeek(item.date) }}</span>
+                  <span>{{ item.time }}</span>
+                  <span>{{ item.cinemaName }}</span>
+                  <span>{{ formatShowPrice(item.price) }}</span>
+                </div>
               </div>
-            </div>
-            <div class="wish-pool-actions">
-              <el-button size="small" type="success" @click="handleAddToSchedule(item)">加入行程</el-button>
-              <el-button size="small" @click="store.removeFromWishPool(item.key)">移除</el-button>
+              <div class="wish-pool-actions">
+                <el-button size="small" type="success" @click="handleAddToSchedule(item)">加入行程</el-button>
+                <el-button size="small" @click="store.removeFromWishPool(item.key)">移除</el-button>
+              </div>
             </div>
           </div>
         </div>
@@ -71,7 +110,10 @@ const store = useScheduleStore()
 
 const WISH_GROUP_AUTO_COLLAPSE_THRESHOLD = 3
 
+const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinema: '', date: '' })
+
 const wishGroupCollapseOverrides = ref(new Map())
+const wishGroupFilters = ref(new Map())
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
@@ -220,10 +262,51 @@ const toggleWishGroup = (movieId) => {
 
 const handleRemoveWishGroup = (movieId) => {
   store.removeWishMovieGroup(movieId)
-  if (!wishGroupCollapseOverrides.value.has(movieId)) return
-  const next = new Map(wishGroupCollapseOverrides.value)
-  next.delete(movieId)
-  wishGroupCollapseOverrides.value = next
+  if (wishGroupCollapseOverrides.value.has(movieId)) {
+    const next = new Map(wishGroupCollapseOverrides.value)
+    next.delete(movieId)
+    wishGroupCollapseOverrides.value = next
+  }
+  if (wishGroupFilters.value.has(movieId)) {
+    const nextFilters = new Map(wishGroupFilters.value)
+    nextFilters.delete(movieId)
+    wishGroupFilters.value = nextFilters
+  }
+}
+
+const getWishGroupFilter = (movieId) => {
+  return wishGroupFilters.value.get(movieId) || EMPTY_WISH_GROUP_FILTER
+}
+
+const updateWishGroupFilter = (movieId, patch) => {
+  const current = getWishGroupFilter(movieId)
+  const nextFilter = { ...current, ...patch }
+  const next = new Map(wishGroupFilters.value)
+  if (!nextFilter.cinema && !nextFilter.date) {
+    next.delete(movieId)
+  } else {
+    next.set(movieId, nextFilter)
+  }
+  wishGroupFilters.value = next
+}
+
+const getWishGroupDateOptions = (movieId) => {
+  const group = groupedWishPool.value.find((item) => item.movieId === movieId)
+  if (!group) return []
+  const uniqueDates = Array.from(new Set(group.items.map((item) => item.date).filter(Boolean))).sort()
+  return uniqueDates.map((date) => ({ value: date, label: formatDateWithRelativeWeek(date) }))
+}
+
+const getFilteredWishItems = (group) => {
+  const filter = getWishGroupFilter(group.movieId)
+  const cinemaKeyword = String(filter.cinema || '').trim().toLowerCase()
+  const targetDate = String(filter.date || '').trim()
+  if (!cinemaKeyword && !targetDate) return group.items
+  return group.items.filter((item) => {
+    if (targetDate && item.date !== targetDate) return false
+    if (cinemaKeyword && !String(item.cinemaName || '').toLowerCase().includes(cinemaKeyword)) return false
+    return true
+  })
 }
 
 const expandAllWishGroups = () => {
@@ -327,6 +410,38 @@ const collapseAllWishGroups = () => {
   gap: 10px;
 }
 
+.wish-pool-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wish-pool-group-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wish-pool-group-filter-input {
+  width: 180px;
+}
+
+.wish-pool-group-filter-select {
+  width: 200px;
+}
+
+.wish-pool-group-filter-summary {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.wish-pool-group-empty {
+  color: #94a3b8;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
 .wish-pool-item {
   display: flex;
   align-items: center;
@@ -390,6 +505,11 @@ const collapseAllWishGroups = () => {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .wish-pool-group-filter-input,
+  .wish-pool-group-filter-select {
+    width: 100%;
   }
 }
 </style>

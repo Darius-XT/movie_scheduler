@@ -7,12 +7,11 @@ from http.cookiejar import Cookie, CookieJar
 from typing import Any, cast
 
 import requests
+from bs4 import BeautifulSoup
 
 from app.core.config import config_manager
 from app.core.logger import logger
 from app.update.movie.base.entities import ScrapedMovieBaseInfo
-
-from bs4 import BeautifulSoup
 
 DEFAULT_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -214,8 +213,11 @@ class MovieBaseInfoClient:
             title = self._extract_title(item)
             genres, actors, release_date = self._extract_hover_meta(item)
             return ScrapedMovieBaseInfo(
-                id=movie_id, title=title, genres=genres,
-                actors=actors, release_date=release_date,
+                id=movie_id,
+                title=title,
+                genres=genres,
+                actors=actors,
+                release_date=release_date,
             )
         except Exception as error:
             logger.error("提取单部电影基础信息失败: %s", error)
