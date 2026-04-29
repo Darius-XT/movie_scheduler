@@ -26,6 +26,7 @@ class MovieWriteData(TypedDict, total=False):
     language: NotRequired[str | None]
     duration: NotRequired[str | None]
     description: NotRequired[str | None]
+    first_showing_at: NotRequired[str | None]
 
 
 # 对应数据库中的 movies 表
@@ -56,11 +57,10 @@ class Movie(Base):
     description = Column(Text, nullable=True, comment="剧情简介")
 
     # 时间戳（东八区北京时间）
-    first_seen_at = Column(
+    first_showing_at = Column(
         DateTime,
-        server_default=func.datetime("now", "+8 hours"),
-        nullable=False,
-        comment="首次抓取时间（北京时间，不随更新变化）",
+        nullable=True,
+        comment="最近一次进入正在热映状态的时间（北京时间）",
     )
     updated_at = Column(
         DateTime,
@@ -90,4 +90,5 @@ class Movie(Base):
             language=data.get("language"),
             duration=data.get("duration"),
             description=data.get("description"),
+            first_showing_at=data.get("first_showing_at"),
         )

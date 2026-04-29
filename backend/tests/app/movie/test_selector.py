@@ -27,7 +27,7 @@ class FakeMovie:
     language: str | None = None
     duration: str | None = None
     description: str | None = None
-    first_seen_at: object = None
+    first_showing_at: object = None
 
 
 class FakeMovieSelectionGateway:
@@ -58,7 +58,7 @@ class FakeMovieSelectionResultBuilder:
             language=None,
             duration=None,
             description=None,
-            first_seen_at=None,
+            first_showing_at=None,
         )
 
 
@@ -90,7 +90,7 @@ def test_movie_selector_filters_showing_movies() -> None:
             "language": None,
             "duration": None,
             "description": None,
-            "first_seen_at": None,
+            "first_showing_at": None,
         }
     ]
 
@@ -123,7 +123,7 @@ def test_movie_selector_filters_upcoming_movies() -> None:
             "language": None,
             "duration": None,
             "description": None,
-            "first_seen_at": None,
+            "first_showing_at": None,
         }
     ]
 

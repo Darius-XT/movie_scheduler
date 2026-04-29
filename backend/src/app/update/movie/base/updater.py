@@ -4,19 +4,27 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
 from typing import cast
 
 from app.core.logger import logger
 from app.models.movie import MovieWriteData
 from app.repositories.movie import movie_repository
 from app.update.entities import UpdateProgressEvent
+from app.update.movie.base.client import MovieBaseInfoClient
 from app.update.movie.base.entities import (
     MovieBaseInfoInputStats,
     MovieBaseInfoResultStats,
     MovieBaseInfoUpdateStats,
     ScrapedMovieBaseInfo,
 )
-from app.update.movie.base.client import MovieBaseInfoClient
+
+_BEIJING_TZ = timezone(timedelta(hours=8))
+
+
+def _now_beijing_iso() -> str:
+    """返回北京时间的 ISO 格式字符串（秒级精度，与 DB server_default 对齐）。"""
+    return datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 class MovieBaseInfoUpdater:
@@ -33,7 +41,9 @@ class MovieBaseInfoUpdater:
         """更新电影基础信息。"""
         logger.info("开始更新电影基础信息，city_id=%s", city_id)
         if progress_callback is not None:
-            progress_callback(UpdateProgressEvent(message="正在抓取电影列表", stage="fetching_movie_list", city_id=city_id))
+            progress_callback(
+                UpdateProgressEvent(message="正在抓取电影列表", stage="fetching_movie_list", city_id=city_id)
+            )
 
         existing_movie_ids = {cast(int, m.id) for m in movie_repository.get_all_movies()}
         logger.debug("数据库当前有 %s 部电影", len(existing_movie_ids))
@@ -48,14 +58,18 @@ class MovieBaseInfoUpdater:
 
         self._log_stats(stats)
         if progress_callback is not None:
-            progress_callback(UpdateProgressEvent(
-                message=(f"基础信息更新完成：新增 {stats.result_stats.added} 部，"
-                         f"更新 {stats.result_stats.updated} 部，删除 {stats.result_stats.removed} 部"),
-                stage="base_info_completed",
-                current=stats.input_stats.deduplicated_total,
-                total=stats.input_stats.deduplicated_total,
-                city_id=city_id,
-            ))
+            progress_callback(
+                UpdateProgressEvent(
+                    message=(
+                        f"基础信息更新完成：新增 {stats.result_stats.added} 部，"
+                        f"更新 {stats.result_stats.updated} 部，删除 {stats.result_stats.removed} 部"
+                    ),
+                    stage="base_info_completed",
+                    current=stats.input_stats.deduplicated_total,
+                    total=stats.input_stats.deduplicated_total,
+                    city_id=city_id,
+                )
+            )
         return stats
 
     def _scrape_all_movies(
@@ -89,12 +103,14 @@ class MovieBaseInfoUpdater:
         page = 1
         while True:
             if progress_callback is not None:
-                progress_callback(UpdateProgressEvent(
-                    message=f"正在抓取{show_type_name}第 {page} 页",
-                    stage="fetching_movie_list",
-                    city_id=city_id,
-                    page=page,
-                ))
+                progress_callback(
+                    UpdateProgressEvent(
+                        message=f"正在抓取{show_type_name}第 {page} 页",
+                        stage="fetching_movie_list",
+                        city_id=city_id,
+                        page=page,
+                    )
+                )
             result = self.client.fetch_page(show_type, page, city_id)
             if result is None:
                 logger.warning("获取页面失败，跳过 page=%s", page)
@@ -116,13 +132,19 @@ class MovieBaseInfoUpdater:
         """输出更新统计日志。"""
         logger.info(
             "基础电影信息输入统计: 抓取总数=%d, 正在热映=%d, 即将上映=%d, 重复=%d, 去重后总数=%d",
-            stats.input_stats.scraped_total, stats.input_stats.showing,
-            stats.input_stats.upcoming, stats.input_stats.duplicate, stats.input_stats.deduplicated_total,
+            stats.input_stats.scraped_total,
+            stats.input_stats.showing,
+            stats.input_stats.upcoming,
+            stats.input_stats.duplicate,
+            stats.input_stats.deduplicated_total,
         )
         logger.info(
             "基础电影信息更新结果统计: 原有=%d, 新增=%d, 更新=%d, 删除=%d, 当前总数=%d",
-            stats.result_stats.existing, stats.result_stats.added,
-            stats.result_stats.updated, stats.result_stats.removed, stats.result_stats.total,
+            stats.result_stats.existing,
+            stats.result_stats.added,
+            stats.result_stats.updated,
+            stats.result_stats.removed,
+            stats.result_stats.total,
         )
 
     def _build_input_stats(
@@ -173,7 +195,12 @@ class MovieBaseInfoUpdater:
         """保存新增电影，返回成功数量。"""
         count = 0
         for movie in unique_scraped_movies:
-            if movie.id in added_movie_ids and movie_repository.save_movie(cast(MovieWriteData, asdict(movie))):
+            if movie.id not in added_movie_ids:
+                continue
+            data = asdict(movie)
+            if movie.is_showing:
+                data["first_showing_at"] = _now_beijing_iso()
+            if movie_repository.save_movie(cast(MovieWriteData, data)):
                 count += 1
                 logger.info("添加新电影 %s (ID: %s)", movie.title, movie.id)
         return count
@@ -193,14 +220,25 @@ class MovieBaseInfoUpdater:
                 continue
             existing_is_showing = cast(bool, existing_movie.is_showing)
             update_data: MovieWriteData = {
-                "id": movie.id, "is_showing": movie.is_showing, "title": movie.title,
-                "genres": movie.genres, "actors": movie.actors, "release_date": movie.release_date,
+                "id": movie.id,
+                "is_showing": movie.is_showing,
+                "title": movie.title,
+                "genres": movie.genres,
+                "actors": movie.actors,
+                "release_date": movie.release_date,
             }
+            if not existing_is_showing and movie.is_showing:
+                update_data["first_showing_at"] = _now_beijing_iso()
             if movie_repository.save_movie(update_data):
                 count += 1
                 if existing_is_showing != movie.is_showing:
-                    logger.info("更新电影状态 %s (ID: %s), is_showing: %s -> %s",
-                                movie.title or "Unknown", movie.id, existing_is_showing, movie.is_showing)
+                    logger.info(
+                        "更新电影状态 %s (ID: %s), is_showing: %s -> %s",
+                        movie.title or "Unknown",
+                        movie.id,
+                        existing_is_showing,
+                        movie.is_showing,
+                    )
                 else:
                     logger.debug("更新电影基础信息: %s (ID: %s)", movie.title or "Unknown", movie.id)
         return count

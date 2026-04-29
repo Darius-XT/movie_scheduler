@@ -45,7 +45,10 @@ class MovieSelector:
             for movie in all_movies
             if self._matches(movie, selection_mode)
         ]
-        selected.sort(key=lambda m: m.first_seen_at or "", reverse=True)
+        selected.sort(
+            key=lambda m: (m.first_showing_at is not None, m.first_showing_at or ""),
+            reverse=True,
+        )
         logger.debug("筛选完成，共找到 %s 部电影", len(selected))
         return selected
 

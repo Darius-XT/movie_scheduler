@@ -24,7 +24,7 @@ class MovieSelectionResultBuilder:
             language=movie.language,
             duration=movie.duration,
             description=movie.description,
-            first_seen_at=str(movie.first_seen_at) if movie.first_seen_at else None,
+            first_showing_at=str(movie.first_showing_at) if movie.first_showing_at else None,
         )
 
 

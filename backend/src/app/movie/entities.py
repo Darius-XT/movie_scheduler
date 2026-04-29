@@ -24,7 +24,7 @@ class MovieSelectionItem:
     language: str | None
     duration: str | None
     description: str | None
-    first_seen_at: str | None
+    first_showing_at: str | None
 
 
 class MovieRecord(Protocol):
@@ -43,7 +43,7 @@ class MovieRecord(Protocol):
     language: str | None
     duration: str | None
     description: str | None
-    first_seen_at: object
+    first_showing_at: object
 
 
 class SupportsMovieSelectionGateway(Protocol):

@@ -31,7 +31,7 @@ class MovieSelectionItem(BaseModel):
     language: str | None = None
     duration: str | None = None
     description: str | None = None
-    first_seen_at: str | None = None
+    first_showing_at: str | None = None
 
 
 class MovieSelectionData(BaseModel):

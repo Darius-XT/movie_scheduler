@@ -33,7 +33,7 @@ def test_select_movie_endpoint_returns_movie_list(monkeypatch: pytest.MonkeyPatc
                 language=None,
                 duration=None,
                 description=None,
-                first_seen_at=None,
+                first_showing_at=None,
             )
         ]
 
@@ -59,7 +59,7 @@ def test_select_movie_endpoint_returns_movie_list(monkeypatch: pytest.MonkeyPatc
                     "language": None,
                     "duration": None,
                     "description": None,
-                    "first_seen_at": None,
+                    "first_showing_at": None,
                 }
             ]
         },

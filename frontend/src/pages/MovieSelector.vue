@@ -387,7 +387,14 @@ const filteredSelectedMovies = computed(() => {
   if (movieSortOrder.value === 'name') {
     movies.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'zh'))
   } else {
-    movies.sort((a, b) => String(b.first_seen_at || '').localeCompare(String(a.first_seen_at || '')))
+    movies.sort((a, b) => {
+      const av = a.first_showing_at || ''
+      const bv = b.first_showing_at || ''
+      if (!av && !bv) return 0
+      if (!av) return 1
+      if (!bv) return -1
+      return bv.localeCompare(av)
+    })
   }
 
   return movies
