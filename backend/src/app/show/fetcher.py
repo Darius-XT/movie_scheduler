@@ -70,17 +70,18 @@ class ShowForSelectedMovieFetcher:
                 return None
 
             movie_data, show_dates = context
+            date_counter = [0]  # 已完成的日期数，由并发任务共享递增
             date_tasks = [
                 self._process_single_date(
                     movie_id,
                     movie_data.movie_name,
                     city_id,
                     show_date,
-                    date_idx,
                     len(show_dates),
+                    date_counter,
                     progress_callback,
                 )
-                for date_idx, show_date in enumerate(show_dates)
+                for show_date in show_dates
             ]
             date_results = await asyncio.gather(*date_tasks, return_exceptions=True)
 
@@ -130,40 +131,52 @@ class ShowForSelectedMovieFetcher:
         movie_name: str,
         city_id: int,
         show_date: str,
-        date_idx: int,
         total_dates: int,
+        date_counter: list[int],
         progress_callback: ProgressCallback | None = None,
     ) -> dict[int, CinemaShowData] | None:
         """异步处理单个日期，获得该电影在全部影院的场次。"""
         try:
             logger.debug("处理日期: %s", show_date)
-            self._notify_processing_date(progress_callback, movie_id, show_date, date_idx, total_dates)
             cinema_ids = await asyncio.to_thread(self.gateway.get_cinemas, movie_id, show_date, city_id)
             if not cinema_ids:
                 logger.debug("日期 %s 没有找到影院", show_date)
+                date_counter[0] += 1
+                self._notify_processing_date(
+                    progress_callback, movie_id, show_date, date_counter[0], total_dates
+                )
                 return None
 
             logger.debug("找到 %s 个影院", len(cinema_ids))
+            cinema_counter = [0]  # 已完成的影院数
             cinema_tasks = [
                 self._get_cinema_shows(
                     cinema_id,
                     movie_name,
                     city_id,
                     show_date,
-                    cinema_idx,
                     len(cinema_ids),
+                    cinema_counter,
                     progress_callback,
                     movie_id,
                 )
-                for cinema_idx, cinema_id in enumerate(cinema_ids)
+                for cinema_id in cinema_ids
             ]
             cinema_results = await asyncio.gather(*cinema_tasks, return_exceptions=True)
 
             valid_results = self._collect_cinema_results(cinema_results)
+            date_counter[0] += 1
+            self._notify_processing_date(
+                progress_callback, movie_id, show_date, date_counter[0], total_dates
+            )
             return self.builder.build_cinemas_from_shows(valid_results)
         except BaseException as error:
             if self._is_degradable_error(error):
                 logger.warning("处理日期 %s 时发生可降级错误，跳过当前日期: %s", show_date, error)
+                date_counter[0] += 1
+                self._notify_processing_date(
+                    progress_callback, movie_id, show_date, date_counter[0], total_dates
+                )
                 return None
             logger.error("处理日期 %s 时发生不可恢复错误: %s", show_date, error)
             raise
@@ -189,31 +202,34 @@ class ShowForSelectedMovieFetcher:
         movie_name: str,
         city_id: int,
         show_date: str,
-        cinema_idx: int,
         total_cinemas: int,
+        cinema_counter: list[int],
         progress_callback: ProgressCallback | None = None,
         movie_id: int | None = None,
     ) -> list[FetchedShowItem]:
         """异步获取指定影院中指定电影的所有场次。"""
-        if progress_callback and movie_id is not None:
-            progress_callback(
-                ProcessingCinemaProgress(
-                    type="processing_cinema",
-                    date=show_date,
-                    cinema_idx=cinema_idx + 1,
-                    total_cinemas=total_cinemas,
-                    cinema_id=cinema_id,
-                    movie_id=movie_id,
-                )
+        try:
+            shows = await asyncio.to_thread(
+                self.gateway.get_cinema_shows,
+                cinema_id,
+                movie_name,
+                city_id,
+                show_date,
             )
-
-        return await asyncio.to_thread(
-            self.gateway.get_cinema_shows,
-            cinema_id,
-            movie_name,
-            city_id,
-            show_date,
-        )
+            return shows
+        finally:
+            cinema_counter[0] += 1
+            if progress_callback and movie_id is not None:
+                progress_callback(
+                    ProcessingCinemaProgress(
+                        type="processing_cinema",
+                        date=show_date,
+                        cinema_idx=cinema_counter[0],
+                        total_cinemas=total_cinemas,
+                        cinema_id=cinema_id,
+                        movie_id=movie_id,
+                    )
+                )
 
     def _finish_movie_result(
         self,
