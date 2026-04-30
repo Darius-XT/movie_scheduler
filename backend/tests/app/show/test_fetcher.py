@@ -9,10 +9,10 @@ from typing import cast
 import pytest
 
 from app.core.exceptions import ExternalDependencyError, RepositoryError
+from app.show.entities import FetchedShowItem, ProcessingDateProgress, ShowFetchProgressEvent
 from app.show.fetcher import ShowForSelectedMovieFetcher
-from app.show.entities import FetchedShowItem, ShowFetchProgressEvent
-from app.show.result_builder import MovieShowDataBuilder
 from app.show.gateway import ShowGateway
+from app.show.result_builder import MovieShowDataBuilder
 
 
 class FakeShowGateway:
@@ -99,6 +99,9 @@ def test_fetcher_builds_complete_movie_result() -> None:
     assert event_types[-1] == "movie_complete"
     assert event_types.count("processing_date") == 2
     assert event_types.count("processing_cinema") == 4
+    date_events = [event for event in progress_events if isinstance(event, ProcessingDateProgress)]
+    assert [event.date_idx for event in date_events] == [1, 2]
+    assert [event.total_dates for event in date_events] == [2, 2]
 
 
 def test_fetcher_skips_movie_when_degradable_error_occurs() -> None:

@@ -298,7 +298,7 @@ class ShowForSelectedMovieFetcher:
                 ProcessingDateProgress(
                     type="processing_date",
                     date=show_date,
-                    date_idx=date_idx + 1,
+                    date_idx=date_idx,
                     total_dates=total_dates,
                     movie_id=movie_id,
                 )
