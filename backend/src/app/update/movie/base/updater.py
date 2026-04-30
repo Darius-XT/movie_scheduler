@@ -22,9 +22,9 @@ from app.update.movie.base.entities import (
 _BEIJING_TZ = timezone(timedelta(hours=8))
 
 
-def _now_beijing_iso() -> str:
-    """返回北京时间的 ISO 格式字符串（秒级精度，与 DB server_default 对齐）。"""
-    return datetime.now(_BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S")
+def _now_beijing_datetime() -> datetime:
+    """返回北京时间的 datetime（秒级精度，与 DB server_default 对齐）。"""
+    return datetime.now(_BEIJING_TZ).replace(tzinfo=None, microsecond=0)
 
 
 class MovieBaseInfoUpdater:
@@ -199,7 +199,7 @@ class MovieBaseInfoUpdater:
                 continue
             data = asdict(movie)
             if movie.is_showing:
-                data["first_showing_at"] = _now_beijing_iso()
+                data["first_showing_at"] = _now_beijing_datetime()
             if movie_repository.save_movie(cast(MovieWriteData, data)):
                 count += 1
                 logger.info("添加新电影 %s (ID: %s)", movie.title, movie.id)
@@ -228,7 +228,7 @@ class MovieBaseInfoUpdater:
                 "release_date": movie.release_date,
             }
             if not existing_is_showing and movie.is_showing:
-                update_data["first_showing_at"] = _now_beijing_iso()
+                update_data["first_showing_at"] = _now_beijing_datetime()
             if movie_repository.save_movie(update_data):
                 count += 1
                 if existing_is_showing != movie.is_showing:

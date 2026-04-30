@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from typing import cast
 
 import pytest
@@ -187,6 +188,36 @@ def test_base_info_updater_counts_updated_by_unique_movie_id(monkeypatch: pytest
 
     assert result.updated == 1
     assert save_calls == [1]
+
+
+def test_base_info_updater_uses_datetime_for_first_showing_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    """first_showing_at 写入 DateTime 字段时应传 datetime 对象。"""
+
+    updater = MovieBaseInfoUpdater()
+    scraped_movies = [
+        ScrapedMovieBaseInfo(
+            id=2,
+            title="电影2",
+            genres="剧情",
+            actors="演员B",
+            release_date="2025-02-01",
+            is_showing=True,
+        ),
+    ]
+    saved: list[MovieWriteData] = []
+
+    def save_movie(movie_data: MovieWriteData) -> bool:
+        saved.append(movie_data)
+        return True
+
+    monkeypatch.setattr(movie_repository, "save_movie", save_movie)
+
+    result = updater._add_new_movies(scraped_movies, {2})  # pyright: ignore[reportPrivateUsage]
+
+    assert result == 1
+    first_showing_at = saved[0]["first_showing_at"]
+    assert isinstance(first_showing_at, datetime)
+    assert first_showing_at.tzinfo is None
 
 
 def test_all_movie_info_updater_orchestrates_full_flow() -> None:

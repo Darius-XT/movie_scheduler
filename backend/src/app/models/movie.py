@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from typing import NotRequired, Required, TypedDict
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
@@ -26,7 +27,7 @@ class MovieWriteData(TypedDict, total=False):
     language: NotRequired[str | None]
     duration: NotRequired[str | None]
     description: NotRequired[str | None]
-    first_showing_at: NotRequired[str | None]
+    first_showing_at: NotRequired[date | datetime | None]
 
 
 # 对应数据库中的 movies 表
