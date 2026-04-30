@@ -245,6 +245,7 @@
 import { ArrowUp } from '@element-plus/icons-vue'
 import { computed, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
+import { formatDateWithRelativeWeek } from '@/utils/dateLabels'
 
 const props = defineProps({
   movie: {
@@ -308,36 +309,6 @@ const toggleShows = () => {
 
 // Expose toggleShows so parent can auto-expand after fetch
 defineExpose({ toggleShows, showsExpanded })
-
-const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-
-const getWeekStart = (date) => {
-  const normalized = new Date(date)
-  normalized.setHours(0, 0, 0, 0)
-  const weekday = normalized.getDay()
-  const offset = weekday === 0 ? -6 : 1 - weekday
-  normalized.setDate(normalized.getDate() + offset)
-  return normalized
-}
-
-const formatDateWithRelativeWeek = (dateText) => {
-  if (!dateText) return ''
-  const targetDate = new Date(`${dateText}T00:00:00`)
-  if (Number.isNaN(targetDate.getTime())) return dateText
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const currentWeekStart = getWeekStart(today)
-  const targetWeekStart = getWeekStart(targetDate)
-  const diffWeeks = Math.floor(
-    (targetWeekStart.getTime() - currentWeekStart.getTime()) / (7 * 24 * 60 * 60 * 1000)
-  )
-  let suffix = ''
-  if (diffWeeks <= 0) suffix = `本${WEEKDAY_LABELS[targetDate.getDay()]}`
-  else if (diffWeeks === 1) suffix = `下${WEEKDAY_LABELS[targetDate.getDay()]}`
-  else if (diffWeeks === 2) suffix = `下下${WEEKDAY_LABELS[targetDate.getDay()]}`
-  else suffix = '三周后'
-  return `${dateText}（${suffix}）`
-}
 
 const formatShowPrice = (price) => {
   const normalized = String(price ?? '').trim()
