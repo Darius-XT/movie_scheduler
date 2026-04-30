@@ -29,10 +29,10 @@ def test_douban_info_enricher_prefers_title_and_year_match() -> None:
     """应优先命中标题和年份都匹配的豆瓣候选。"""
     client = FakeDoubanApiClient([
         DoubanMovieSearchItem(title="哪吒之魔童降世", rating="8.4",
-                              cover_link="https://movie.douban.com/subject/26794435/",
+                              cover_link="https://m.douban.com/movie/subject/26794435/",
                               year="2019", country="中国大陆", actors=["饺子", "吕艳婷"]),
         DoubanMovieSearchItem(title="哪吒之魔童闹海", rating="8.4",
-                              cover_link="https://movie.douban.com/subject/34780991/",
+                              cover_link="https://m.douban.com/movie/subject/34780991/",
                               year="2025", country="中国大陆", actors=["饺子", "吕艳婷"]),
     ])
     enricher = DoubanInfoEnricher(client=cast(DoubanApiClient, client))
@@ -40,7 +40,7 @@ def test_douban_info_enricher_prefers_title_and_year_match() -> None:
     result = enricher.fetch_movie_supplement(_make_movie())
 
     assert result.score == "8.4"
-    assert result.douban_url == "https://movie.douban.com/subject/34780991/"
+    assert result.douban_url == "https://m.douban.com/movie/subject/34780991/"
 
 
 def test_douban_info_enricher_returns_no_score_when_title_is_empty() -> None:

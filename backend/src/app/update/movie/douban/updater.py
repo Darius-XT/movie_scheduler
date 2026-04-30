@@ -16,6 +16,8 @@ from app.update.movie.douban.enricher import (
     douban_info_enricher,
 )
 
+MAX_DOUBAN_UPDATE_CONCURRENCY = 2
+
 
 class MovieDoubanInfoUpdater:
     """负责补充电影的豆瓣评分与详情链接。"""
@@ -41,8 +43,10 @@ class MovieDoubanInfoUpdater:
             return 0
 
         total_movies = len(movies_to_update)
+        semaphore = asyncio.Semaphore(MAX_DOUBAN_UPDATE_CONCURRENCY)
         tasks = [
-            self._process_single_movie(
+            self._process_single_movie_with_limit(
+                semaphore=semaphore,
                 movie=movie,
                 index=idx,
                 total_movies=total_movies,
@@ -61,6 +65,23 @@ class MovieDoubanInfoUpdater:
             success_count + failure_count,
         )
         return success_count
+
+    async def _process_single_movie_with_limit(
+        self,
+        *,
+        semaphore: asyncio.Semaphore,
+        movie: object,
+        index: int,
+        total_movies: int,
+        progress_callback: Callable[[UpdateProgressEvent], None] | None,
+    ) -> bool:
+        async with semaphore:
+            return await self._process_single_movie(
+                movie=movie,
+                index=index,
+                total_movies=total_movies,
+                progress_callback=progress_callback,
+            )
 
     async def _process_single_movie(
         self,
