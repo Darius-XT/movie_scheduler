@@ -129,12 +129,18 @@ SSE 帧不包在 `success/data` 中，但每帧仍是结构化 JSON：
 
 ## 环境变量
 
-所有项目自有变量使用 `MOVIE_SCHEDULER_` 前缀：
+所有项目自有变量使用 `MOVIE_SCHEDULER_` 前缀，模板维护在 `backend/.env.example`。
 
-```
-MOVIE_SCHEDULER_DB_PATH=.runtime/movies.db
-MOVIE_SCHEDULER_LOG_LEVEL=debug
-```
+| 变量 | 用途 |
+|------|------|
+| `MOVIE_SCHEDULER_LOG_LEVEL` | 后端日志级别 |
+| `MOVIE_SCHEDULER_DB_PATH` | SQLite 数据库路径；相对路径按 `backend/` 解析 |
+| `MOVIE_SCHEDULER_DEFAULT_CITY_ID` | 未显式传入 `city_id` 时使用的默认城市 |
+| `MOVIE_SCHEDULER_CITY_MAPPING` | 可选城市名到城市 ID 的 JSON 对象 |
+| `MOVIE_SCHEDULER_YEAR_THRESHOLD` | 电影年份筛选阈值 |
+| `MOVIE_SCHEDULER_TIMEOUT` | 外部请求超时时间，单位秒 |
+| `MOVIE_SCHEDULER_HOST` / `MOVIE_SCHEDULER_PORT` | 后端监听地址与端口 |
+| `MOVIE_SCHEDULER_CORS_ORIGINS` | CORS 允许来源 JSON 数组 |
 
 ## 代码规模
 

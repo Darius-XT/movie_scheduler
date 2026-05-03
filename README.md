@@ -88,22 +88,26 @@ backend/.runtime/movies.db
 MOVIE_SCHEDULER_LOG_LEVEL=debug
 MOVIE_SCHEDULER_DB_PATH=.runtime/movies.db
 MOVIE_SCHEDULER_DEFAULT_CITY_ID=10
+MOVIE_SCHEDULER_CITY_MAPPING={"北京":1,"上海":10}
+MOVIE_SCHEDULER_YEAR_THRESHOLD=2020
 MOVIE_SCHEDULER_TIMEOUT=60
 MOVIE_SCHEDULER_HOST=0.0.0.0
 MOVIE_SCHEDULER_PORT=8000
 MOVIE_SCHEDULER_CORS_ORIGINS=["*"]
 ```
 
-Docker 环境中后端工作目录是 `/app`，所以 `.runtime/movies.db` 会解析为 `/app/.runtime/movies.db`。
+其中 `MOVIE_SCHEDULER_CITY_MAPPING` 控制前端可选城市及后端允许的城市 ID；
+`MOVIE_SCHEDULER_DEFAULT_CITY_ID` 必须存在于该映射值中。Docker 环境中后端工作目录是 `/app`，
+所以 `.runtime/movies.db` 会解析为 `/app/.runtime/movies.db`。
 
 ## 主要功能
 
 - 获取城市列表：`GET /api/cities`
-- 更新影院数据：`GET /api/update/cinema-stream`
-- 更新电影数据：`GET /api/update/movie-stream`
+- 更新影院数据：`GET /api/update/cinema-stream?city_id=10&force_update_all=false`
+- 更新电影数据：`GET /api/update/movie-stream?city_id=10&force_update_all=false`
 - 选择待查询电影：`POST /api/movies/select`
 - 获取豆瓣信息：`POST /api/movies/{movie_id}/fetch-douban`
-- 拉取排片数据：`GET /api/shows/fetch-stream`
+- 拉取排片数据：`GET /api/shows/fetch-stream?movie_ids=1,2&city_id=10`
 
 部分接口使用 SSE 流式返回，前端会逐步展示更新进度。
 
