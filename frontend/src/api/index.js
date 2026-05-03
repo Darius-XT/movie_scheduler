@@ -7,6 +7,10 @@ const api = axios.create({
 
 export const getCities = () => api.get('/cities')
 
+export const getPlanning = () => api.get('/planning')
+
+export const savePlanning = (planning) => api.put('/planning', planning)
+
 export const selectMovies = (selectionMode = 'all') =>
   api.post('/movies/select', { selection_mode: selectionMode })
 

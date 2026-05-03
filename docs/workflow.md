@@ -13,11 +13,28 @@ docker compose up -d
 cd backend && uv run pytest
 ```
 
-规范见 [后端测试规范](backend-testing.md)，要点：
+规范见 [后端测试规范](../backend/docs/testing.md)，要点：
 
 - 所有新增 public 方法必须有对应测试
 - 测试目录镜像 `src/app/`，文件命名 `test_{被测模块名}.py`
 - 用 `monkeypatch` 或构造函数注入隔离依赖，不做真实网络请求
+
+## 代码修改后的检查
+
+修改 Python 后端代码后，必须在仓库根目录运行全局 Pyright 检查：
+
+```bash
+pyright
+```
+
+发现 Pyright 报错时，优先按真实类型问题修复代码；如果是 SQLAlchemy ORM 动态字段等静态分析无法推断的场景，
+只能使用项目允许的 `getattr()` + `cast()` 方式局部收敛类型，不能用 `cast()` 掩盖普通类型错误。
+
+交付前必须满足：
+
+- Pyright 全局检查无错误
+- 后端测试通过：`cd backend && uv run pytest`
+- 如果本机缺少 `pyright` 命令，必须在交付说明中明确写出未运行原因，不能默默跳过
 
 ## Git 规范
 

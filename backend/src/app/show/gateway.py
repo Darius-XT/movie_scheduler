@@ -6,9 +6,9 @@ from typing import cast
 
 from app.repositories.movie import movie_repository
 from app.show.cinema_client import cinema_client
-from app.show.cinema_show_client import cinema_show_client
+from app.show.date_client import date_client
 from app.show.entities import FetchedShowItem
-from app.show.show_date_client import show_date_client
+from app.show.show_client import show_client
 
 
 class ShowGateway:
@@ -28,7 +28,7 @@ class ShowGateway:
 
     def get_show_dates(self, movie_id: int, city_id: int) -> list[str]:
         """抓取电影可排片日期。"""
-        return show_date_client.get_show_dates(movie_id, city_id)
+        return date_client.get_show_dates(movie_id, city_id)
 
     def get_cinemas(self, movie_id: int, show_date: str, city_id: int) -> list[int]:
         """抓取指定电影在某日的全部影院 ID。"""
@@ -59,7 +59,7 @@ class ShowGateway:
         show_date: str | None = None,
     ) -> list[FetchedShowItem]:
         """抓取指定影院中某部电影的场次，可选限制到指定日期。"""
-        return cinema_show_client.get_cinema_shows(cinema_id, city_id, movie_name, show_date)
+        return show_client.get_cinema_shows(cinema_id, city_id, movie_name, show_date)
 
 
 show_gateway = ShowGateway()

@@ -15,13 +15,15 @@ movie_scheduler/
 ├── backend/              # 后端服务
 │   ├── src/app/          # FastAPI 应用源码
 │   ├── migrations/       # Alembic 数据库迁移
+│   ├── docs/             # 后端结构、数据库、架构规范、API 文档
 │   ├── scripts/          # 启动和辅助脚本
 │   ├── .env.example      # 后端环境变量模板
 │   └── .runtime/         # 本地运行时文件，包含 SQLite 数据库
 ├── frontend/             # Vue 前端
+│   ├── docs/             # 前端规范文档
 │   ├── src/
 │   └── package.json
-├── docs/                 # 项目规范和开发文档
+├── docs/                 # 跨端开发流程文档
 └── docker-compose.yml    # 本地开发编排
 ```
 
@@ -78,6 +80,8 @@ backend/.runtime/movies.db
 
 容器读写数据库时，实际读写的是本地这份 SQLite 文件。执行 `docker compose down` 不会删除数据库；删除 `backend/.runtime/movies.db` 才会清空本地数据库文件。
 
+当前 SQLite 数据库保存影院、电影、豆瓣补充信息，以及单用户的想看池和行程计划。
+
 ## 环境变量
 
 后端配置位于 `backend/.env`，模板见 `backend/.env.example`。
@@ -91,6 +95,7 @@ MOVIE_SCHEDULER_DEFAULT_CITY_ID=10
 MOVIE_SCHEDULER_CITY_MAPPING={"北京":1,"上海":10}
 MOVIE_SCHEDULER_YEAR_THRESHOLD=2020
 MOVIE_SCHEDULER_TIMEOUT=60
+MOVIE_SCHEDULER_DOUBAN_API_BASE_URL=http://localhost:8085
 MOVIE_SCHEDULER_HOST=0.0.0.0
 MOVIE_SCHEDULER_PORT=8000
 MOVIE_SCHEDULER_CORS_ORIGINS=["*"]
@@ -99,6 +104,7 @@ MOVIE_SCHEDULER_CORS_ORIGINS=["*"]
 其中 `MOVIE_SCHEDULER_CITY_MAPPING` 控制前端可选城市及后端允许的城市 ID；
 `MOVIE_SCHEDULER_DEFAULT_CITY_ID` 必须存在于该映射值中。Docker 环境中后端工作目录是 `/app`，
 所以 `.runtime/movies.db` 会解析为 `/app/.runtime/movies.db`。
+`MOVIE_SCHEDULER_DOUBAN_API_BASE_URL` 指向豆瓣信息补充服务，代码读取时会自动移除末尾 `/`。
 
 ## 主要功能
 
@@ -108,6 +114,7 @@ MOVIE_SCHEDULER_CORS_ORIGINS=["*"]
 - 选择待查询电影：`POST /api/movies/select`
 - 获取豆瓣信息：`POST /api/movies/{movie_id}/fetch-douban`
 - 拉取排片数据：`GET /api/shows/fetch-stream?movie_ids=1,2&city_id=10`
+- 读取/保存单用户排片计划：`GET /api/planning` / `PUT /api/planning`
 
 部分接口使用 SSE 流式返回，前端会逐步展示更新进度。
 
@@ -173,8 +180,11 @@ Linux 容器执行 `.sh` 文件需要 LF 行尾。仓库通过 `.gitattributes` 
 
 ## 更多文档
 
-- 后端架构：[docs/backend-architecture.md](docs/backend-architecture.md)
-- 后端规范：[docs/backend-conventions.md](docs/backend-conventions.md)
-- 后端测试：[docs/backend-testing.md](docs/backend-testing.md)
-- 前端规范：[docs/frontend.md](docs/frontend.md)
+- 后端领域地图：[backend/docs/structure.md](backend/docs/structure.md)
+- 后端数据库：[backend/docs/database.md](backend/docs/database.md)
+- 后端架构规范：[backend/docs/architecture.md](backend/docs/architecture.md)
+- 后端编码规范：[backend/docs/conventions.md](backend/docs/conventions.md)
+- 后端测试规范：[backend/docs/testing.md](backend/docs/testing.md)
+- API 契约：[backend/docs/api.md](backend/docs/api.md)
+- 前端规范：[frontend/docs/frontend.md](frontend/docs/frontend.md)
 - 开发流程：[docs/workflow.md](docs/workflow.md)

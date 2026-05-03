@@ -10,8 +10,8 @@ from typing import Literal
 from app.core.bootstrap import bootstrap_runtime
 from app.core.file_saver import file_saver
 from app.show.cinema_client import CinemaClient
-from app.show.cinema_show_client import CinemaShowClient
-from app.show.show_date_client import ShowDateClient
+from app.show.date_client import DateClient
+from app.show.show_client import ShowClient
 from app.update.cinema.client import CinemaInfoClient
 from app.update.movie.base.client import MovieBaseInfoClient
 from app.update.movie.douban.client import DoubanApiClient
@@ -87,7 +87,7 @@ def export_sample(sample_name: SampleName) -> dict[str, str]:
 def _fetch_sample(sample_name: SampleName) -> str:
     """根据样本类型抓取原始内容。"""
     if sample_name == "show_dates":
-        client = ShowDateClient()
+        client = DateClient()
         dates = client.get_show_dates(DEMO_MOVIE_ID, DEMO_CITY_ID)
         return json.dumps(dates, ensure_ascii=False, indent=2)
 
@@ -99,7 +99,7 @@ def _fetch_sample(sample_name: SampleName) -> str:
         return json.dumps(cinema_ids, ensure_ascii=False, indent=2)
 
     if sample_name == "cinema_shows":
-        client = CinemaShowClient()
+        client = ShowClient()
         return client.fetch_raw(DEMO_CINEMA_ID, DEMO_CITY_ID) or ""
 
     if sample_name == "movie_base_info":

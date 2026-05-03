@@ -35,7 +35,7 @@
               :key="item.key"
               class="schedule-item"
             >
-              <div class="schedule-item-time">{{ item.time }}</div>
+              <div class="schedule-item-time">{{ formatScheduleItemTimeRange(item) }}</div>
               <div class="schedule-item-title">{{ item.movieTitle }}</div>
               <div class="schedule-item-meta">{{ item.cinemaName }}</div>
               <div class="schedule-item-price">{{ formatShowPrice(item.price) }}</div>
@@ -67,6 +67,7 @@ import { ElMessage } from 'element-plus'
 import { computed } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { formatDateWithRelativeWeek } from '@/utils/dateLabels'
+import { formatShowTimeRange } from '@/utils/showTime'
 
 const store = useScheduleStore()
 
@@ -75,6 +76,8 @@ const formatShowPrice = (price) => {
   if (!normalized || normalized === '0' || normalized === '0.0' || normalized === '0.00') return '暂无价格'
   return `￥${normalized}`
 }
+
+const formatScheduleItemTimeRange = (item) => formatShowTimeRange(item.time, item.durationMinutes)
 
 const scheduleDateColumns = computed(() => {
   const groups = new Map()

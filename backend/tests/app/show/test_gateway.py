@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.exceptions import DataParsingError, ExternalDependencyError
-from app.show.show_date_client import show_date_client
+from app.show.date_client import date_client
 from app.show.gateway import show_gateway
 
 
@@ -18,7 +18,7 @@ def test_get_show_dates_raises_external_dependency_error_on_scrape_failure(
         del movie_id, city_id
         return None
 
-    monkeypatch.setattr(show_date_client, "_fetch", fake_fetch)
+    monkeypatch.setattr(date_client, "_fetch", fake_fetch)
 
     with pytest.raises(ExternalDependencyError):
         show_gateway.get_show_dates(1, 10)
@@ -37,8 +37,8 @@ def test_get_show_dates_raises_data_parsing_error_on_empty_parse_result(
         del raw_content
         return []
 
-    monkeypatch.setattr(show_date_client, "_fetch", fake_fetch)
-    monkeypatch.setattr(show_date_client, "parse", fake_parse)
+    monkeypatch.setattr(date_client, "_fetch", fake_fetch)
+    monkeypatch.setattr(date_client, "parse", fake_parse)
 
     with pytest.raises(DataParsingError):
         show_gateway.get_show_dates(1, 10)

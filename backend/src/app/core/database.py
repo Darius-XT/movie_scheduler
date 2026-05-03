@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine
@@ -42,7 +42,7 @@ class DatabaseManager:
             raise
 
     @contextmanager
-    def session(self) -> Iterator[Session]:
+    def session(self) -> Generator[Session, None, None]:
         """提供只读/通用会话上下文，不自动提交事务。"""
         self.initialize()
 
@@ -56,7 +56,7 @@ class DatabaseManager:
             session.close()
 
     @contextmanager
-    def transaction(self) -> Iterator[Session]:
+    def transaction(self) -> Generator[Session, None, None]:
         """提供带自动提交与回滚的事务会话上下文。"""
         self.initialize()
 

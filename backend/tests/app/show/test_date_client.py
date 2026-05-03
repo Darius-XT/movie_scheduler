@@ -1,6 +1,6 @@
 """放映日期解析器测试。"""
 
-from app.show.show_date_client import show_date_client
+from app.show.date_client import date_client
 
 
 def test_show_date_parser_extracts_dates_from_json_payload() -> None:
@@ -20,7 +20,7 @@ def test_show_date_parser_extracts_dates_from_json_payload() -> None:
     }
     """
 
-    assert show_date_client.parse(payload) == [
+    assert date_client.parse(payload) == [
         "2026-04-08",
         "2026-04-14",
         "2026-04-15",

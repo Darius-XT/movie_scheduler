@@ -1,4 +1,4 @@
-"""影院场次客户端：合并 scraper + parser，对外返回业务对象。"""
+"""场次客户端：根据日期与影院抓取具体场次。"""
 
 from __future__ import annotations
 
@@ -6,15 +6,11 @@ import json
 import re
 from typing import TypedDict, cast
 
-import requests
-import urllib3
-
 from app.core.config import config_manager
 from app.core.exceptions import DataParsingError, ExternalDependencyError
 from app.core.logger import logger
 from app.show.entities import FetchedShowItem
-
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from app.show.request_helper import fetch_show_api_text
 
 
 class ShowItemData(TypedDict, total=False):
@@ -55,7 +51,7 @@ class RootData(TypedDict, total=False):
     data: CinemaShowsData
 
 
-class CinemaShowClient:
+class ShowClient:
     """合并 HTTP 抓取与 JSON 解析，返回场次列表。"""
 
     def __init__(self) -> None:
@@ -101,35 +97,7 @@ class CinemaShowClient:
         """发起 HTTP 请求，失败返回 None。"""
         normalized_city_id = int(city_id if city_id is not None else (config_manager.city_id or 10))
         url = f"{self.base_url}?cinemaId={cinema_id}&ci={normalized_city_id}"
-        try:
-            logger.debug("开始获取影院场次信息: %s", url)
-
-            headers = {
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-                "Referer": "https://www.maoyan.com/",
-                "Origin": "https://www.maoyan.com",
-            }
-
-            response = requests.get(url, headers=headers, timeout=self.timeout, verify=False)
-            logger.debug("响应状态码: %s", response.status_code)
-            logger.debug("响应长度: %s 字符", len(response.text))
-
-            if response.status_code == 200:
-                logger.debug("成功获取影院场次 JSON")
-                return response.text
-
-            logger.error(
-                "获取影院场次请求失败: status=%s, url=%s, response=%s",
-                response.status_code,
-                url,
-                response.text[:1000],
-            )
-            return None
-        except Exception as error:
-            logger.error("获取影院场次异常: url=%s, error=%s", url, error, exc_info=True)
-            return None
+        return fetch_show_api_text(url, self.timeout, "获取影院场次信息")
 
     # ------------------------------------------------------------------
     # 解析（public，供测试直接调用）
@@ -241,4 +209,4 @@ class CinemaShowClient:
         return match.group(0) if match is not None else normalized_value
 
 
-cinema_show_client = CinemaShowClient()
+show_client = ShowClient()

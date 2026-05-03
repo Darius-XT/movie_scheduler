@@ -1,32 +1,21 @@
-"""放映日期客户端：合并 scraper + parser，对外返回业务对象。"""
+"""日期客户端：抓取电影在城市内有哪些上映日期。"""
 
 from __future__ import annotations
 
 import json
 from typing import cast
 
-import requests
-import urllib3
-
 from app.core.exceptions import DataParsingError, ExternalDependencyError
 from app.core.logger import logger
+from app.show.request_helper import fetch_show_api_text
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-
-class ShowDateClient:
+class DateClient:
     """合并 HTTP 抓取与 JSON 解析，直接返回放映日期列表。"""
 
     def __init__(self) -> None:
         self.base_url = "https://apis.netstart.cn/maoyan/movie/showdays"
         self.timeout = 30
-        self.headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-            "Referer": "https://www.maoyan.com/",
-            "Origin": "https://www.maoyan.com",
-        }
 
     def get_show_dates(self, movie_id: int, city_id: int) -> list[str]:
         """获取指定电影在指定城市的可用放映日期。
@@ -57,38 +46,7 @@ class ShowDateClient:
         """发起 HTTP 请求，失败返回 None。"""
         normalized_city_id = int(city_id)
         url = f"{self.base_url}?movieId={movie_id}&cityId={normalized_city_id}"
-        try:
-            logger.debug(
-                "开始抓取放映日期信息: movieId=%s, cityId=%s, url=%s",
-                movie_id,
-                normalized_city_id,
-                url,
-            )
-
-            response = requests.get(
-                url,
-                headers=self.headers,
-                timeout=self.timeout,
-                verify=False,
-            )
-
-            logger.debug("响应状态码: %s", response.status_code)
-            logger.debug("响应长度: %s 字符", len(response.text))
-
-            if response.status_code == 200:
-                logger.debug("成功获取放映日期 JSON")
-                return response.text
-
-            logger.error(
-                "获取放映日期请求失败: status=%s, url=%s, response=%s",
-                response.status_code,
-                url,
-                response.text[:1000],
-            )
-            return None
-        except Exception as error:
-            logger.error("获取放映日期异常: url=%s, error=%s", url, error, exc_info=True)
-            return None
+        return fetch_show_api_text(url, self.timeout, "抓取放映日期信息")
 
     # ------------------------------------------------------------------
     # 解析（public，供测试直接调用）
@@ -137,4 +95,4 @@ class ShowDateClient:
         return dates
 
 
-show_date_client = ShowDateClient()
+date_client = DateClient()

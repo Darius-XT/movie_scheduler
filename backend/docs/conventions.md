@@ -1,4 +1,4 @@
-# 后端编码规范
+# 编码规范
 
 ## 命名规范
 
@@ -44,16 +44,6 @@ def get_movies():
 | service 内部流转 | dataclass（`@dataclass(slots=True)`）|
 
 ORM 对象不出 service，Pydantic schema 不进 repository。
-
-## Gateway 与 Client、Result Builder 的职责边界
-
-| 角色 | 职责 | 不应做的事 |
-|------|------|-----------|
-| `client.py` | 与单个外部 HTTP 接口对话；合并 scraper + parser；对外返回单一类型的业务对象或抛出 `ExternalDependencyError` / `DataParsingError` | 不调用 DB、不调用其他 client、不实现业务规则 |
-| `gateway.py` | 把"用例所需的所有外部访问能力"组合到一个对象上（DB 读 + 多个 client 调用，可含分页等"调用编排"） | 不实现业务规则；不持有领域状态 |
-| `result_builder.py` | 把内部 dataclass / 抓取结果转换为 service / 用例输出结构 | 不发起 IO；不抛业务异常 |
-| `service.py` | 输入校验、调用 gateway/updater/builder、组装最终输出；async 入口 | 不直接发 HTTP；不直接执行同步 DB IO（用 `asyncio.to_thread`） |
-| `*_reset_helper.py` 等 | 一个具体的领域内辅助行为（重置、清理、迁移等） | 不做主业务流程的事 |
 
 ## 类型标注
 
@@ -139,6 +129,7 @@ SSE 帧不包在 `success/data` 中，但每帧仍是结构化 JSON：
 | `MOVIE_SCHEDULER_CITY_MAPPING` | 可选城市名到城市 ID 的 JSON 对象 |
 | `MOVIE_SCHEDULER_YEAR_THRESHOLD` | 电影年份筛选阈值 |
 | `MOVIE_SCHEDULER_TIMEOUT` | 外部请求超时时间，单位秒 |
+| `MOVIE_SCHEDULER_DOUBAN_API_BASE_URL` | 豆瓣信息补充服务的基础 URL；读取时会移除末尾 `/` |
 | `MOVIE_SCHEDULER_HOST` / `MOVIE_SCHEDULER_PORT` | 后端监听地址与端口 |
 | `MOVIE_SCHEDULER_CORS_ORIGINS` | CORS 允许来源 JSON 数组 |
 

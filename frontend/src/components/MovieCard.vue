@@ -246,6 +246,7 @@ import { ArrowUp } from '@element-plus/icons-vue'
 import { computed, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { formatDateWithRelativeWeek } from '@/utils/dateLabels'
+import { formatShowTimeRange } from '@/utils/showTime'
 
 const props = defineProps({
   movie: {
@@ -449,7 +450,7 @@ const displayGroups = computed(() => {
         .map((entry) => ({
           ...entry,
           primaryText: mode === 'cinema' ? formatDateWithRelativeWeek(entry.date) : entry.cinemaName,
-          secondaryText: entry.time,
+          secondaryText: formatShowTimeRange(entry.time, entry.durationMinutes),
         })),
     }))
 })

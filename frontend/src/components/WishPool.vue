@@ -85,7 +85,7 @@
                 <div class="wish-pool-main">
                   <div class="wish-pool-meta">
                     <span>{{ formatDateWithRelativeWeek(item.date) }}</span>
-                    <span>{{ item.time }}</span>
+                    <span>{{ formatWishItemTimeRange(item) }}</span>
                     <span>{{ item.cinemaName }}</span>
                     <span>{{ formatShowPrice(item.price) }}</span>
                   </div>
@@ -119,6 +119,7 @@ import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { formatDateWithRelativeWeek } from '@/utils/dateLabels'
+import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
 
 const store = useScheduleStore()
 
@@ -143,16 +144,6 @@ const parseMovieDurationMinutes = (durationText) => {
   return match ? Number(match[1]) : null
 }
 
-const parseShowTimeToMinutes = (timeText) => {
-  const normalized = String(timeText ?? '').trim()
-  const match = normalized.match(/^(\d{1,2}):(\d{2})$/)
-  if (!match) return null
-  const hours = Number(match[1])
-  const minutes = Number(match[2])
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
-  return hours * 60 + minutes
-}
-
 const getShowEntryDurationMinutes = (showEntry) => {
   if (typeof showEntry?.durationMinutes === 'number' && !Number.isNaN(showEntry.durationMinutes)) {
     return showEntry.durationMinutes
@@ -160,6 +151,8 @@ const getShowEntryDurationMinutes = (showEntry) => {
   const movie = store.selectedMovies.find((item) => item.id === showEntry?.movieId)
   return parseMovieDurationMinutes(movie?.duration)
 }
+
+const formatWishItemTimeRange = (item) => formatShowTimeRange(item.time, getShowEntryDurationMinutes(item))
 
 const getScheduleConflict = (showEntry) => {
   const targetStart = parseShowTimeToMinutes(showEntry.time)

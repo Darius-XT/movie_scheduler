@@ -1,6 +1,6 @@
 """影院场次解析器测试。"""
 
-from app.show.cinema_show_client import cinema_show_client
+from app.show.show_client import show_client
 
 
 def test_cinema_show_parser_falls_back_to_vip_price_when_discount_price_is_stonefont() -> None:
@@ -33,7 +33,7 @@ def test_cinema_show_parser_falls_back_to_vip_price_when_discount_price_is_stone
     }
     """
 
-    result = cinema_show_client.parse(payload, "测试电影")
+    result = show_client.parse(payload, "测试电影")
 
     assert len(result) == 1
     assert result[0].price == "32"
@@ -76,7 +76,7 @@ def test_cinema_show_parser_filters_to_target_show_date() -> None:
     }
     """
 
-    result = cinema_show_client.parse(payload, "测试电影", "2026-04-09")
+    result = show_client.parse(payload, "测试电影", "2026-04-09")
 
     assert len(result) == 1
     assert result[0].show_date == "2026-04-09"

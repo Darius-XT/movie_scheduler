@@ -9,10 +9,13 @@
 
 ## 规范文档索引
 
-- [后端架构](docs/backend-architecture.md) — 目录结构、领域模块、文件职责
-- [后端编码规范](docs/backend-conventions.md) — 命名、类型、异步、依赖注入、数据传递等
-- [后端测试规范](docs/backend-testing.md) — 测试目录结构、两层分工、依赖隔离约定
-- [前端规范](docs/frontend.md) — 组件组织、状态管理、API 层
+- [后端领域地图](backend/docs/structure.md) — 当前顶层领域、重要业务子领域职责
+- [后端数据库](backend/docs/database.md) — SQLite 表、字段、约束
+- [后端架构规范](backend/docs/architecture.md) — 目录组织规则、文件职责
+- [后端编码规范](backend/docs/conventions.md) — 命名、类型、异步、依赖注入、数据传递等
+- [后端测试规范](backend/docs/testing.md) — 测试目录结构、两层分工、依赖隔离约定
+- [API 契约](backend/docs/api.md) — JSON 接口、SSE 事件、单用户计划同步协议
+- [前端规范](frontend/docs/frontend.md) — 组件组织、状态管理、API 层
 - [开发流程](docs/workflow.md) — 测试、Git 规范、启动命令、调试样本
 
 ## 后端禁止事项
@@ -27,7 +30,7 @@
 - 在 async 函数中直接调用同步 IO（必须用 `asyncio.to_thread()`）
 - 在领域目录内单独建 `clients/`、`gateway/` 这种"按角色再分一层"的子目录——
   client 与 service 同住领域根；单文件 `gateway.py` 是允许的
-- API 响应必须使用统一的 `success/data` 包装（参见 [后端编码规范](docs/backend-conventions.md#api-响应格式)）
+- API 响应必须使用统一的 `success/data` 包装（参见 [后端编码规范](backend/docs/conventions.md#api-响应格式)）
 
 ## 前端禁止事项
 
@@ -36,4 +39,4 @@
 - 在组件中重复实现已存在于 Pinia store 的状态
 - 引入与 `/api/v?` 形式的版本前缀相关的硬编码（永远只有 `/api`）
 
-> 详细前端约定见 [前端规范](docs/frontend.md)。
+> 详细前端约定见 [前端规范](frontend/docs/frontend.md)。

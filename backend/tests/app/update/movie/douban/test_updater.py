@@ -86,8 +86,11 @@ def test_douban_info_updater_processes_all_movies(monkeypatch: pytest.MonkeyPatc
 def test_douban_info_updater_limits_concurrency(monkeypatch: pytest.MonkeyPatch) -> None:
     movies = [FakeMovie(id=index, title=f"电影{index}") for index in range(1, 6)]
 
+    def save_movie(_: MovieWriteData) -> bool:
+        return True
+
     monkeypatch.setattr(movie_repository, "get_movies_without_douban_info", lambda: movies)
-    monkeypatch.setattr(movie_repository, "save_movie", lambda movie_data: True)
+    monkeypatch.setattr(movie_repository, "save_movie", save_movie)
 
     enricher = SlowConcurrentFakeEnricher()
     updater = MovieDoubanInfoUpdater(enricher=cast(DoubanInfoEnricher, enricher))

@@ -215,7 +215,7 @@ def test_base_info_updater_uses_datetime_for_first_showing_at(monkeypatch: pytes
     result = updater._add_new_movies(scraped_movies, {2})  # pyright: ignore[reportPrivateUsage]
 
     assert result == 1
-    first_showing_at = saved[0]["first_showing_at"]
+    first_showing_at = saved[0].get("first_showing_at")
     assert isinstance(first_showing_at, datetime)
     assert first_showing_at.tzinfo is None
 
