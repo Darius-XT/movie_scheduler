@@ -352,6 +352,7 @@ const createShowEntry = (cinema, show) => ({
   movieId: props.movie.id,
   movieTitle: props.movie.title,
   date: show.date,
+  formattedDate: formatDateWithRelativeWeek(show.date || '未标注日期'),
   time: show.time,
   cinemaId: cinema.cinema_id,
   cinemaName: cinema.cinema_name,
@@ -449,8 +450,10 @@ const displayGroups = computed(() => {
         })
         .map((entry) => ({
           ...entry,
-          primaryText: mode === 'cinema' ? formatDateWithRelativeWeek(entry.date) : entry.cinemaName,
-          secondaryText: formatShowTimeRange(entry.time, entry.durationMinutes),
+          primaryText: mode === 'cinema' ? entry.formattedDate : entry.cinemaName,
+          secondaryText: mode === 'cinema'
+            ? formatShowTimeRange(entry.time, entry.durationMinutes)
+            : `${entry.formattedDate} ${formatShowTimeRange(entry.time, entry.durationMinutes)}`,
         })),
     }))
 })
