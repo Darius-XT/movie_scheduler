@@ -131,7 +131,7 @@ import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
 
 const store = useScheduleStore()
 
-const WISH_GROUP_AUTO_COLLAPSE_THRESHOLD = 3
+const WISH_GROUP_DEFAULT_COLLAPSED = true
 const SHOWS_PAGE_SIZE = 8
 
 const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinema: '', date: '' })
@@ -229,16 +229,11 @@ const getWishGroupMovieMeta = (movieId) => {
   return metaParts.join(' · ')
 }
 
-const getWishGroupItemsCount = (movieId) => {
-  const group = groupedWishPool.value.find((item) => item.movieId === movieId)
-  return group ? group.items.length : 0
-}
-
 const isWishGroupCollapsed = (movieId) => {
   if (wishGroupCollapseOverrides.value.has(movieId)) {
     return wishGroupCollapseOverrides.value.get(movieId)
   }
-  return getWishGroupItemsCount(movieId) > WISH_GROUP_AUTO_COLLAPSE_THRESHOLD
+  return WISH_GROUP_DEFAULT_COLLAPSED
 }
 
 const toggleWishGroup = (movieId) => {
