@@ -8,6 +8,18 @@
         <div class="planning-header-main">
           <span>想看</span>
           <span class="planning-header-summary">{{ store.wishPool.length }} 个想看场次</span>
+          <div v-if="store.wishPool.length > 0" class="planning-header-filters">
+            <el-check-tag
+              v-for="filter in weekFilterOptions"
+              :key="filter.value"
+              :checked="activeWeekFilter === filter.value"
+              :disabled="filter.count === 0"
+              type="primary"
+              @change="handleWeekFilterChange(filter.value)"
+            >
+              {{ filter.label }}<span v-if="filter.count > 0" class="planning-header-filter-count">{{ filter.count }}</span>
+            </el-check-tag>
+          </div>
         </div>
         <div v-if="groupedWishPool.length > 0" class="planning-header-actions">
           <el-button text size="small" @click="expandAllWishGroups">全部展开</el-button>
@@ -39,6 +51,18 @@
             <span>{{ group.movieTitle }}</span>
             <span v-if="getWishGroupMovieMeta(group.movieId)" class="wish-pool-group-meta">
               {{ getWishGroupMovieMeta(group.movieId) }}
+            </span>
+            <span v-if="group.weekTags.length > 0" class="wish-pool-group-tags">
+              <el-tag
+                v-for="tag in group.weekTags"
+                :key="tag.value"
+                size="small"
+                :type="tag.value === 'current' ? 'success' : 'warning'"
+                effect="light"
+                round
+              >
+                {{ tag.label }}
+              </el-tag>
             </span>
           </div>
           <div class="wish-pool-group-actions">
@@ -140,7 +164,7 @@ import { Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { formatDateWithRelativeWeek } from '@/utils/dateLabels'
+import { formatDateWithRelativeWeek, getWeekOffsetFromToday } from '@/utils/dateLabels'
 import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
 
 const store = useScheduleStore()
@@ -148,11 +172,28 @@ const store = useScheduleStore()
 const WISH_GROUP_DEFAULT_COLLAPSED = true
 const SHOWS_PAGE_SIZE = 8
 
+const WEEK_FILTER_DEFINITIONS = [
+  { value: 'current', label: '本周', offset: 0 },
+  { value: 'next', label: '下周', offset: 1 },
+]
+
 const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinema: '', date: '' })
 
 const wishGroupCollapseOverrides = ref(new Map())
 const wishGroupFilters = ref(new Map())
 const wishGroupPages = ref(new Map())
+const activeWeekFilter = ref('')
+
+const getItemWeekFilterValue = (item) => {
+  const offset = getWeekOffsetFromToday(item.date)
+  const definition = WEEK_FILTER_DEFINITIONS.find((entry) => entry.offset === offset)
+  return definition ? definition.value : null
+}
+
+const matchesActiveWeekFilter = (item) => {
+  if (!activeWeekFilter.value) return true
+  return getItemWeekFilterValue(item) === activeWeekFilter.value
+}
 
 const formatShowPrice = (price) => {
   const normalized = String(price ?? '').trim()
@@ -209,10 +250,19 @@ const handleAddToSchedule = (showEntry) => {
 const groupedWishPool = computed(() => {
   const groups = new Map()
   store.wishPool.forEach((item) => {
+    if (!matchesActiveWeekFilter(item)) return
     if (!groups.has(item.movieId)) {
-      groups.set(item.movieId, { movieId: item.movieId, movieTitle: item.movieTitle, items: [] })
+      groups.set(item.movieId, {
+        movieId: item.movieId,
+        movieTitle: item.movieTitle,
+        items: [],
+        weekValueSet: new Set(),
+      })
     }
-    groups.get(item.movieId).items.push(item)
+    const group = groups.get(item.movieId)
+    group.items.push(item)
+    const weekValue = getItemWeekFilterValue(item)
+    if (weekValue) group.weekValueSet.add(weekValue)
   })
   return Array.from(groups.values())
     .sort((a, b) => {
@@ -223,6 +273,9 @@ const groupedWishPool = computed(() => {
     })
     .map((group) => ({
       ...group,
+      weekTags: WEEK_FILTER_DEFINITIONS
+        .filter((definition) => group.weekValueSet.has(definition.value))
+        .map((definition) => ({ value: definition.value, label: definition.label })),
       items: [...group.items].sort((a, b) => {
         const aKey = `${a.date} ${a.time}`
         const bKey = `${b.date} ${b.time}`
@@ -230,6 +283,24 @@ const groupedWishPool = computed(() => {
       }),
     }))
 })
+
+const weekFilterOptions = computed(() => {
+  const counts = new Map(WEEK_FILTER_DEFINITIONS.map((definition) => [definition.value, 0]))
+  store.wishPool.forEach((item) => {
+    const value = getItemWeekFilterValue(item)
+    if (value && counts.has(value)) counts.set(value, counts.get(value) + 1)
+  })
+  return WEEK_FILTER_DEFINITIONS.map((definition) => ({
+    value: definition.value,
+    label: definition.label,
+    count: counts.get(definition.value) || 0,
+  }))
+})
+
+const handleWeekFilterChange = (filterValue) => {
+  activeWeekFilter.value = activeWeekFilter.value === filterValue ? '' : filterValue
+  wishGroupPages.value = new Map()
+}
 
 const getMovieYear = (movie) => {
   const releaseDate = String(movie?.release_date || '').trim()
@@ -370,9 +441,23 @@ const collapseAllWishGroups = () => {
 
 .planning-header-main {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   min-width: 0;
+  flex-wrap: wrap;
+}
+
+.planning-header-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.planning-header-filter-count {
+  margin-left: 4px;
+  opacity: 0.7;
+  font-size: 11px;
 }
 
 .planning-header-actions {
@@ -460,6 +545,13 @@ const collapseAllWishGroups = () => {
   color: #64748b;
   font-size: 13px;
   font-weight: 500;
+}
+
+.wish-pool-group-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .wish-pool-group-list {
