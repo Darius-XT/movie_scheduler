@@ -23,6 +23,19 @@
       >
         <div class="wish-pool-group-header">
           <div class="wish-pool-group-title">
+            <button
+              type="button"
+              class="wish-pool-group-star"
+              :class="{ 'is-active': store.isMovieStarred(group.movieId) }"
+              :aria-pressed="store.isMovieStarred(group.movieId)"
+              :title="store.isMovieStarred(group.movieId) ? '取消星标' : '标记为本周想看'"
+              @click="store.toggleMovieStarred(group.movieId)"
+            >
+              <el-icon>
+                <StarFilled v-if="store.isMovieStarred(group.movieId)" />
+                <Star v-else />
+              </el-icon>
+            </button>
             <span>{{ group.movieTitle }}</span>
             <span v-if="getWishGroupMovieMeta(group.movieId)" class="wish-pool-group-meta">
               {{ getWishGroupMovieMeta(group.movieId) }}
@@ -123,6 +136,7 @@
 </template>
 
 <script setup>
+import { Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
@@ -201,7 +215,12 @@ const groupedWishPool = computed(() => {
     groups.get(item.movieId).items.push(item)
   })
   return Array.from(groups.values())
-    .sort((a, b) => String(a.movieTitle || '').localeCompare(String(b.movieTitle || '')))
+    .sort((a, b) => {
+      const aStarred = store.isMovieStarred(a.movieId)
+      const bStarred = store.isMovieStarred(b.movieId)
+      if (aStarred !== bStarred) return aStarred ? -1 : 1
+      return String(a.movieTitle || '').localeCompare(String(b.movieTitle || ''))
+    })
     .map((group) => ({
       ...group,
       items: [...group.items].sort((a, b) => {
@@ -397,12 +416,44 @@ const collapseAllWishGroups = () => {
 
 .wish-pool-group-title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   color: #0f172a;
   font-size: 15px;
   font-weight: 700;
+}
+
+.wish-pool-group-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.wish-pool-group-star:hover {
+  color: #f59e0b;
+  background-color: #fef3c7;
+}
+
+.wish-pool-group-star:active {
+  transform: scale(0.92);
+}
+
+.wish-pool-group-star.is-active {
+  color: #f59e0b;
+}
+
+.wish-pool-group-star :deep(.el-icon) {
+  font-size: 18px;
 }
 
 .wish-pool-group-meta {
