@@ -2,14 +2,12 @@ import { defineStore, storeToRefs } from 'pinia'
 import { useMovieSelectionStore } from './movieSelectionStore'
 import { usePlanningStore } from './planningStore'
 import { useShowCacheStore } from './showCacheStore'
-import { useStarredMoviesStore } from './starredMoviesStore'
 import { useUpdateMetaStore } from './updateMetaStore'
 
 export const useScheduleStore = defineStore('schedule', () => {
   const movieSelectionStore = useMovieSelectionStore()
   const planningStore = usePlanningStore()
   const showCacheStore = useShowCacheStore()
-  const starredMoviesStore = useStarredMoviesStore()
   const updateMetaStore = useUpdateMetaStore()
 
   const { selectedMovies } = storeToRefs(movieSelectionStore)
@@ -21,7 +19,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     planningSyncInFlight,
   } = storeToRefs(planningStore)
   const { movieShowsMap } = storeToRefs(showCacheStore)
-  const { starredMovieIds } = storeToRefs(starredMoviesStore)
   const {
     cinemaUpdateMeta,
     movieUpdateMeta,
@@ -34,7 +31,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     wishPool,
     scheduleItems,
     movieShowsMap,
-    starredMovieIds,
     cinemaUpdateMeta,
     movieUpdateMeta,
     cinemaUpdateResult,
@@ -59,8 +55,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     removeFromSchedule: planningStore.removeFromSchedule,
     toggleSchedulePurchased: planningStore.toggleSchedulePurchased,
     removePastSchedules: planningStore.removePastSchedules,
-    isMovieStarred: starredMoviesStore.isMovieStarred,
-    toggleMovieStarred: starredMoviesStore.toggleMovieStarred,
     recordCinemaUpdate: updateMetaStore.recordCinemaUpdate,
     recordMovieUpdate: updateMetaStore.recordMovieUpdate,
     initializePlanningSync: planningStore.initializePlanningSync,

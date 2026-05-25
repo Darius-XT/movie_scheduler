@@ -7,25 +7,24 @@
       <div class="planning-header">
         <div class="planning-header-main">
           <span>想看</span>
-          <span class="planning-header-summary">{{ store.wishPool.length }} 个想看场次</span>
-          <div v-if="store.wishPool.length > 0" class="planning-header-filters">
-            <el-check-tag
-              v-for="filter in weekFilterOptions"
-              :key="filter.value"
-              :checked="activeWeekFilter === filter.value"
-              :disabled="filter.count === 0"
-              type="primary"
-              @change="handleWeekFilterChange(filter.value)"
-            >
-              {{ filter.label }}<span v-if="filter.count > 0" class="planning-header-filter-count">{{ filter.count }}</span>
-            </el-check-tag>
-          </div>
         </div>
         <div v-if="groupedWishPool.length > 0" class="planning-header-actions">
           <el-button text size="small" @click="expandAllWishGroups">全部展开</el-button>
           <el-button text size="small" @click="collapseAllWishGroups">全部收起</el-button>
         </div>
       </div>
+      <el-tabs
+        v-if="store.wishPool.length > 0"
+        v-model="activeWeekFilter"
+        class="planning-header-tabs"
+      >
+        <el-tab-pane
+          v-for="filter in weekFilterOptions"
+          :key="filter.value"
+          :name="filter.value"
+          :label="`${filter.label} (${filter.count})`"
+        />
+      </el-tabs>
     </template>
     <div v-if="groupedWishPool.length > 0" class="wish-pool-list">
       <div
@@ -35,34 +34,9 @@
       >
         <div class="wish-pool-group-header">
           <div class="wish-pool-group-title">
-            <button
-              type="button"
-              class="wish-pool-group-star"
-              :class="{ 'is-active': store.isMovieStarred(group.movieId) }"
-              :aria-pressed="store.isMovieStarred(group.movieId)"
-              :title="store.isMovieStarred(group.movieId) ? '取消星标' : '标记为本周想看'"
-              @click="store.toggleMovieStarred(group.movieId)"
-            >
-              <el-icon>
-                <StarFilled v-if="store.isMovieStarred(group.movieId)" />
-                <Star v-else />
-              </el-icon>
-            </button>
             <span>{{ group.movieTitle }}</span>
             <span v-if="getWishGroupMovieMeta(group.movieId)" class="wish-pool-group-meta">
               {{ getWishGroupMovieMeta(group.movieId) }}
-            </span>
-            <span v-if="group.weekTags.length > 0" class="wish-pool-group-tags">
-              <el-tag
-                v-for="tag in group.weekTags"
-                :key="tag.value"
-                size="small"
-                :type="tag.value === 'current' ? 'success' : 'warning'"
-                effect="light"
-                round
-              >
-                {{ tag.label }}
-              </el-tag>
             </span>
           </div>
           <div class="wish-pool-group-actions">
@@ -160,9 +134,8 @@
 </template>
 
 <script setup>
-import { Star, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { formatDateWithRelativeWeek, getWeekOffsetFromToday } from '@/utils/dateLabels'
 import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
@@ -173,6 +146,7 @@ const WISH_GROUP_DEFAULT_COLLAPSED = true
 const SHOWS_PAGE_SIZE = 8
 
 const WEEK_FILTER_DEFINITIONS = [
+  { value: 'all', label: '全部', offset: null },
   { value: 'current', label: '本周', offset: 0 },
   { value: 'next', label: '下周', offset: 1 },
 ]
@@ -182,7 +156,7 @@ const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinema: '', date: '' })
 const wishGroupCollapseOverrides = ref(new Map())
 const wishGroupFilters = ref(new Map())
 const wishGroupPages = ref(new Map())
-const activeWeekFilter = ref('')
+const activeWeekFilter = ref('all')
 
 const getItemWeekFilterValue = (item) => {
   const offset = getWeekOffsetFromToday(item.date)
@@ -191,7 +165,7 @@ const getItemWeekFilterValue = (item) => {
 }
 
 const matchesActiveWeekFilter = (item) => {
-  if (!activeWeekFilter.value) return true
+  if (activeWeekFilter.value === 'all') return true
   return getItemWeekFilterValue(item) === activeWeekFilter.value
 }
 
@@ -256,26 +230,14 @@ const groupedWishPool = computed(() => {
         movieId: item.movieId,
         movieTitle: item.movieTitle,
         items: [],
-        weekValueSet: new Set(),
       })
     }
-    const group = groups.get(item.movieId)
-    group.items.push(item)
-    const weekValue = getItemWeekFilterValue(item)
-    if (weekValue) group.weekValueSet.add(weekValue)
+    groups.get(item.movieId).items.push(item)
   })
   return Array.from(groups.values())
-    .sort((a, b) => {
-      const aStarred = store.isMovieStarred(a.movieId)
-      const bStarred = store.isMovieStarred(b.movieId)
-      if (aStarred !== bStarred) return aStarred ? -1 : 1
-      return String(a.movieTitle || '').localeCompare(String(b.movieTitle || ''))
-    })
+    .sort((a, b) => String(a.movieTitle || '').localeCompare(String(b.movieTitle || '')))
     .map((group) => ({
       ...group,
-      weekTags: WEEK_FILTER_DEFINITIONS
-        .filter((definition) => group.weekValueSet.has(definition.value))
-        .map((definition) => ({ value: definition.value, label: definition.label })),
       items: [...group.items].sort((a, b) => {
         const aKey = `${a.date} ${a.time}`
         const bKey = `${b.date} ${b.time}`
@@ -285,22 +247,26 @@ const groupedWishPool = computed(() => {
 })
 
 const weekFilterOptions = computed(() => {
-  const counts = new Map(WEEK_FILTER_DEFINITIONS.map((definition) => [definition.value, 0]))
+  const movieIdsByFilter = new Map(
+    WEEK_FILTER_DEFINITIONS.map((definition) => [definition.value, new Set()])
+  )
   store.wishPool.forEach((item) => {
+    movieIdsByFilter.get('all').add(item.movieId)
     const value = getItemWeekFilterValue(item)
-    if (value && counts.has(value)) counts.set(value, counts.get(value) + 1)
+    if (value && movieIdsByFilter.has(value)) {
+      movieIdsByFilter.get(value).add(item.movieId)
+    }
   })
   return WEEK_FILTER_DEFINITIONS.map((definition) => ({
     value: definition.value,
     label: definition.label,
-    count: counts.get(definition.value) || 0,
+    count: movieIdsByFilter.get(definition.value).size,
   }))
 })
 
-const handleWeekFilterChange = (filterValue) => {
-  activeWeekFilter.value = activeWeekFilter.value === filterValue ? '' : filterValue
+watch(activeWeekFilter, () => {
   wishGroupPages.value = new Map()
-}
+})
 
 const getMovieYear = (movie) => {
   const releaseDate = String(movie?.release_date || '').trim()
@@ -447,30 +413,22 @@ const collapseAllWishGroups = () => {
   flex-wrap: wrap;
 }
 
-.planning-header-filters {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.planning-header-filter-count {
-  margin-left: 4px;
-  opacity: 0.7;
-  font-size: 11px;
-}
-
 .planning-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.planning-header-summary {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
+.planning-header-tabs {
+  margin-top: 8px;
+}
+
+.planning-header-tabs :deep(.el-tabs__header) {
+  margin: 0;
+}
+
+.planning-header-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
 }
 
 .wish-pool-list {
@@ -509,49 +467,10 @@ const collapseAllWishGroups = () => {
   font-weight: 700;
 }
 
-.wish-pool-group-star {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: #cbd5e1;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
-}
-
-.wish-pool-group-star:hover {
-  color: #f59e0b;
-  background-color: #fef3c7;
-}
-
-.wish-pool-group-star:active {
-  transform: scale(0.92);
-}
-
-.wish-pool-group-star.is-active {
-  color: #f59e0b;
-}
-
-.wish-pool-group-star :deep(.el-icon) {
-  font-size: 18px;
-}
-
 .wish-pool-group-meta {
   color: #64748b;
   font-size: 13px;
   font-weight: 500;
-}
-
-.wish-pool-group-tags {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 
 .wish-pool-group-list {
@@ -641,10 +560,6 @@ const collapseAllWishGroups = () => {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
-  }
-
-  .planning-header-summary {
-    white-space: normal;
   }
 }
 

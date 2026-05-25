@@ -29,10 +29,6 @@ export const getWeekOffsetFromToday = (dateText) => {
   return Math.floor((targetWeekStart.getTime() - currentWeekStart.getTime()) / (7 * DAY_MS))
 }
 
-export const isInCurrentWeek = (dateText) => getWeekOffsetFromToday(dateText) === 0
-
-export const isInNextWeek = (dateText) => getWeekOffsetFromToday(dateText) === 1
-
 export const formatDateWithRelativeWeek = (dateText) => {
   if (!dateText) return ''
   const targetDate = parseShowDate(dateText)
