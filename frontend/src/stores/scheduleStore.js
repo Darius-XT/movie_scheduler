@@ -53,7 +53,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     isInSchedule: planningStore.isInSchedule,
     addToSchedule: planningStore.addToSchedule,
     removeFromSchedule: planningStore.removeFromSchedule,
-    moveFromScheduleToWishPool: planningStore.moveFromScheduleToWishPool,
     toggleSchedulePurchased: planningStore.toggleSchedulePurchased,
     removePastSchedules: planningStore.removePastSchedules,
     recordCinemaUpdate: updateMetaStore.recordCinemaUpdate,

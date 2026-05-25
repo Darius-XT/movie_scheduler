@@ -40,7 +40,6 @@
               <div class="schedule-item-meta">{{ item.cinemaName }}</div>
               <div class="schedule-item-price">{{ formatShowPrice(item.price) }}</div>
               <div class="schedule-item-actions">
-                <el-button size="small" @click="store.moveFromScheduleToWishPool(item.key)">放回想看</el-button>
                 <el-tag
                   :type="item.purchased ? 'success' : 'info'"
                   effect="plain"

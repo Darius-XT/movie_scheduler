@@ -125,16 +125,6 @@ export const usePlanningStore = defineStore('planning', () => {
     persistPlanningAfterMutation()
   }
 
-  const moveFromScheduleToWishPool = (showKey) => {
-    const targetItem = scheduleItems.value.find((item) => item.key === showKey)
-    scheduleItems.value = scheduleItems.value.filter((item) => item.key !== showKey)
-    if (targetItem && !isInWishPool(showKey)) {
-      const { purchased, ...wishEntry } = targetItem
-      wishPool.value = [...wishPool.value, wishEntry]
-    }
-    persistPlanningAfterMutation()
-  }
-
   const toggleSchedulePurchased = (showKey) => {
     scheduleItems.value = scheduleItems.value.map((item) => {
       if (item.key !== showKey) return item
@@ -168,7 +158,6 @@ export const usePlanningStore = defineStore('planning', () => {
     isInSchedule,
     addToSchedule,
     removeFromSchedule,
-    moveFromScheduleToWishPool,
     toggleSchedulePurchased,
     removePastSchedules,
     initializePlanningSync,

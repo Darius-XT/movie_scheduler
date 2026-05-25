@@ -91,7 +91,15 @@
                   </div>
                 </div>
                 <div class="wish-pool-actions">
-                  <el-button size="small" type="success" @click="handleAddToSchedule(item)">加入行程</el-button>
+                  <el-button
+                    size="small"
+                    type="success"
+                    :plain="store.isInSchedule(item.key)"
+                    :disabled="store.isInSchedule(item.key)"
+                    @click="handleAddToSchedule(item)"
+                  >
+                    {{ store.isInSchedule(item.key) ? '已加入行程' : '加入行程' }}
+                  </el-button>
                   <el-button size="small" @click="store.removeFromWishPool(item.key)">移除</el-button>
                 </div>
               </div>
