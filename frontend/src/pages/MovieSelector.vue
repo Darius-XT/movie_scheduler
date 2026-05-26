@@ -12,8 +12,6 @@
         <UpdatePanel
           :cities="cities"
           :update-form="updateForm"
-          @update:lastAddedMovieIds="lastAddedMovieIds = $event"
-          @update:lastUpdatedMovieIds="lastUpdatedMovieIds = $event"
         />
         <MovieFilterPanel
           :update-form="updateForm"
@@ -48,33 +46,22 @@
         </div>
 
         <div class="movie-list">
-          <section
-            v-for="section in movieDisplaySections"
-            :key="section.key"
-            class="movie-category-section"
-          >
-            <div class="movie-category-header">
-              <h4 class="movie-category-title">{{ section.title }}</h4>
-              <el-tag size="small" type="info">{{ section.movies.length }} 部</el-tag>
-            </div>
-
-            <MovieCard
-              v-for="(movie, index) in section.movies"
-              :key="movie.id"
-              :movie="movie"
-              :index="section.startIndex + index"
-              :is-fetching="fetchingMovieIds.has(movie.id)"
-              :is-douban-fetching="doubanFetchingIds.has(movie.id)"
-              :movie-progress-text="movieProgress.get(movie.id) || ''"
-              :movie-fetch-date-entries="getMovieDateProgressEntries(movie.id)"
-              :shows-data="getMovieShowsData(movie.id)"
-              :has-valid-shows="hasValidMovieShows(movie.id)"
-              @fetch-single-show="handleFetchSingleShow"
-              @fetch-douban="handleFetchDouban"
-              @toggle-wish-pool-entry="handleToggleWishPoolEntry"
-              @add-all-to-wish-pool="handleAddAllToWishPool"
-            />
-          </section>
+          <MovieCard
+            v-for="(movie, index) in filteredSelectedMovies"
+            :key="movie.id"
+            :movie="movie"
+            :index="index"
+            :is-fetching="fetchingMovieIds.has(movie.id)"
+            :is-douban-fetching="doubanFetchingIds.has(movie.id)"
+            :movie-progress-text="movieProgress.get(movie.id) || ''"
+            :movie-fetch-date-entries="getMovieDateProgressEntries(movie.id)"
+            :shows-data="getMovieShowsData(movie.id)"
+            :has-valid-shows="hasValidMovieShows(movie.id)"
+            @fetch-single-show="handleFetchSingleShow"
+            @fetch-douban="handleFetchDouban"
+            @toggle-wish-pool-entry="handleToggleWishPoolEntry"
+            @add-all-to-wish-pool="handleAddAllToWishPool"
+          />
         </div>
       </div>
     </el-card>
@@ -98,10 +85,6 @@ const store = useScheduleStore()
 // ===== 城市 / 更新表单 =====
 const cities = ref([])
 const updateForm = ref({ cityId: null, forceUpdate: false })
-
-// ===== 电影筛选更新标记 =====
-const lastAddedMovieIds = ref(new Set())
-const lastUpdatedMovieIds = ref(new Set())
 
 // ===== 场次缓存跨天失效定时器 =====
 // 场次按自然日缓存：同一天内保留，跨过 0 点自动失效（由 store 负责判断）。
@@ -256,31 +239,6 @@ const filteredSelectedMovies = computed(() => {
 
   return movies
 })
-
-const movieDisplaySections = computed(() => {
-  const addedMovies = []
-  const existingMovies = []
-
-  filteredSelectedMovies.value.forEach((movie) => {
-    if (lastAddedMovieIds.value.has(movie.id)) {
-      addedMovies.push(movie)
-    } else {
-      existingMovies.push(movie)
-    }
-  })
-
-  const sections = []
-  let offset = 0
-
-  if (addedMovies.length > 0) {
-    sections.push({ key: 'added', title: '新增电影', movies: addedMovies, startIndex: offset })
-    offset += addedMovies.length
-  }
-
-  sections.push({ key: 'existing', title: '在库电影', movies: existingMovies, startIndex: offset })
-
-  return sections.filter((section) => section.movies.length > 0)
-})
 </script>
 
 <style scoped>
@@ -339,30 +297,6 @@ const movieDisplaySections = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.movie-category-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.movie-category-section + .movie-category-section {
-  margin-top: 8px;
-}
-
-.movie-category-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.movie-category-title {
-  margin: 0;
-  color: #173b7a;
-  font-size: 20px;
-  font-weight: 700;
 }
 
 @media (max-width: 960px) {

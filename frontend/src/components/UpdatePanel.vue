@@ -120,8 +120,6 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:lastAddedMovieIds', 'update:lastUpdatedMovieIds'])
-
 const store = useScheduleStore()
 
 const cinemaLoading = ref(false)
@@ -241,10 +239,6 @@ const handleUpdateMovie = async () => {
       } else if (data.type === 'complete') {
         store.recordMovieUpdate(data.data, Date.now() - startedAt)
         movieUpdateProgress.value = '电影信息更新完成'
-        const addedIds = new Set(data.data.base_info?.result_stats?.added_movie_ids || [])
-        const updatedIds = new Set(data.data.base_info?.result_stats?.updated_movie_ids || [])
-        emit('update:lastAddedMovieIds', addedIds)
-        emit('update:lastUpdatedMovieIds', updatedIds)
         ElMessage.success('电影信息更新成功')
       } else if (data.type === 'error') {
         movieUpdateProgress.value = ''
