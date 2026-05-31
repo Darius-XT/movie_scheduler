@@ -213,7 +213,7 @@ const handleUpdateCinema = async () => {
 }
 
 .section-title-meta {
-  margin-left: auto;
+  margin-left: 4px;
   color: #64748b;
   font-size: 12px;
   font-weight: 400;
