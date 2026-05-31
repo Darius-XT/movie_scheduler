@@ -7,34 +7,29 @@ from typing import cast
 
 from app.models.planning import PlanningItem as PlanningItemModel
 from app.models.planning import PlanningItemWriteData
-from app.planning.schemas import PlanningData, PlanningItem, PlanningListType
+from app.planning.schemas import PlanningData, ScheduleItem
 from app.repositories.planning import planning_repository
 
 
 class PlanningService:
-    """单用户想看与行程计划服务。"""
+    """单用户行程计划服务。"""
 
     async def get_planning(self) -> PlanningData:
-        """读取当前排片计划。"""
+        """读取当前行程。"""
         items = await asyncio.to_thread(planning_repository.list_items)
-        return self._build_planning_data(items)
+        return PlanningData(schedule_items=[self._to_schema_item(item) for item in items])
 
-    async def replace_planning(
+    async def replace_schedule_items(
         self,
-        wish_pool: list[PlanningItem],
-        schedule_items: list[PlanningItem],
+        schedule_items: list[ScheduleItem],
     ) -> PlanningData:
-        """全量替换当前排片计划。"""
-        write_items = [
-            *[self._to_write_data("wish", item) for item in wish_pool],
-            *[self._to_write_data("schedule", item) for item in schedule_items],
-        ]
+        """全量替换行程。"""
+        write_items = [self._to_write_data(item) for item in schedule_items]
         saved_items = await asyncio.to_thread(planning_repository.replace_all, write_items)
-        return self._build_planning_data(saved_items)
+        return PlanningData(schedule_items=[self._to_schema_item(item) for item in saved_items])
 
-    def _to_write_data(self, list_type: PlanningListType, item: PlanningItem) -> PlanningItemWriteData:
+    def _to_write_data(self, item: ScheduleItem) -> PlanningItemWriteData:
         return {
-            "list_type": list_type,
             "show_key": item.key,
             "movie_id": item.movie_id,
             "movie_title": item.movie_title,
@@ -44,23 +39,11 @@ class PlanningService:
             "cinema_name": item.cinema_name,
             "price": item.price,
             "duration_minutes": item.duration_minutes,
-            "purchased": item.purchased if list_type == "schedule" else False,
+            "purchased": item.purchased,
         }
 
-    def _build_planning_data(self, items: list[PlanningItemModel]) -> PlanningData:
-        wish_pool: list[PlanningItem] = []
-        schedule_items: list[PlanningItem] = []
-        for item in items:
-            planning_item = self._to_schema_item(item)
-            list_type = cast(str, getattr(item, "list_type"))
-            if list_type == "schedule":
-                schedule_items.append(planning_item)
-            elif list_type == "wish":
-                wish_pool.append(planning_item)
-        return PlanningData(wish_pool=wish_pool, schedule_items=schedule_items)
-
-    def _to_schema_item(self, item: PlanningItemModel) -> PlanningItem:
-        return PlanningItem(
+    def _to_schema_item(self, item: PlanningItemModel) -> ScheduleItem:
+        return ScheduleItem(
             key=cast(str, getattr(item, "show_key")),
             movieId=cast(int, getattr(item, "movie_id")),
             movieTitle=cast(str, getattr(item, "movie_title")),

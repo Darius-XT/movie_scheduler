@@ -13,7 +13,6 @@ from app.models import Base
 class PlanningItemWriteData(TypedDict, total=False):
     """排片计划持久化写入数据。"""
 
-    list_type: Required[str]
     show_key: Required[str]
     movie_id: Required[int]
     movie_title: Required[str]
@@ -27,15 +26,14 @@ class PlanningItemWriteData(TypedDict, total=False):
 
 
 class PlanningItem(Base):
-    """单用户想看与行程条目。"""
+    """单用户行程条目(场次维度)。"""
 
     __tablename__ = "planning_items"
     __table_args__ = (
-        UniqueConstraint("list_type", "show_key", name="uq_planning_items_list_type_show_key"),
+        UniqueConstraint("show_key", name="uq_planning_items_show_key"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="计划条目ID")
-    list_type = Column(String(20), nullable=False, index=True, comment="列表类型：wish 或 schedule")
     show_key = Column(String(255), nullable=False, comment="前端场次唯一键")
     movie_id = Column(Integer, nullable=False, index=True, comment="电影ID")
     movie_title = Column(String(200), nullable=False, comment="电影标题")
@@ -64,7 +62,6 @@ class PlanningItem(Base):
     def from_dict(cls, data: PlanningItemWriteData) -> PlanningItem:
         """从写入字典创建计划条目。"""
         return cls(
-            list_type=data["list_type"],
             show_key=data["show_key"],
             movie_id=data["movie_id"],
             movie_title=data["movie_title"],

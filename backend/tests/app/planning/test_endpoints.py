@@ -26,19 +26,18 @@ def _payload() -> dict[str, object]:
         "durationMinutes": 120,
         "purchased": True,
     }
-    return {"wish_pool": [item], "schedule_items": [item]}
+    return {"schedule_items": [item]}
 
 
 def test_planning_endpoints_replace_and_get() -> None:
-    """接口应支持全量保存并读取计划。"""
-    put_response = client.put("/api/planning", json=_payload())
+    """接口应支持全量保存并读取行程。"""
+    put_response = client.put("/api/planning/schedule-items", json=_payload())
     get_response = client.get("/api/planning")
 
     assert put_response.status_code == 200
     assert put_response.json()["success"] is True
-    assert "movieId" in put_response.json()["data"]["wish_pool"][0]
+    assert "movieId" in put_response.json()["data"]["schedule_items"][0]
     assert get_response.status_code == 200
-    assert get_response.json()["data"]["wish_pool"][0]["purchased"] is False
     assert get_response.json()["data"]["schedule_items"][0]["purchased"] is True
 
 

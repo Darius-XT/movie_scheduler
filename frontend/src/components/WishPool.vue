@@ -1,178 +1,112 @@
 <template>
   <el-card
     class="planning-card wish-planning-card"
-    :body-style="groupedWishPool.length === 0 ? { display: 'none' } : undefined"
+    :body-style="store.wishMovies.length === 0 ? { display: 'none' } : undefined"
   >
     <template #header>
       <div class="planning-header">
         <div class="planning-header-main">
           <span>想看</span>
+          <span class="planning-header-summary">
+            {{ store.wishMovies.length }} 部
+          </span>
         </div>
-        <div v-if="groupedWishPool.length > 0" class="planning-header-actions">
-          <el-button text size="small" @click="expandAllWishGroups">全部展开</el-button>
-          <el-button text size="small" @click="collapseAllWishGroups">全部收起</el-button>
-        </div>
-      </div>
-      <el-tabs
-        v-if="store.wishPool.length > 0"
-        v-model="activeWeekFilter"
-        class="planning-header-tabs"
-      >
-        <el-tab-pane
-          v-for="filter in weekFilterOptions"
-          :key="filter.value"
-          :name="filter.value"
-          :label="`${filter.label} (${filter.count})`"
-        />
-      </el-tabs>
-    </template>
-    <div v-if="groupedWishPool.length > 0" class="wish-pool-list">
-      <div
-        v-for="group in groupedWishPool"
-        :key="group.movieId"
-        class="wish-pool-group"
-      >
-        <div class="wish-pool-group-header">
-          <div class="wish-pool-group-title">
-            <span>{{ group.movieTitle }}</span>
-            <span v-if="getWishGroupMovieMeta(group.movieId)" class="wish-pool-group-meta">
-              {{ getWishGroupMovieMeta(group.movieId) }}
-            </span>
-          </div>
-          <div class="wish-pool-group-actions">
-            <el-button text size="small" @click="handleRemoveWishGroup(group.movieId)">
-              全部移除
-            </el-button>
-            <el-button text size="small" @click="toggleWishGroup(group.movieId)">
-              {{ isWishGroupCollapsed(group.movieId) ? '展开' : '收起' }}
-            </el-button>
-          </div>
-        </div>
-        <div v-if="!isWishGroupCollapsed(group.movieId)" class="wish-pool-group-body">
-          <div v-if="group.items.length > 1" class="wish-pool-group-filter">
-            <el-input
-              :model-value="getWishGroupFilter(group.movieId).cinema"
-              class="wish-pool-group-filter-input"
-              size="small"
-              clearable
-              placeholder="搜索影院名"
-              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { cinema: value })"
-            />
-            <el-select
-              :model-value="getWishGroupFilter(group.movieId).date"
-              class="wish-pool-group-filter-select"
-              size="small"
-              clearable
-              placeholder="全部日期"
-              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { date: value ?? '' })"
-            >
-              <el-option
-                v-for="dateOption in getWishGroupDateOptions(group.movieId)"
-                :key="dateOption.value"
-                :label="dateOption.label"
-                :value="dateOption.value"
-              />
-            </el-select>
-            <span
-              v-if="getFilteredWishItems(group).length !== group.items.length"
-              class="wish-pool-group-filter-summary"
-            >
-              {{ getFilteredWishItems(group).length }} / {{ group.items.length }}
-            </span>
-          </div>
-          <div
-            v-if="getFilteredWishItems(group).length === 0"
-            class="wish-pool-group-empty"
+        <div v-if="store.wishMovies.length > 0" class="planning-header-actions">
+          <el-button
+            type="primary"
+            size="small"
+            :loading="batchFetching"
+            @click="handleBatchFetch"
           >
-            没有符合筛选条件的场次
-          </div>
-          <template v-else>
-            <div class="wish-pool-group-list">
-              <div
-                v-for="item in getPagedWishItems(group)"
-                :key="item.key"
-                class="wish-pool-item"
-              >
-                <div class="wish-pool-main">
-                  <div class="wish-pool-meta">
-                    <span>{{ formatDateWithRelativeWeek(item.date) }}</span>
-                    <span>{{ formatWishItemTimeRange(item) }}</span>
-                    <span>{{ item.cinemaName }}</span>
-                    <span>{{ formatShowPrice(item.price) }}</span>
-                  </div>
-                </div>
-                <div class="wish-pool-actions">
-                  <el-button
-                    size="small"
-                    type="success"
-                    :plain="store.isInSchedule(item.key)"
-                    :disabled="store.isInSchedule(item.key)"
-                    @click="handleAddToSchedule(item)"
-                  >
-                    {{ store.isInSchedule(item.key) ? '已加入行程' : '加入行程' }}
-                  </el-button>
-                  <el-button size="small" @click="store.removeFromWishPool(item.key)">移除</el-button>
-                </div>
-              </div>
-            </div>
-            <el-pagination
-              v-if="getFilteredWishItems(group).length > SHOWS_PAGE_SIZE"
-              class="wish-pool-group-pagination"
-              small
-              background
-              layout="prev, pager, next, total"
-              :page-size="SHOWS_PAGE_SIZE"
-              :total="getFilteredWishItems(group).length"
-              :current-page="getWishGroupPage(group.movieId)"
-              @current-change="(page) => setWishGroupPage(group.movieId, page)"
-            />
-          </template>
+            一键抓取&更新场次
+          </el-button>
         </div>
       </div>
+      <div v-if="batchFetching || batchTotal > 0" class="batch-progress">
+        <el-progress
+          :percentage="batchPercentage"
+          :status="batchDone >= batchTotal && batchTotal > 0 ? 'success' : undefined"
+          :format="() => `${batchDone}/${batchTotal} 部完成`"
+        />
+      </div>
+    </template>
+
+    <div v-if="store.wishMovies.length > 0" class="wish-movie-list">
+      <MovieCard
+        v-for="(movie, index) in store.wishMovies"
+        :key="movie.id"
+        :movie="movie"
+        :index="index"
+        mode="wish"
+        :is-fetching="fetchingMovieIds.has(movie.id)"
+        :is-douban-fetching="doubanFetchingIds.has(movie.id)"
+        :movie-progress-text="movieProgress.get(movie.id) || ''"
+        :movie-fetch-date-entries="getMovieDateProgressEntries(movie.id)"
+        :shows-data="store.getMovieShowsData(movie.id)"
+        :has-valid-shows="store.hasMovieShowsData(movie.id)"
+        @fetch-single-show="handleFetchSingleShow"
+        @fetch-douban="handleFetchDouban"
+        @remove-wish-movie="handleRemoveWishMovie"
+        @add-to-schedule="handleAddToSchedule"
+      />
     </div>
   </el-card>
 </template>
 
 <script setup>
-import { ElMessage } from 'element-plus'
-import { computed, ref, watch } from 'vue'
+import { fetchMovieDouban } from '@/api'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useShowFetching } from '@/composables/useShowFetching'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { formatDateWithRelativeWeek, getWeekOffsetFromToday } from '@/utils/dateLabels'
-import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
+import { parseShowTimeToMinutes } from '@/utils/showTime'
+import MovieCard from '@/components/MovieCard.vue'
+
+const props = defineProps({
+  updateForm: {
+    type: Object,
+    required: true,
+  },
+})
 
 const store = useScheduleStore()
 
-const WISH_GROUP_DEFAULT_COLLAPSED = true
-const SHOWS_PAGE_SIZE = 8
+const {
+  fetchingMovieIds,
+  movieProgress,
+  getMovieDateProgressEntries,
+  handleFetchSingleShow,
+  handleBatchFetchShows,
+  batchFetching,
+  batchTotal,
+  batchDone,
+  scheduleMidnightCleanup,
+  stopMidnightCleanup,
+} = useShowFetching(store, props.updateForm)
 
-const WEEK_FILTER_DEFINITIONS = [
-  { value: 'all', label: '全部', offset: null },
-  { value: 'current', label: '本周', offset: 0 },
-  { value: 'next', label: '下周', offset: 1 },
-]
+const doubanFetchingIds = ref(new Set())
 
-const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinema: '', date: '' })
+onMounted(() => {
+  scheduleMidnightCleanup()
+})
 
-const wishGroupCollapseOverrides = ref(new Map())
-const wishGroupFilters = ref(new Map())
-const wishGroupPages = ref(new Map())
-const activeWeekFilter = ref('all')
+onBeforeUnmount(() => {
+  stopMidnightCleanup()
+})
 
-const getItemWeekFilterValue = (item) => {
-  const offset = getWeekOffsetFromToday(item.date)
-  const definition = WEEK_FILTER_DEFINITIONS.find((entry) => entry.offset === offset)
-  return definition ? definition.value : null
-}
+const batchPercentage = computed(() => {
+  if (!batchTotal.value) return 0
+  return Math.round((batchDone.value / batchTotal.value) * 100)
+})
 
-const matchesActiveWeekFilter = (item) => {
-  if (activeWeekFilter.value === 'all') return true
-  return getItemWeekFilterValue(item) === activeWeekFilter.value
-}
-
-const formatShowPrice = (price) => {
-  const normalized = String(price ?? '').trim()
-  if (!normalized || normalized === '0' || normalized === '0.0' || normalized === '0.00') return '暂无价格'
-  return `￥${normalized}`
+const handleBatchFetch = async () => {
+  if (batchFetching.value) return
+  const movies = store.wishMovies
+  if (movies.length === 0) {
+    ElMessage.warning('想看列表为空')
+    return
+  }
+  await handleBatchFetchShows(movies)
 }
 
 const parseMovieDurationMinutes = (durationText) => {
@@ -185,11 +119,9 @@ const getShowEntryDurationMinutes = (showEntry) => {
   if (typeof showEntry?.durationMinutes === 'number' && !Number.isNaN(showEntry.durationMinutes)) {
     return showEntry.durationMinutes
   }
-  const movie = store.selectedMovies.find((item) => item.id === showEntry?.movieId)
+  const movie = store.wishMovies.find((item) => item.id === showEntry?.movieId)
   return parseMovieDurationMinutes(movie?.duration)
 }
-
-const formatWishItemTimeRange = (item) => formatShowTimeRange(item.time, getShowEntryDurationMinutes(item))
 
 const getScheduleConflict = (showEntry) => {
   const targetStart = parseShowTimeToMinutes(showEntry.time)
@@ -221,171 +153,54 @@ const handleAddToSchedule = (showEntry) => {
   ElMessage.success(`已将《${showEntry.movieTitle}》加入行程`)
 }
 
-const groupedWishPool = computed(() => {
-  const groups = new Map()
-  store.wishPool.forEach((item) => {
-    if (!matchesActiveWeekFilter(item)) return
-    if (!groups.has(item.movieId)) {
-      groups.set(item.movieId, {
-        movieId: item.movieId,
-        movieTitle: item.movieTitle,
-        items: [],
-      })
+const handleRemoveWishMovie = async (movie) => {
+  if (!movie?.id) return
+  if (store.hasScheduleForMovie(movie.id)) {
+    ElMessage.warning(`《${movie.title}》还有场次在行程中,请先从行程移除`)
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认将《${movie.title}》从想看中移除?`,
+      '移除想看',
+      {
+        type: 'warning',
+        confirmButtonText: '移除',
+        cancelButtonText: '取消',
+      }
+    )
+  } catch {
+    return
+  }
+  try {
+    await store.removeFromWishMovies(movie.id)
+    store.removeMovieShowsData(movie.id)
+    ElMessage.info(`已将《${movie.title}》移出想看`)
+  } catch {
+    // store 已 rollback;wishSyncError watcher 会提示
+  }
+}
+
+const handleFetchDouban = async (movie) => {
+  if (!movie?.id) return
+  doubanFetchingIds.value = new Set([...doubanFetchingIds.value, movie.id])
+  try {
+    const res = await fetchMovieDouban(movie.id)
+    const { score, douban_url } = res.data.data
+    store.updateMovieScore(movie.id, score, douban_url)
+    if (douban_url) {
+      ElMessage.success(`《${movie.title}》豆瓣评分：${score}`)
+    } else {
+      ElMessage.warning(`《${movie.title}》未找到豆瓣匹配条目`)
     }
-    groups.get(item.movieId).items.push(item)
-  })
-  return Array.from(groups.values())
-    .sort((a, b) => String(a.movieTitle || '').localeCompare(String(b.movieTitle || '')))
-    .map((group) => ({
-      ...group,
-      items: [...group.items].sort((a, b) => {
-        const aKey = `${a.date} ${a.time}`
-        const bKey = `${b.date} ${b.time}`
-        return aKey.localeCompare(bKey)
-      }),
-    }))
-})
-
-const weekFilterOptions = computed(() => {
-  const movieIdsByFilter = new Map(
-    WEEK_FILTER_DEFINITIONS.map((definition) => [definition.value, new Set()])
-  )
-  store.wishPool.forEach((item) => {
-    movieIdsByFilter.get('all').add(item.movieId)
-    const value = getItemWeekFilterValue(item)
-    if (value && movieIdsByFilter.has(value)) {
-      movieIdsByFilter.get(value).add(item.movieId)
-    }
-  })
-  return WEEK_FILTER_DEFINITIONS.map((definition) => ({
-    value: definition.value,
-    label: definition.label,
-    count: movieIdsByFilter.get(definition.value).size,
-  }))
-})
-
-watch(activeWeekFilter, () => {
-  wishGroupPages.value = new Map()
-})
-
-const getMovieYear = (movie) => {
-  const releaseDate = String(movie?.release_date || '').trim()
-  const match = releaseDate.match(/^(\d{4})/)
-  return match ? match[1] : ''
-}
-
-const getWishGroupMovieMeta = (movieId) => {
-  const movie = store.selectedMovies.find((item) => item.id === movieId)
-  if (!movie) return ''
-  const metaParts = [
-    getMovieYear(movie),
-    String(movie.director || '').trim(),
-    String(movie.country || '').trim(),
-  ].filter(Boolean)
-  return metaParts.join(' · ')
-}
-
-const isWishGroupCollapsed = (movieId) => {
-  if (wishGroupCollapseOverrides.value.has(movieId)) {
-    return wishGroupCollapseOverrides.value.get(movieId)
+  } catch (error) {
+    const msg = error?.response?.data?.detail || error?.message || '未知错误'
+    ElMessage.error(`获取豆瓣信息失败：${msg}`)
+  } finally {
+    const next = new Set(doubanFetchingIds.value)
+    next.delete(movie.id)
+    doubanFetchingIds.value = next
   }
-  return WISH_GROUP_DEFAULT_COLLAPSED
-}
-
-const toggleWishGroup = (movieId) => {
-  const next = new Map(wishGroupCollapseOverrides.value)
-  next.set(movieId, !isWishGroupCollapsed(movieId))
-  wishGroupCollapseOverrides.value = next
-}
-
-const handleRemoveWishGroup = (movieId) => {
-  store.removeWishMovieGroup(movieId)
-  if (wishGroupCollapseOverrides.value.has(movieId)) {
-    const next = new Map(wishGroupCollapseOverrides.value)
-    next.delete(movieId)
-    wishGroupCollapseOverrides.value = next
-  }
-  if (wishGroupFilters.value.has(movieId)) {
-    const nextFilters = new Map(wishGroupFilters.value)
-    nextFilters.delete(movieId)
-    wishGroupFilters.value = nextFilters
-  }
-  if (wishGroupPages.value.has(movieId)) {
-    const nextPages = new Map(wishGroupPages.value)
-    nextPages.delete(movieId)
-    wishGroupPages.value = nextPages
-  }
-}
-
-const getWishGroupFilter = (movieId) => {
-  return wishGroupFilters.value.get(movieId) || EMPTY_WISH_GROUP_FILTER
-}
-
-const updateWishGroupFilter = (movieId, patch) => {
-  const current = getWishGroupFilter(movieId)
-  const nextFilter = { ...current, ...patch }
-  const next = new Map(wishGroupFilters.value)
-  if (!nextFilter.cinema && !nextFilter.date) {
-    next.delete(movieId)
-  } else {
-    next.set(movieId, nextFilter)
-  }
-  wishGroupFilters.value = next
-  if (wishGroupPages.value.has(movieId)) {
-    const nextPages = new Map(wishGroupPages.value)
-    nextPages.delete(movieId)
-    wishGroupPages.value = nextPages
-  }
-}
-
-const getWishGroupDateOptions = (movieId) => {
-  const group = groupedWishPool.value.find((item) => item.movieId === movieId)
-  if (!group) return []
-  const uniqueDates = Array.from(new Set(group.items.map((item) => item.date).filter(Boolean))).sort()
-  return uniqueDates.map((date) => ({ value: date, label: formatDateWithRelativeWeek(date) }))
-}
-
-const getFilteredWishItems = (group) => {
-  const filter = getWishGroupFilter(group.movieId)
-  const cinemaKeyword = String(filter.cinema || '').trim().toLowerCase()
-  const targetDate = String(filter.date || '').trim()
-  if (!cinemaKeyword && !targetDate) return group.items
-  return group.items.filter((item) => {
-    if (targetDate && item.date !== targetDate) return false
-    if (cinemaKeyword && !String(item.cinemaName || '').toLowerCase().includes(cinemaKeyword)) return false
-    return true
-  })
-}
-
-const getWishGroupPage = (movieId) => wishGroupPages.value.get(movieId) || 1
-
-const setWishGroupPage = (movieId, page) => {
-  const next = new Map(wishGroupPages.value)
-  next.set(movieId, page)
-  wishGroupPages.value = next
-}
-
-const getPagedWishItems = (group) => {
-  const filtered = getFilteredWishItems(group)
-  const page = getWishGroupPage(group.movieId)
-  const start = (page - 1) * SHOWS_PAGE_SIZE
-  return filtered.slice(start, start + SHOWS_PAGE_SIZE)
-}
-
-const expandAllWishGroups = () => {
-  const next = new Map()
-  groupedWishPool.value.forEach((group) => {
-    next.set(group.movieId, false)
-  })
-  wishGroupCollapseOverrides.value = next
-}
-
-const collapseAllWishGroups = () => {
-  const next = new Map()
-  groupedWishPool.value.forEach((group) => {
-    next.set(group.movieId, true)
-  })
-  wishGroupCollapseOverrides.value = next
 }
 </script>
 
@@ -407,10 +222,17 @@ const collapseAllWishGroups = () => {
 
 .planning-header-main {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   min-width: 0;
   flex-wrap: wrap;
+}
+
+.planning-header-summary {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .planning-header-actions {
@@ -419,130 +241,14 @@ const collapseAllWishGroups = () => {
   gap: 8px;
 }
 
-.planning-header-tabs {
-  margin-top: 8px;
+.batch-progress {
+  margin-top: 12px;
 }
 
-.planning-header-tabs :deep(.el-tabs__header) {
-  margin: 0;
-}
-
-.planning-header-tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
-}
-
-.wish-pool-list {
+.wish-movie-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.wish-pool-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.wish-pool-group-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.wish-pool-group-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.wish-pool-group-title {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: #0f172a;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.wish-pool-group-meta {
-  color: #64748b;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.wish-pool-group-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.wish-pool-group-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.wish-pool-group-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.wish-pool-group-filter-input {
-  width: 180px;
-}
-
-.wish-pool-group-filter-select {
-  width: 200px;
-}
-
-.wish-pool-group-filter-summary {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.wish-pool-group-empty {
-  color: #94a3b8;
-  font-size: 13px;
-  padding: 8px 0;
-}
-
-.wish-pool-group-pagination {
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
-.wish-pool-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px;
-  border-radius: 8px;
-  background-color: #f8fafc;
-  border: 1px solid #e2e8f0;
-}
-
-.wish-pool-main {
-  min-width: 0;
-}
-
-.wish-pool-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  color: #64748b;
-  font-size: 13px;
-}
-
-.wish-pool-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 @media (max-width: 960px) {
@@ -560,26 +266,6 @@ const collapseAllWishGroups = () => {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
-  }
-}
-
-@media (max-width: 640px) {
-  .wish-pool-group-header,
-  .wish-pool-item,
-  .wish-pool-actions {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .wish-pool-group-actions {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .wish-pool-group-filter-input,
-  .wish-pool-group-filter-select {
-    width: 100%;
   }
 }
 </style>

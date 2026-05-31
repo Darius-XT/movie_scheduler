@@ -19,6 +19,7 @@ class MovieSelectionItem:
     actors: str | None
     release_date: str | None
     is_showing: bool
+    is_wished: bool
     director: str | None
     country: str | None
     language: str | None
@@ -38,6 +39,7 @@ class MovieRecord(Protocol):
     actors: str | None
     release_date: str | None
     is_showing: bool
+    is_wished: bool
     director: str | None
     country: str | None
     language: str | None

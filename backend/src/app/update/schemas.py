@@ -17,7 +17,6 @@ class UpdateMovieRequest(BaseModel):
     """更新电影信息请求。"""
 
     city_id: int
-    force_update_all: bool = False
 
 
 class UpdateCinemaData(BaseModel):

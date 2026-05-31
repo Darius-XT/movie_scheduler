@@ -27,19 +27,23 @@ export const selectMovies = (selectionMode = 'all') =>
   api.post('/movies/select', { selection_mode: selectionMode })
 
 // SSE 流式请求同样封装在这里
-export const streamMovieUpdate = (cityId, forceUpdate) =>
-  fetch(`/api/update/movie-stream?city_id=${cityId}&force_update_all=${forceUpdate}`)
+export const streamMovieUpdate = (cityId) =>
+  fetch(`/api/update/movie-stream?city_id=${cityId}`)
 ```
 
 后端长时任务通过 **SSE** 推送进度，前端用 `fetch` stream 接收，不用轮询。
 
-## 计划数据同步
+## 想看与行程
 
-`wishPool` 和 `scheduleItems` 是单用户计划数据，前端启动时通过 `GET /api/planning`
-从后端加载；当后端为空且浏览器已有旧本地数据时，自动通过 `PUT /api/planning`
-上传一次。本地 `localStorage` 仍保留为加载回退和离线状态缓存。
-
-`movieShowsMap` 只作为浏览器本地场次缓存使用，同一自然日内有效，跨日失效，不写入后端。
+- **想看(电影维度)**:`movieSelectionStore.wishMovies` 来源于 `GET /api/movies/wished`,
+  状态字段为 `movies.is_wished`。加入/移出通过 `PATCH /api/movies/{id}/wished` 持久化,
+  store 内部做乐观更新 + 失败回滚。
+- **行程(场次维度)**:`planningStore.scheduleItems` 通过 `GET /api/planning` 加载、
+  `PUT /api/planning/schedule-items` 全量替换。本地 `localStorage` 仍保留作离线回退缓存。
+- 旧的"场次维度想看池"已废弃,localStorage 中的 `wishPool` key 由 `planningStore`
+  启动时主动清理。
+- `movieShowsMap` 只作为浏览器本地场次缓存使用,同一自然日内有效,跨日由 `useShowFetching.scheduleMidnightCleanup`
+  自动清空;不写入后端。
 
 场次展示统一使用 `src/utils/showTime.js` 处理开始/结束时间：场次列表、想看池和行程板都显示
 `HH:mm-HH:mm`。结束时间由场次开始时间加 `durationMinutes` 推算；展示时如果片长缺失或无效，

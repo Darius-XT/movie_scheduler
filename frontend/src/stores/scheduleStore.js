@@ -10,13 +10,13 @@ export const useScheduleStore = defineStore('schedule', () => {
   const showCacheStore = useShowCacheStore()
   const updateMetaStore = useUpdateMetaStore()
 
-  const { selectedMovies } = storeToRefs(movieSelectionStore)
+  const { selectedMovies, wishMovies, wishSyncError, wishSyncReady } =
+    storeToRefs(movieSelectionStore)
   const {
-    wishPool,
     scheduleItems,
-    planningSyncError,
-    planningSyncReady,
-    planningSyncInFlight,
+    scheduleSyncError,
+    scheduleSyncReady,
+    scheduleSyncInFlight,
   } = storeToRefs(planningStore)
   const { movieShowsMap } = storeToRefs(showCacheStore)
   const {
@@ -28,16 +28,18 @@ export const useScheduleStore = defineStore('schedule', () => {
 
   return {
     selectedMovies,
-    wishPool,
+    wishMovies,
     scheduleItems,
     movieShowsMap,
     cinemaUpdateMeta,
     movieUpdateMeta,
     cinemaUpdateResult,
     movieUpdateResult,
-    planningSyncError,
-    planningSyncReady,
-    planningSyncInFlight,
+    wishSyncError,
+    wishSyncReady,
+    scheduleSyncError,
+    scheduleSyncReady,
+    scheduleSyncInFlight,
     setSelectedMovies: movieSelectionStore.setSelectedMovies,
     updateMovieScore: movieSelectionStore.updateMovieScore,
     setMovieShowsData: showCacheStore.setMovieShowsData,
@@ -45,19 +47,19 @@ export const useScheduleStore = defineStore('schedule', () => {
     getMovieShowsData: showCacheStore.getMovieShowsData,
     hasMovieShowsData: showCacheStore.hasMovieShowsData,
     pruneStaleMovieShows: showCacheStore.pruneStaleMovieShows,
-    isInWishPool: planningStore.isInWishPool,
-    addToWishPool: planningStore.addToWishPool,
-    removeFromWishPool: planningStore.removeFromWishPool,
-    removeWishMovieGroup: planningStore.removeWishMovieGroup,
-    addManyToWishPool: planningStore.addManyToWishPool,
+    isInWishMovies: movieSelectionStore.isInWishMovies,
+    addToWishMovies: movieSelectionStore.addToWishMovies,
+    removeFromWishMovies: movieSelectionStore.removeFromWishMovies,
+    initializeWishSync: movieSelectionStore.initializeWishSync,
     isInSchedule: planningStore.isInSchedule,
     addToSchedule: planningStore.addToSchedule,
     removeFromSchedule: planningStore.removeFromSchedule,
     toggleSchedulePurchased: planningStore.toggleSchedulePurchased,
     removePastSchedules: planningStore.removePastSchedules,
+    hasScheduleForMovie: planningStore.hasScheduleForMovie,
     recordCinemaUpdate: updateMetaStore.recordCinemaUpdate,
     recordMovieUpdate: updateMetaStore.recordMovieUpdate,
-    initializePlanningSync: planningStore.initializePlanningSync,
-    persistPlanningToBackend: planningStore.persistPlanningToBackend,
+    initializeScheduleSync: planningStore.initializeScheduleSync,
+    persistScheduleToBackend: planningStore.persistScheduleToBackend,
   }
 })

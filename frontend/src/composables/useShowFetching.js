@@ -13,11 +13,43 @@ const getTotalShows = (movieShowData) => {
   return movieShowData.cinemas.reduce((total, cinema) => total + (cinema.shows?.length || 0), 0)
 }
 
+const readSseStream = async (response, onData) => {
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = JSON.parse(line.substring(6))
+      onData(data)
+    }
+  }
+}
+
 export const useShowFetching = (store, updateForm) => {
   const fetchingMovieIds = ref(new Set())
   const movieProgress = ref(new Map())
   const movieFetchDetails = ref(new Map())
+  const batchFetching = ref(false)
+  const batchTotal = ref(0)
+  const batchDone = ref(0)
   let midnightCleanupTimer = null
+
+  const markFetchingStart = (movieId) => {
+    fetchingMovieIds.value = new Set([...fetchingMovieIds.value, movieId])
+  }
+
+  const markFetchingEnd = (movieId) => {
+    const next = new Set(fetchingMovieIds.value)
+    next.delete(movieId)
+    fetchingMovieIds.value = next
+  }
 
   const ensureMovieFetchDetails = (movieId) => {
     if (!movieFetchDetails.value.has(movieId)) {
@@ -87,81 +119,115 @@ export const useShowFetching = (store, updateForm) => {
     }, msUntilNextMidnight())
   }
 
-  const handleFetchSingleShow = async (movie) => {
-    if (!movie.id) {
-      ElMessage.warning('电影ID无效')
+  // 核心抓取流程:同时服务"单部"与"批量"。movies 数组中每部电影各有独立进度;
+  // 后端 SSE 事件都带 movie_id,前端按 movie_id 分发进度。
+  const runFetchShows = async (movies) => {
+    const valid = (movies || []).filter((m) => m?.id && m.is_showing !== false)
+    if (valid.length === 0) {
+      ElMessage.warning('没有可抓取的电影')
       return
     }
+    const movieIds = valid.map((m) => m.id)
+    const movieById = new Map(valid.map((m) => [m.id, m]))
 
-    fetchingMovieIds.value = new Set([...fetchingMovieIds.value, movie.id])
-    movieProgress.value.set(movie.id, '开始获取场次信息...')
-    movieFetchDetails.value.delete(movie.id)
+    if (movieIds.length > 1) {
+      batchFetching.value = true
+      batchTotal.value = movieIds.length
+      batchDone.value = 0
+    }
+
+    movieIds.forEach((id) => {
+      markFetchingStart(id)
+      movieProgress.value.set(id, '开始获取场次信息...')
+      movieFetchDetails.value.delete(id)
+    })
 
     try {
-      const response = await streamShows([movie.id], updateForm.value.cityId)
+      const response = await streamShows(movieIds, updateForm?.value?.cityId)
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop()
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const data = JSON.parse(line.substring(6))
-
-          if (data.type === 'dates_found') {
-            initializeMovieDates(movie.id, data.dates)
-            movieProgress.value.set(movie.id, `找到 ${data.dates.length} 个排片日期`)
-          } else if (data.type === 'processing_date') {
-            updateMovieDateProgress(movie.id, data.date, { active: true })
-            movieProgress.value.set(movie.id, `处理日期 ${data.date_idx}/${data.total_dates}: ${data.date}`)
-          } else if (data.type === 'processing_cinema') {
-            updateMovieDateProgress(movie.id, data.date, {
+      await readSseStream(response, async (data) => {
+        const movieId = data.movie_id
+        if (data.type === 'dates_found') {
+          if (movieId != null) {
+            initializeMovieDates(movieId, data.dates)
+            movieProgress.value.set(movieId, `找到 ${data.dates.length} 个排片日期`)
+          }
+        } else if (data.type === 'processing_date') {
+          if (movieId != null) {
+            updateMovieDateProgress(movieId, data.date, { active: true })
+            movieProgress.value.set(movieId, `处理日期 ${data.date_idx}/${data.total_dates}: ${data.date}`)
+          }
+        } else if (data.type === 'processing_cinema') {
+          if (movieId != null) {
+            updateMovieDateProgress(movieId, data.date, {
               done: data.cinema_idx,
               total: data.total_cinemas,
               active: true,
             })
-            movieProgress.value.set(movie.id, `日期 ${data.date} - 影院 ${data.cinema_idx}/${data.total_cinemas}`)
-          } else if (data.type === 'complete') {
-            const shows = data.data
-            const showItem = shows[0]
-            const totalShows = showItem ? getTotalShows(showItem) : 0
-
-            movieProgress.value.set(
-              movie.id,
-              showItem ? `抓取完成，共 ${totalShows} 个场次` : '抓取完成，暂无场次'
-            )
-            await waitForProgressTransition()
-            clearMovieFetchProgress([movie.id])
-
-            if (shows.length > 0) {
-              store.setMovieShowsData(movie.id, { ...showItem, cachedAt: Date.now() })
-              ElMessage.success(`成功获取《${movie.title}》的场次信息（共 ${totalShows} 个场次）`)
-            } else {
+            movieProgress.value.set(movieId, `日期 ${data.date} - 影院 ${data.cinema_idx}/${data.total_cinemas}`)
+          }
+        } else if (data.type === 'movie_complete') {
+          if (movieId != null) {
+            const movie = movieById.get(movieId)
+            const label = data.has_shows ? '抓取完成' : '暂无场次'
+            movieProgress.value.set(movieId, label)
+            markFetchingEnd(movieId)
+            if (movieIds.length > 1) {
+              batchDone.value += 1
+            }
+            if (movie && !data.has_shows) {
               ElMessage.warning(`电影《${movie.title}》暂无场次信息`)
             }
-          } else if (data.type === 'error') {
-            ElMessage.error('获取失败: ' + data.error)
-            clearMovieFetchProgress([movie.id])
           }
+        } else if (data.type === 'complete') {
+          const shows = data.data || []
+          shows.forEach((showItem) => {
+            const id = showItem?.movie_id
+            if (id != null) {
+              const totalShows = getTotalShows(showItem)
+              store.setMovieShowsData(id, { ...showItem, cachedAt: Date.now() })
+              const movie = movieById.get(id)
+              if (movie) {
+                movieProgress.value.set(id, `抓取完成,共 ${totalShows} 个场次`)
+                if (movieIds.length === 1) {
+                  ElMessage.success(`成功获取《${movie.title}》的场次信息（共 ${totalShows} 个场次）`)
+                }
+              }
+            }
+          })
+          await waitForProgressTransition()
+          movieIds.forEach((id) => clearMovieFetchProgress([id]))
+          if (movieIds.length > 1) {
+            batchDone.value = batchTotal.value
+            ElMessage.success(`一键抓取完成,共 ${shows.length} 部电影有场次`)
+          }
+        } else if (data.type === 'error') {
+          ElMessage.error('获取失败: ' + data.error)
+          movieIds.forEach((id) => clearMovieFetchProgress([id]))
         }
-      }
+      })
     } catch (error) {
       ElMessage.error('获取失败: ' + error.message)
-      clearMovieFetchProgress([movie.id])
+      movieIds.forEach((id) => clearMovieFetchProgress([id]))
     } finally {
-      const next = new Set(fetchingMovieIds.value)
-      next.delete(movie.id)
-      fetchingMovieIds.value = next
+      movieIds.forEach((id) => markFetchingEnd(id))
+      if (movieIds.length > 1) {
+        batchFetching.value = false
+      }
     }
+  }
+
+  const handleFetchSingleShow = async (movie) => {
+    if (!movie?.id) {
+      ElMessage.warning('电影ID无效')
+      return
+    }
+    await runFetchShows([movie])
+  }
+
+  const handleBatchFetchShows = async (movies) => {
+    await runFetchShows(movies)
   }
 
   return {
@@ -170,6 +236,10 @@ export const useShowFetching = (store, updateForm) => {
     getMovieDateProgressEntries,
     clearAllMovieFetchProgress,
     handleFetchSingleShow,
+    handleBatchFetchShows,
+    batchFetching,
+    batchTotal,
+    batchDone,
     scheduleMidnightCleanup,
     stopMidnightCleanup,
   }

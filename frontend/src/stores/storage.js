@@ -16,4 +16,12 @@ const saveToStorage = (key, value) => {
   }
 }
 
-export { loadFromStorage, saveToStorage }
+const removeFromStorage = (key) => {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export { loadFromStorage, saveToStorage, removeFromStorage }

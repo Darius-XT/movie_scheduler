@@ -1,128 +1,91 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
-import { getPlanning, savePlanning } from '@/api'
+import { getPlanning, saveScheduleItems } from '@/api'
 import { getShowEndDate } from '@/utils/showTime'
-import { loadFromStorage, saveToStorage } from './storage'
+import { loadFromStorage, removeFromStorage, saveToStorage } from './storage'
 
-const WISH_POOL_KEY = 'wishPool'
 const SCHEDULE_ITEMS_KEY = 'scheduleItems'
+const LEGACY_WISH_POOL_KEY = 'wishPool'
 
 export const usePlanningStore = defineStore('planning', () => {
-  const wishPool = ref(loadFromStorage(WISH_POOL_KEY, []))
+  // Clean up legacy localStorage key (场次级想看池已废弃)
+  removeFromStorage(LEGACY_WISH_POOL_KEY)
+
   const scheduleItems = ref(loadFromStorage(SCHEDULE_ITEMS_KEY, []))
-  const planningSyncError = ref('')
-  const planningSyncReady = ref(false)
-  const planningSyncInFlight = ref(false)
+  const scheduleSyncError = ref('')
+  const scheduleSyncReady = ref(false)
+  const scheduleSyncInFlight = ref(false)
 
-  let suppressPlanningPersist = false
-  let planningSyncPending = false
+  let suppressSchedulePersist = false
+  let scheduleSyncPending = false
 
-  watch(wishPool, (val) => saveToStorage(WISH_POOL_KEY, val), { deep: true })
   watch(scheduleItems, (val) => saveToStorage(SCHEDULE_ITEMS_KEY, val), { deep: true })
 
-  const buildPlanningPayload = () => ({
-    wish_pool: wishPool.value,
-    schedule_items: scheduleItems.value,
-  })
+  const hasLocalSchedule = () => scheduleItems.value.length > 0
 
-  const hasLocalPlanning = () => wishPool.value.length > 0 || scheduleItems.value.length > 0
+  const hasRemoteSchedule = (planning) => (planning?.schedule_items?.length || 0) > 0
 
-  const hasRemotePlanning = (planning) =>
-    (planning?.wish_pool?.length || 0) > 0 || (planning?.schedule_items?.length || 0) > 0
-
-  const applyRemotePlanning = (planning) => {
-    suppressPlanningPersist = true
-    wishPool.value = planning?.wish_pool || []
+  const applyRemoteSchedule = (planning) => {
+    suppressSchedulePersist = true
     scheduleItems.value = planning?.schedule_items || []
-    suppressPlanningPersist = false
+    suppressSchedulePersist = false
   }
 
-  const persistPlanningToBackend = async () => {
-    if (!planningSyncReady.value || suppressPlanningPersist) return
-    if (planningSyncInFlight.value) {
-      planningSyncPending = true
+  const persistScheduleToBackend = async () => {
+    if (!scheduleSyncReady.value || suppressSchedulePersist) return
+    if (scheduleSyncInFlight.value) {
+      scheduleSyncPending = true
       return
     }
-    planningSyncInFlight.value = true
+    scheduleSyncInFlight.value = true
     try {
-      await savePlanning(buildPlanningPayload())
-      planningSyncError.value = ''
+      await saveScheduleItems(scheduleItems.value)
+      scheduleSyncError.value = ''
     } catch (error) {
-      planningSyncError.value = error?.response?.data?.error || error?.message || '计划同步失败'
-      console.error('保存计划失败:', error)
+      scheduleSyncError.value = error?.response?.data?.error || error?.message || '行程同步失败'
+      console.error('保存行程失败:', error)
     } finally {
-      planningSyncInFlight.value = false
-      if (planningSyncPending) {
-        planningSyncPending = false
-        void persistPlanningToBackend()
+      scheduleSyncInFlight.value = false
+      if (scheduleSyncPending) {
+        scheduleSyncPending = false
+        void persistScheduleToBackend()
       }
     }
   }
 
-  const initializePlanningSync = async () => {
+  const initializeScheduleSync = async () => {
     try {
       const response = await getPlanning()
       const remotePlanning = response.data.data
-      if (hasRemotePlanning(remotePlanning)) {
-        applyRemotePlanning(remotePlanning)
-      } else if (hasLocalPlanning()) {
-        await savePlanning(buildPlanningPayload())
+      if (hasRemoteSchedule(remotePlanning)) {
+        applyRemoteSchedule(remotePlanning)
+      } else if (hasLocalSchedule()) {
+        await saveScheduleItems(scheduleItems.value)
       }
-      planningSyncError.value = ''
+      scheduleSyncError.value = ''
     } catch (error) {
-      planningSyncError.value = error?.response?.data?.error || error?.message || '计划同步初始化失败'
-      console.error('初始化计划同步失败:', error)
+      scheduleSyncError.value = error?.response?.data?.error || error?.message || '行程同步初始化失败'
+      console.error('初始化行程同步失败:', error)
     } finally {
-      planningSyncReady.value = true
+      scheduleSyncReady.value = true
     }
   }
 
-  const persistPlanningAfterMutation = () => {
-    void persistPlanningToBackend()
+  const persistScheduleAfterMutation = () => {
+    void persistScheduleToBackend()
   }
 
-  const isInWishPool = (showKey) => {
-    return wishPool.value.some((item) => item.key === showKey)
-  }
-
-  const addToWishPool = (showEntry) => {
-    if (isInWishPool(showEntry.key)) return
-    wishPool.value = [...wishPool.value, showEntry]
-    persistPlanningAfterMutation()
-  }
-
-  const removeFromWishPool = (showKey) => {
-    wishPool.value = wishPool.value.filter((item) => item.key !== showKey)
-    persistPlanningAfterMutation()
-  }
-
-  const removeWishMovieGroup = (movieId) => {
-    wishPool.value = wishPool.value.filter((item) => item.movieId !== movieId)
-    persistPlanningAfterMutation()
-  }
-
-  const addManyToWishPool = (entries) => {
-    const newEntries = entries.filter((e) => !isInWishPool(e.key))
-    if (newEntries.length > 0) {
-      wishPool.value = [...wishPool.value, ...newEntries]
-      persistPlanningAfterMutation()
-    }
-    return newEntries.length
-  }
-
-  const isInSchedule = (showKey) => {
-    return scheduleItems.value.some((item) => item.key === showKey)
-  }
+  const isInSchedule = (showKey) => scheduleItems.value.some((item) => item.key === showKey)
 
   const addToSchedule = (showEntry) => {
     if (isInSchedule(showEntry.key)) return
     scheduleItems.value = [...scheduleItems.value, { ...showEntry, purchased: false }]
-    persistPlanningAfterMutation()
+    persistScheduleAfterMutation()
   }
 
   const removeFromSchedule = (showKey) => {
     scheduleItems.value = scheduleItems.value.filter((item) => item.key !== showKey)
-    persistPlanningAfterMutation()
+    persistScheduleAfterMutation()
   }
 
   const toggleSchedulePurchased = (showKey) => {
@@ -130,7 +93,7 @@ export const usePlanningStore = defineStore('planning', () => {
       if (item.key !== showKey) return item
       return { ...item, purchased: !item.purchased }
     })
-    persistPlanningAfterMutation()
+    persistScheduleAfterMutation()
   }
 
   const removePastSchedules = () => {
@@ -140,27 +103,25 @@ export const usePlanningStore = defineStore('planning', () => {
       const endDate = getShowEndDate(item.date, item.time, item.durationMinutes)
       return endDate == null || endDate >= now
     })
-    if (before !== scheduleItems.value.length) persistPlanningAfterMutation()
+    if (before !== scheduleItems.value.length) persistScheduleAfterMutation()
     return before - scheduleItems.value.length
   }
 
+  const hasScheduleForMovie = (movieId) =>
+    scheduleItems.value.some((item) => item.movieId === movieId)
+
   return {
-    wishPool,
     scheduleItems,
-    planningSyncError,
-    planningSyncReady,
-    planningSyncInFlight,
-    isInWishPool,
-    addToWishPool,
-    removeFromWishPool,
-    removeWishMovieGroup,
-    addManyToWishPool,
+    scheduleSyncError,
+    scheduleSyncReady,
+    scheduleSyncInFlight,
     isInSchedule,
     addToSchedule,
     removeFromSchedule,
     toggleSchedulePurchased,
     removePastSchedules,
-    initializePlanningSync,
-    persistPlanningToBackend,
+    hasScheduleForMovie,
+    initializeScheduleSync,
+    persistScheduleToBackend,
   }
 })

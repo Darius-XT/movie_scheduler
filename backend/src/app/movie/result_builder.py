@@ -19,6 +19,7 @@ class MovieSelectionResultBuilder:
             actors=movie.actors,
             release_date=movie.release_date,
             is_showing=movie.is_showing,
+            is_wished=movie.is_wished,
             director=movie.director,
             country=movie.country,
             language=movie.language,

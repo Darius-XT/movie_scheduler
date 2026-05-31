@@ -9,24 +9,30 @@ export const getCities = () => api.get('/cities')
 
 export const getPlanning = () => api.get('/planning')
 
-export const savePlanning = (planning) => api.put('/planning', planning)
+export const saveScheduleItems = (scheduleItems) =>
+  api.put('/planning/schedule-items', { schedule_items: scheduleItems })
 
 export const selectMovies = (selectionMode = 'all') =>
   api.post('/movies/select', { selection_mode: selectionMode })
+
+export const getWishedMovies = () => api.get('/movies/wished')
+
+export const setMovieWished = (movieId, isWished) =>
+  api.patch(`/movies/${movieId}/wished`, { is_wished: isWished })
 
 export const fetchMovieDouban = (movieId) =>
   api.post(`/movies/${movieId}/fetch-douban`)
 
 // SSE streaming functions — return a raw Response for the caller to read
-export const streamCinemaUpdate = (cityId, forceUpdate) =>
+export const streamCinemaUpdate = (cityId) =>
   fetch(
-    `/api/update/cinema-stream?city_id=${cityId}&force_update_all=${forceUpdate}`,
+    `/api/update/cinema-stream?city_id=${cityId}`,
     { headers: { Accept: 'text/event-stream' } }
   )
 
-export const streamMovieUpdate = (cityId, forceUpdate) =>
+export const streamMovieUpdate = (cityId) =>
   fetch(
-    `/api/update/movie-stream?city_id=${cityId}&force_update_all=${forceUpdate}`,
+    `/api/update/movie-stream?city_id=${cityId}`,
     { headers: { Accept: 'text/event-stream' } }
   )
 

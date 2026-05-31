@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 from app.schemas import SuccessEnvelope
 
 
-class PlanningItem(BaseModel):
-    """前端排片计划条目。"""
+class ScheduleItem(BaseModel):
+    """前端行程条目(场次维度)。"""
 
     key: str
     movie_id: int = Field(alias="movieId")
@@ -29,8 +27,7 @@ class PlanningItem(BaseModel):
 class PlanningData(BaseModel):
     """排片计划列表数据。"""
 
-    wish_pool: list[PlanningItem]
-    schedule_items: list[PlanningItem]
+    schedule_items: list[ScheduleItem]
 
 
 class PlanningResponse(SuccessEnvelope):
@@ -39,11 +36,7 @@ class PlanningResponse(SuccessEnvelope):
     data: PlanningData
 
 
-class ReplacePlanningRequest(BaseModel):
-    """全量替换排片计划请求。"""
+class ReplaceScheduleItemsRequest(BaseModel):
+    """全量替换行程请求。"""
 
-    wish_pool: list[PlanningItem] = []
-    schedule_items: list[PlanningItem] = []
-
-
-PlanningListType = Literal["wish", "schedule"]
+    schedule_items: list[ScheduleItem] = []

@@ -42,28 +42,24 @@ class UpdateService:
     async def update_movie(
         self,
         city_id: int | None,
-        force_update_all: bool = False,
         progress_callback: Callable[[UpdateProgressEvent], None] | None = None,
     ) -> UpdateMovieResult:
-        """异步更新电影信息。"""
+        """异步更新电影信息(增量)。"""
         return await self.movie_info_updater.update_all_movie_info(
             city_id=self._normalize_city_id(city_id),
-            force_update_all=force_update_all,
             progress_callback=progress_callback,
         )
 
     async def update_cinema(
         self,
         city_id: int | None,
-        force_update_all: bool = False,
         progress_callback: Callable[[UpdateProgressEvent], None] | None = None,
     ) -> UpdateCinemaResult:
-        """异步更新影院信息。"""
+        """异步更新影院信息(增量)。"""
         normalized_city_id = self._normalize_city_id(city_id)
         success_count, failure_count = await asyncio.to_thread(
             self.cinema_info_updater.update_all_cinema_info,
             normalized_city_id,
-            force_update_all,
             progress_callback,
         )
         return self.result_builder.build_cinema_update_result(

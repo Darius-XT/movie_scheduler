@@ -26,6 +26,7 @@ class MovieSelectionItem(BaseModel):
     actors: str | None = None
     release_date: str | None = None
     is_showing: bool = False
+    is_wished: bool = False
     director: str | None = None
     country: str | None = None
     language: str | None = None
@@ -44,3 +45,33 @@ class MovieSelectionResponse(SuccessEnvelope):
     """电影筛选响应。"""
 
     data: MovieSelectionData
+
+
+class WishedMoviesData(BaseModel):
+    """想看电影列表数据。"""
+
+    movies: list[MovieSelectionItem]
+
+
+class WishedMoviesResponse(SuccessEnvelope):
+    """想看电影列表响应。"""
+
+    data: WishedMoviesData
+
+
+class SetMovieWishedRequest(BaseModel):
+    """设置电影想看状态请求。"""
+
+    is_wished: bool
+
+
+class MovieDetailData(BaseModel):
+    """单个电影详情数据。"""
+
+    movie: MovieSelectionItem
+
+
+class MovieDetailResponse(SuccessEnvelope):
+    """单个电影详情响应。"""
+
+    data: MovieDetailData

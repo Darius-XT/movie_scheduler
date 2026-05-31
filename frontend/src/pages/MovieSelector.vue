@@ -26,7 +26,7 @@
         <ScheduleBoard />
 
         <!-- 想看池 -->
-        <WishPool />
+        <WishPool :update-form="updateForm" />
 
         <!-- 电影列表 -->
         <div class="section-header">
@@ -51,16 +51,11 @@
             :key="movie.id"
             :movie="movie"
             :index="index"
-            :is-fetching="fetchingMovieIds.has(movie.id)"
+            mode="select"
             :is-douban-fetching="doubanFetchingIds.has(movie.id)"
-            :movie-progress-text="movieProgress.get(movie.id) || ''"
-            :movie-fetch-date-entries="getMovieDateProgressEntries(movie.id)"
-            :shows-data="getMovieShowsData(movie.id)"
-            :has-valid-shows="hasValidMovieShows(movie.id)"
-            @fetch-single-show="handleFetchSingleShow"
+            :is-wish-toggling="wishTogglingIds.has(movie.id)"
             @fetch-douban="handleFetchDouban"
-            @toggle-wish-pool-entry="handleToggleWishPoolEntry"
-            @add-all-to-wish-pool="handleAddAllToWishPool"
+            @toggle-wish-movie="handleToggleWishMovie"
           />
         </div>
       </div>
@@ -71,8 +66,7 @@
 <script setup>
 import { fetchMovieDouban, getCities } from '@/api'
 import { ElMessage } from 'element-plus'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useShowFetching } from '@/composables/useShowFetching'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import MovieCard from '@/components/MovieCard.vue'
 import MovieFilterPanel from '@/components/MovieFilterPanel.vue'
@@ -84,30 +78,21 @@ const store = useScheduleStore()
 
 // ===== 城市 / 更新表单 =====
 const cities = ref([])
-const updateForm = ref({ cityId: null, forceUpdate: false })
-
-// ===== 场次缓存跨天失效定时器 =====
-// 场次按自然日缓存：同一天内保留，跨过 0 点自动失效（由 store 负责判断）。
-const {
-  fetchingMovieIds,
-  movieProgress,
-  getMovieDateProgressEntries,
-  clearAllMovieFetchProgress,
-  handleFetchSingleShow,
-  scheduleMidnightCleanup,
-  stopMidnightCleanup,
-} = useShowFetching(store, updateForm)
+const updateForm = ref({ cityId: null })
 
 // ===== 电影列表状态 =====
 const movieSearchKeyword = ref('')
 const movieSortOrder = ref('newest')
 const doubanFetchingIds = ref(new Set())
+const wishTogglingIds = ref(new Set())
 
 // ===== 初始化 =====
 onMounted(async () => {
   store.pruneStaleMovieShows()
-  await store.initializePlanningSync()
-  scheduleMidnightCleanup()
+  await Promise.all([
+    store.initializeScheduleSync(),
+    store.initializeWishSync(),
+  ])
   try {
     const response = await getCities()
     cities.value = response.data.data.cities
@@ -119,24 +104,23 @@ onMounted(async () => {
   }
 })
 
-onBeforeUnmount(() => {
-  stopMidnightCleanup()
-})
-
 watch(
-  () => store.planningSyncError,
+  () => store.scheduleSyncError,
   (message) => {
     if (message) ElMessage.warning(message)
   }
 )
 
-const hasValidMovieShows = (movieId) => store.hasMovieShowsData(movieId)
-
-const getMovieShowsData = (movieId) => store.getMovieShowsData(movieId)
+watch(
+  () => store.wishSyncError,
+  (message) => {
+    if (message) ElMessage.warning(message)
+  }
+)
 
 // ===== 事件处理：来自 MovieFilterPanel =====
 const handleMoviesSelected = () => {
-  clearAllMovieFetchProgress()
+  // no-op now; 场次抓取已移到想看列表
 }
 
 // ===== 豆瓣信息获取 =====
@@ -162,54 +146,26 @@ const handleFetchDouban = async (movie) => {
   }
 }
 
-// ===== 想看池交互 =====
-const parseMovieDurationMinutes = (durationText) => {
-  const normalized = String(durationText ?? '').trim()
-  const match = normalized.match(/(\d+)/)
-  return match ? Number(match[1]) : null
-}
-
-const createShowEntry = (movie, cinema, show) => ({
-  key: `${movie.id}-${cinema.cinema_id}-${show.date}-${show.time}`,
-  movieId: movie.id,
-  movieTitle: movie.title,
-  date: show.date,
-  time: show.time,
-  cinemaId: cinema.cinema_id,
-  cinemaName: cinema.cinema_name,
-  price: show.price,
-  durationMinutes: parseMovieDurationMinutes(movie?.duration),
-})
-
-const handleToggleWishPoolEntry = (entry) => {
-  if (store.isInSchedule(entry.key)) return
-  if (store.isInWishPool(entry.key)) {
-    store.removeFromWishPool(entry.key)
-    return
+// ===== 想看交互(电影维度) =====
+const handleToggleWishMovie = async (movie) => {
+  if (!movie?.id) return
+  wishTogglingIds.value = new Set([...wishTogglingIds.value, movie.id])
+  try {
+    if (store.isInWishMovies(movie.id)) {
+      await store.removeFromWishMovies(movie.id)
+      store.removeMovieShowsData(movie.id)
+      ElMessage.info(`已将《${movie.title}》移出想看`)
+    } else {
+      await store.addToWishMovies(movie)
+      ElMessage.success(`已将《${movie.title}》加入想看`)
+    }
+  } catch {
+    // store 已 rollback,并设置过 wishSyncError(由 watch 弹出 warning)
+  } finally {
+    const next = new Set(wishTogglingIds.value)
+    next.delete(movie.id)
+    wishTogglingIds.value = next
   }
-  store.addToWishPool(entry)
-  ElMessage.success(`已将《${entry.movieTitle}》加入想看`)
-}
-
-const handleAddAllToWishPool = (movie, providedEntries) => {
-  let entries = providedEntries
-  if (!entries) {
-    const showsData = getMovieShowsData(movie.id)
-    if (!showsData?.cinemas) return
-    entries = showsData.cinemas.flatMap((cinema) =>
-      (cinema.shows || [])
-        .map((show) => createShowEntry(movie, cinema, show))
-        .filter((entry) => !store.isInSchedule(entry.key))
-    )
-  }
-
-  if (entries.length === 0) {
-    ElMessage.warning(`《${movie.title}》的场次已全部加入想看或行程`)
-    return
-  }
-
-  const added = store.addManyToWishPool(entries)
-  ElMessage.success(`已将《${movie.title}》的 ${added} 个场次加入想看`)
 }
 
 // ===== 计算属性 =====

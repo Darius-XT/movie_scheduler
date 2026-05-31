@@ -23,7 +23,6 @@ from app.update.movie.base.entities import (
 from app.update.movie.base.updater import MovieBaseInfoUpdater
 from app.update.movie.extra.updater import MovieExtraInfoUpdater
 from app.update.movie.updater import MovieInfoUpdater
-from app.update.movie_update_reset_helper import MovieUpdateResetHelper
 from app.update.result_builder import (
     UpdateMovieBaseInfoResult,
     UpdateMovieExtraInfoResult,
@@ -35,16 +34,6 @@ from app.update.result_builder import (
 from app.update.updater import InfoUpdateUseCase
 
 UpdateProgressCallback = Callable[[UpdateProgressEvent], None]
-
-
-class FakeResetHelper:
-    """用于测试的重置辅助类。"""
-
-    def __init__(self) -> None:
-        self.called_with: list[bool] = []
-
-    def reset_movies_if_needed(self, force_update_all: bool) -> None:
-        self.called_with.append(force_update_all)
 
 
 class FakeBaseInfoUpdater:
@@ -82,10 +71,8 @@ class FakeExtraInfoUpdater:
 
     async def update_all_movie_extra_info(
         self,
-        force_update_all: bool = False,
         progress_callback: UpdateProgressCallback | None = None,
     ) -> int:
-        assert force_update_all is True
         assert progress_callback is None
         return 3
 
@@ -96,11 +83,9 @@ class FakeMovieInfoUpdater:
     async def update_all_movie_info(
         self,
         city_id: int,
-        force_update_all: bool,
         progress_callback: UpdateProgressCallback | None = None,
     ) -> UpdateMovieResult:
         assert city_id == 10
-        assert force_update_all is True
         assert progress_callback is None
         return UpdateMovieResult(
             base_info=UpdateMovieBaseInfoResult(
@@ -131,7 +116,6 @@ class FakeCinemaInfoUpdater:
     def update_all_cinema_info(
         self,
         city_id: int,
-        force_update_all: bool = False,
         progress_callback: UpdateProgressCallback | None = None,
     ) -> tuple[int, int]:
         assert city_id == 10
@@ -221,18 +205,13 @@ def test_base_info_updater_uses_datetime_for_first_showing_at(monkeypatch: pytes
 
 
 def test_all_movie_info_updater_orchestrates_full_flow() -> None:
-    """电影更新器应串联重置、基础信息和额外信息更新。"""
-    reset_helper = FakeResetHelper()
-    updater = MovieInfoUpdater(
-        reset_helper=cast(MovieUpdateResetHelper, reset_helper),
-        result_builder=UpdateResultBuilder(),
-    )
+    """电影更新器应串联基础信息和额外信息更新(增量)。"""
+    updater = MovieInfoUpdater(result_builder=UpdateResultBuilder())
     updater.base_info_updater = cast(MovieBaseInfoUpdater, FakeBaseInfoUpdater())
     updater.extra_info_updater = cast(MovieExtraInfoUpdater, FakeExtraInfoUpdater())
 
-    result = asyncio.run(updater.update_all_movie_info(city_id=10, force_update_all=True))
+    result = asyncio.run(updater.update_all_movie_info(city_id=10))
 
-    assert reset_helper.called_with == [True]
     assert asdict(result) == {
         "base_info": {
             "input_stats": {
@@ -262,7 +241,7 @@ def test_info_update_use_case_orchestrates_cinema_result_building() -> None:
     use_case.movie_info_updater = cast(MovieInfoUpdater, FakeMovieInfoUpdater())
     use_case.cinema_info_updater = cast(CinemaInfoUpdater, FakeCinemaInfoUpdater())
 
-    movie_result = asyncio.run(use_case.update_movie_info(city_id=10, force_update_all=True))
+    movie_result = asyncio.run(use_case.update_movie_info(city_id=10))
     cinema_result = use_case.update_cinema_info(city_id=10)
 
     assert asdict(movie_result) == {

@@ -109,12 +109,14 @@ MOVIE_SCHEDULER_CORS_ORIGINS=["*"]
 ## 主要功能
 
 - 获取城市列表：`GET /api/cities`
-- 更新影院数据：`GET /api/update/cinema-stream?city_id=10&force_update_all=false`
-- 更新电影数据：`GET /api/update/movie-stream?city_id=10&force_update_all=false`
+- 更新影院数据：`GET /api/update/cinema-stream?city_id=10`
+- 更新电影数据：`GET /api/update/movie-stream?city_id=10`
 - 选择待查询电影：`POST /api/movies/select`
+- 想看列表读取：`GET /api/movies/wished`
+- 想看状态切换：`PATCH /api/movies/{movie_id}/wished`
 - 获取豆瓣信息：`POST /api/movies/{movie_id}/fetch-douban`
 - 拉取排片数据：`GET /api/shows/fetch-stream?movie_ids=1,2&city_id=10`
-- 读取/保存单用户排片计划：`GET /api/planning` / `PUT /api/planning`
+- 读取行程：`GET /api/planning`;全量替换行程：`PUT /api/planning/schedule-items`
 
 部分接口使用 SSE 流式返回，前端会逐步展示更新进度。
 

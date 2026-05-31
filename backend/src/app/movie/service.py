@@ -15,6 +15,7 @@ from app.movie.entities import (
 )
 from app.movie.gateway import movie_gateway
 from app.movie.result_builder import movie_result_builder
+from app.repositories.movie import movie_repository
 
 SelectionMode = Literal["showing", "upcoming", "all"]
 
@@ -52,6 +53,11 @@ class MovieSelector:
         logger.debug("筛选完成，共找到 %s 部电影", len(selected))
         return selected
 
+    def list_wished_movies(self) -> list[MovieSelectionItem]:
+        """读取全部想看电影。"""
+        movies = movie_repository.list_wished_movies()
+        return [self.result_builder.build_movie(movie) for movie in movies]
+
     def _matches(self, movie: MovieRecord, selection_mode: SelectionMode) -> bool:
         if selection_mode == "all":
             return True
@@ -70,6 +76,24 @@ class MovieService:
         """按上映状态异步筛选电影。"""
         normalized = self._normalize_selection_mode(selection_mode)
         return await asyncio.to_thread(self.selector.select_movie, normalized)
+
+    async def list_wished_movies(self) -> list[MovieSelectionItem]:
+        """异步读取全部想看电影。"""
+        return await asyncio.to_thread(self.selector.list_wished_movies)
+
+    async def set_movie_wished(self, movie_id: int, is_wished: bool) -> MovieSelectionItem:
+        """更新单部电影的想看状态。
+
+        Raises:
+            AppError: 电影不存在(status_code=404)。
+        """
+        ok = await asyncio.to_thread(movie_repository.set_movie_wished, movie_id, is_wished)
+        if not ok:
+            raise AppError(f"电影不存在: {movie_id}", status_code=404)
+        movie = await asyncio.to_thread(movie_repository.get_movie_by_id, movie_id)
+        if movie is None:
+            raise AppError(f"电影不存在: {movie_id}", status_code=404)
+        return self.selector.result_builder.build_movie(movie)
 
     def _normalize_selection_mode(self, selection_mode: SelectionMode) -> SelectionMode:
         if selection_mode not in {"showing", "upcoming", "all"}:

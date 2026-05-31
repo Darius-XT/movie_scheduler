@@ -18,7 +18,6 @@
             :value="city.id"
           />
         </el-select>
-        <el-checkbox v-model="updateForm.forceUpdate" style="margin-left: 28px">强制更新</el-checkbox>
       </el-form-item>
 
       <el-form-item class="update-action-form-item">
@@ -195,7 +194,7 @@ const handleUpdateCinema = async () => {
   cinemaUpdateProgress.value = ''
   const startedAt = Date.now()
   try {
-    const response = await streamCinemaUpdate(props.updateForm.cityId, props.updateForm.forceUpdate)
+    const response = await streamCinemaUpdate(props.updateForm.cityId)
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     if (!response.body) throw new Error('未收到更新响应流')
 
@@ -229,7 +228,7 @@ const handleUpdateMovie = async () => {
   movieUpdateProgress.value = ''
   const startedAt = Date.now()
   try {
-    const response = await streamMovieUpdate(props.updateForm.cityId, props.updateForm.forceUpdate)
+    const response = await streamMovieUpdate(props.updateForm.cityId)
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     if (!response.body) throw new Error('未收到更新响应流')
 

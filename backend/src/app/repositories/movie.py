@@ -53,6 +53,34 @@ class MovieRepository:
             logger.error("获取所有电影失败: %s", error)
             raise RepositoryError("读取电影列表失败") from error
 
+    def list_wished_movies(self) -> list[Movie]:
+        """获取全部想看电影,按首次上映时间倒序。"""
+        try:
+            with database_manager.session() as session:
+                return (
+                    session.query(Movie)
+                    .filter(Movie.is_wished.is_(True))
+                    .order_by(Movie.first_showing_at.desc().nullslast(), Movie.id.desc())
+                    .all()
+                )
+        except SQLAlchemyError as error:
+            logger.error("获取想看电影列表失败: %s", error)
+            raise RepositoryError("读取想看电影列表失败") from error
+
+    def set_movie_wished(self, movie_id: int, is_wished: bool) -> bool:
+        """更新电影的想看状态,电影不存在时返回 False。"""
+        try:
+            with database_manager.transaction() as session:
+                movie = session.query(Movie).filter(Movie.id == movie_id).first()
+                if movie is None:
+                    logger.warning("设置想看状态失败,电影不存在: ID %s", movie_id)
+                    return False
+                movie.is_wished = bool(is_wished)
+            return True
+        except SQLAlchemyError as error:
+            logger.error("设置电影想看状态失败: %s", error)
+            raise RepositoryError("设置电影想看状态失败") from error
+
     def get_movies_count(self) -> int:
         """获取电影总数。"""
         try:
@@ -111,17 +139,6 @@ class MovieRepository:
         except SQLAlchemyError as error:
             logger.error("删除电影失败: %s", error)
             raise RepositoryError("删除电影失败") from error
-
-    def delete_all_movies(self) -> bool:
-        """删除全部电影。"""
-        try:
-            with database_manager.transaction() as session:
-                deleted_count = session.query(Movie).delete()
-                logger.info("已删除所有电影，共 %s 部", deleted_count)
-            return True
-        except SQLAlchemyError as error:
-            logger.error("删除所有电影失败: %s", error)
-            raise RepositoryError("删除所有电影失败") from error
 
 
 movie_repository = MovieRepository()

@@ -27,16 +27,11 @@ class MovieDoubanInfoUpdater:
 
     async def update_all_movie_douban_info(
         self,
-        force_update_all: bool = False,
         progress_callback: Callable[[UpdateProgressEvent], None] | None = None,
     ) -> int:
-        """更新电影豆瓣信息，并返回成功数量。"""
-        if force_update_all:
-            logger.info("开始强制更新所有电影的豆瓣信息")
-            movies_to_update = await asyncio.to_thread(movie_repository.get_all_movies)
-        else:
-            logger.info("开始获取待补充豆瓣信息的电影")
-            movies_to_update = await asyncio.to_thread(movie_repository.get_movies_without_douban_info)
+        """更新电影豆瓣信息（增量）,并返回成功数量。"""
+        logger.info("开始获取待补充豆瓣信息的电影")
+        movies_to_update = await asyncio.to_thread(movie_repository.get_movies_without_douban_info)
 
         if not movies_to_update:
             logger.info("没有需要更新豆瓣信息的电影")

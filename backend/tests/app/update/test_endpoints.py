@@ -31,7 +31,6 @@ def test_update_cinema_stream_endpoint_returns_progress_and_result(
 
     async def update_cinema(
         city_id: int,
-        force_update_all: bool = False,
         progress_callback: UpdateProgressCallback | None = None,
     ) -> UpdateCinemaResult:
         assert city_id == 10
@@ -64,11 +63,9 @@ def test_update_movie_stream_endpoint_returns_progress_and_result(
 
     async def update_movie(
         city_id: int,
-        force_update_all: bool = False,
         progress_callback: UpdateProgressCallback | None = None,
     ) -> UpdateMovieResult:
         assert city_id == 10
-        assert force_update_all is False
         assert progress_callback is not None
         progress_callback(
             UpdateProgressEvent(
@@ -100,9 +97,7 @@ def test_update_movie_stream_endpoint_returns_progress_and_result(
         )
 
     monkeypatch.setattr(update_service, "update_movie", update_movie)
-    with client.stream(
-        "GET", "/api/update/movie-stream?city_id=10&force_update_all=false"
-    ) as response:
+    with client.stream("GET", "/api/update/movie-stream?city_id=10") as response:
         body = "".join(response.iter_text())
 
     assert response.status_code == 200

@@ -98,7 +98,7 @@ async def _drain_sse_queue(
             task.cancel()
 
 
-async def encode_update_movie_stream(city_id: int, force_update_all: bool) -> AsyncIterator[str]:
+async def encode_update_movie_stream(city_id: int) -> AsyncIterator[str]:
     """将电影更新过程编码为 SSE 文本帧。"""
     event_queue: asyncio.Queue[dict[str, object] | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -107,7 +107,7 @@ async def encode_update_movie_stream(city_id: int, force_update_all: bool) -> As
     async def run_update() -> None:
         try:
             result = await update_service.update_movie(
-                city_id=city_id, force_update_all=force_update_all,
+                city_id=city_id,
                 progress_callback=push_progress,
             )
             payload: dict[str, object] = {"type": "complete", "data": build_update_movie_data(result).model_dump()}
@@ -123,7 +123,7 @@ async def encode_update_movie_stream(city_id: int, force_update_all: bool) -> As
         yield frame
 
 
-async def encode_update_cinema_stream(city_id: int, force_update_all: bool) -> AsyncIterator[str]:
+async def encode_update_cinema_stream(city_id: int) -> AsyncIterator[str]:
     """将影院更新过程编码为 SSE 文本帧。"""
     event_queue: asyncio.Queue[dict[str, object] | None] = asyncio.Queue()
     loop = asyncio.get_running_loop()
@@ -132,7 +132,7 @@ async def encode_update_cinema_stream(city_id: int, force_update_all: bool) -> A
     async def run_update() -> None:
         try:
             result = await update_service.update_cinema(
-                city_id=city_id, force_update_all=force_update_all,
+                city_id=city_id,
                 progress_callback=push_progress,
             )
             payload: dict[str, object] = {"type": "complete", "data": build_update_cinema_data(result).model_dump()}
@@ -149,19 +149,19 @@ async def encode_update_cinema_stream(city_id: int, force_update_all: bool) -> A
 
 
 @router.get("/update/movie-stream")
-async def update_movie_stream(city_id: int, force_update_all: bool = False) -> StreamingResponse:
-    """以 SSE 方式流式返回电影更新文案进度。"""
+async def update_movie_stream(city_id: int) -> StreamingResponse:
+    """以 SSE 方式流式返回电影更新文案进度(增量)。"""
     return StreamingResponse(
-        encode_update_movie_stream(city_id=city_id, force_update_all=force_update_all),
+        encode_update_movie_stream(city_id=city_id),
         media_type="text/event-stream",
     )
 
 
 @router.get("/update/cinema-stream")
-async def update_cinema_stream(city_id: int, force_update_all: bool = False) -> StreamingResponse:
-    """以 SSE 方式流式返回影院更新文案进度。"""
+async def update_cinema_stream(city_id: int) -> StreamingResponse:
+    """以 SSE 方式流式返回影院更新文案进度(增量)。"""
     return StreamingResponse(
-        encode_update_cinema_stream(city_id=city_id, force_update_all=force_update_all),
+        encode_update_cinema_stream(city_id=city_id),
         media_type="text/event-stream",
     )
 

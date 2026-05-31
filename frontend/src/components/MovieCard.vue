@@ -45,37 +45,56 @@
           {{ descriptionExpanded ? '收起' : '展开' }}简介
         </el-button>
         <el-button
-          v-if="!hasValidShows"
-          :type="movie.is_showing === false ? 'info' : 'primary'"
-          size="small"
-          :loading="isFetching"
-          :disabled="movie.is_showing === false"
-          @click="$emit('fetch-single-show', movie)"
-        >
-          {{ movie.is_showing === false ? '暂未上映' : '获取场次信息' }}
-        </el-button>
-        <el-button
-          v-else
-          type="success"
-          size="small"
-          @click="toggleShows"
-        >
-          {{ showsExpanded ? '收起' : '展开' }}场次信息
-        </el-button>
-        <el-button
           size="small"
           :loading="isDoubanFetching"
           @click="$emit('fetch-douban', movie)"
         >
           {{ (movie.douban_url || movie.score === '无豆瓣评分') ? '更新豆瓣' : '获取豆瓣' }}
         </el-button>
+        <template v-if="mode === 'select'">
+          <el-button
+            size="small"
+            :type="isInWishMovies ? 'success' : 'primary'"
+            :plain="isInWishMovies"
+            :loading="isWishToggling"
+            @click="$emit('toggle-wish-movie', movie)"
+          >
+            {{ isInWishMovies ? '已加入想看' : '加入想看' }}
+          </el-button>
+        </template>
+        <template v-else>
+          <el-button
+            :type="hasValidShows ? 'success' : 'primary'"
+            size="small"
+            :loading="isFetching"
+            :disabled="movie.is_showing === false"
+            @click="$emit('fetch-single-show', movie)"
+          >
+            {{ fetchButtonLabel }}
+          </el-button>
+          <el-button
+            v-if="hasValidShows"
+            size="small"
+            @click="toggleShows"
+          >
+            {{ showsExpanded ? '收起' : '展开' }}场次
+          </el-button>
+          <el-button
+            size="small"
+            type="danger"
+            plain
+            @click="$emit('remove-wish-movie', movie)"
+          >
+            移除
+          </el-button>
+        </template>
       </div>
     </div>
 
     <!-- 单个电影获取进度 -->
     <el-collapse-transition>
       <div
-        v-if="movieProgressText"
+        v-if="mode === 'wish' && movieProgressText"
         class="single-movie-progress"
         role="status"
         aria-live="polite"
@@ -91,7 +110,7 @@
 
     <!-- 日期抓取进度 -->
     <el-collapse-transition>
-      <div v-if="movieFetchDateEntries.length > 0" class="single-movie-progress">
+      <div v-if="mode === 'wish' && movieFetchDateEntries.length > 0" class="single-movie-progress">
         <el-divider style="margin: 12px 0" />
         <div
           class="date-progress-list"
@@ -134,9 +153,9 @@
       </div>
     </el-collapse-transition>
 
-    <!-- 场次列表 -->
+    <!-- 场次列表(仅 wish 模式) -->
     <el-collapse-transition>
-      <div v-if="showsExpanded && hasValidShows" class="movie-shows">
+      <div v-if="mode === 'wish' && showsExpanded && hasValidShows" class="movie-shows">
         <el-divider style="margin: 12px 0" />
         <div class="shows-summary">
           <el-tag type="info" size="small">
@@ -145,14 +164,6 @@
           <el-tag type="success" size="small">
             {{ filteredShowCount }} / {{ getTotalShows(showsData) }} 个场次
           </el-tag>
-          <el-button
-            size="small"
-            plain
-            :disabled="availableEntries.length === 0"
-            @click="$emit('add-all-to-wish-pool', movie, availableEntries)"
-          >
-            全部想看
-          </el-button>
           <el-radio-group
             class="show-view-mode"
             size="small"
@@ -208,12 +219,12 @@
                 <span class="time-group-price">{{ formatShowPrice(entry.price) }}</span>
                 <el-button
                   size="small"
-                  type="primary"
-                  plain
-                  :disabled="isEntryUnavailable(entry)"
-                  @click="$emit('toggle-wish-pool-entry', entry)"
+                  type="success"
+                  :plain="isEntryInSchedule(entry)"
+                  :disabled="isEntryInSchedule(entry)"
+                  @click="$emit('add-to-schedule', entry)"
                 >
-                  {{ getShowActionLabel(entry) }}
+                  {{ isEntryInSchedule(entry) ? '已加入行程' : '加入行程' }}
                 </el-button>
               </div>
             </div>
@@ -257,11 +268,20 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  mode: {
+    type: String,
+    default: 'select',
+    validator: (v) => ['select', 'wish'].includes(v),
+  },
   isFetching: {
     type: Boolean,
     default: false,
   },
   isDoubanFetching: {
+    type: Boolean,
+    default: false,
+  },
+  isWishToggling: {
     type: Boolean,
     default: false,
   },
@@ -286,8 +306,9 @@ const props = defineProps({
 defineEmits([
   'fetch-single-show',
   'fetch-douban',
-  'toggle-wish-pool-entry',
-  'add-all-to-wish-pool',
+  'toggle-wish-movie',
+  'remove-wish-movie',
+  'add-to-schedule',
 ])
 
 const store = useScheduleStore()
@@ -300,6 +321,14 @@ const selectedShowDate = ref('')
 
 const movieRegion = computed(() => String(props.movie?.country || '').trim())
 
+const isInWishMovies = computed(() => store.isInWishMovies(props.movie?.id))
+
+const fetchButtonLabel = computed(() => {
+  if (props.movie.is_showing === false) return '暂未上映'
+  if (props.hasValidShows) return '更新场次'
+  return '抓取场次'
+})
+
 const toggleDescription = () => {
   descriptionExpanded.value = !descriptionExpanded.value
 }
@@ -308,7 +337,6 @@ const toggleShows = () => {
   showsExpanded.value = !showsExpanded.value
 }
 
-// Expose toggleShows so parent can auto-expand after fetch
 defineExpose({ toggleShows, showsExpanded })
 
 const formatShowPrice = (price) => {
@@ -339,13 +367,7 @@ const getDateProgressStatusLabel = (item) => {
   return '等待中'
 }
 
-const isEntryUnavailable = (entry) => store.isInSchedule(entry.key)
-
-const getShowActionLabel = (entry) => {
-  if (store.isInSchedule(entry.key)) return '已在行程'
-  if (store.isInWishPool(entry.key)) return '移出想看'
-  return '想看'
-}
+const isEntryInSchedule = (entry) => store.isInSchedule(entry.key)
 
 const createShowEntry = (cinema, show) => ({
   key: `${props.movie.id}-${cinema.cinema_id}-${show.date}-${show.time}`,
@@ -361,7 +383,7 @@ const createShowEntry = (cinema, show) => ({
 })
 
 const availableDateOptions = computed(() => {
-  if (!props.showsData?.cinemas) return []
+  if (props.mode !== 'wish' || !props.showsData?.cinemas) return []
   const dateSet = new Set()
   props.showsData.cinemas.forEach((cinema) => {
     ;(cinema.shows || []).forEach((show) => {
@@ -385,7 +407,7 @@ const matchesSelectedDate = (date) => {
 }
 
 const filteredCinemaShows = computed(() => {
-  if (!props.showsData?.cinemas) return []
+  if (props.mode !== 'wish' || !props.showsData?.cinemas) return []
   return props.showsData.cinemas
     .filter((cinema) => matchesCinemaKeyword(cinema.cinema_name))
     .map((cinema) => ({
@@ -398,14 +420,6 @@ const filteredCinemaShows = computed(() => {
 const filteredShowCount = computed(() =>
   filteredCinemaShows.value.reduce((total, cinema) => total + cinema.shows.length, 0),
 )
-
-const availableEntries = computed(() => {
-  return filteredCinemaShows.value.flatMap((cinema) =>
-    cinema.shows
-      .map((show) => createShowEntry(cinema, show))
-      .filter((entry) => !isEntryUnavailable(entry))
-  )
-})
 
 const displayGroups = computed(() => {
   const cinemas = filteredCinemaShows.value

@@ -28,6 +28,7 @@ class MovieWriteData(TypedDict, total=False):
     duration: NotRequired[str | None]
     description: NotRequired[str | None]
     first_showing_at: NotRequired[date | datetime | None]
+    is_wished: NotRequired[bool]
 
 
 # 对应数据库中的 movies 表
@@ -49,6 +50,7 @@ class Movie(Base):
     actors = Column(Text, nullable=True, comment="主演")
     release_date = Column(String(20), nullable=True, comment="上映日期")
     is_showing = Column(Boolean, nullable=False, server_default="0", comment="是否正在热映")
+    is_wished = Column(Boolean, nullable=False, server_default="0", comment="是否加入想看")
 
     # 详细信息（从电影详情API获取）
     director = Column(Text, nullable=True, comment="导演")
@@ -92,4 +94,5 @@ class Movie(Base):
             duration=data.get("duration"),
             description=data.get("description"),
             first_showing_at=data.get("first_showing_at"),
+            is_wished=bool(data.get("is_wished", False)),
         )
