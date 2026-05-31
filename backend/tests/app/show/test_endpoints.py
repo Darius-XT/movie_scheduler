@@ -2,58 +2,61 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-
 import pytest
 from fastapi.testclient import TestClient
 
 from app.app import app
 from app.core.exceptions import RepositoryError
-from app.show.service import StreamCompleteEvent, show_service
+from app.show.service import show_service
 
 client = TestClient(app, raise_server_exceptions=False)
 
 
-def test_fetch_show_stream_endpoint_streams_complete_event(
+def test_get_shows_endpoint_returns_movies_and_last_fetched_at(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """流式接口应输出完成事件。"""
+    """GET /api/shows 应返回想看电影的场次和最近一次抓取完成时间。"""
 
-    async def stream_show(
-        movie_ids: list[int],
-        city_id: int | None = None,
-    ) -> AsyncIterator[StreamCompleteEvent]:
-        assert movie_ids == [1, 2]
-        assert city_id == 10
-        yield StreamCompleteEvent(type="complete", data=[])
+    async def fake_payload() -> dict[str, object]:
+        return {
+            "movies": [
+                {
+                    "movie_id": 1,
+                    "shows": [
+                        {
+                            "cinema_id": 10,
+                            "cinema_name": "影院A",
+                            "date": "2026-06-01",
+                            "time": "19:30",
+                            "price": "39.9",
+                        }
+                    ],
+                }
+            ],
+            "last_fetched_at": "2026-06-01T08:00:00",
+        }
 
-    monkeypatch.setattr(show_service, "stream_show", stream_show)
+    monkeypatch.setattr(show_service, "get_shows_for_wished_movies", fake_payload)
 
-    with client.stream("GET", "/api/shows/fetch-stream?movie_ids=1,2&city_id=10") as response:
-        body = "".join(response.iter_text())
+    response = client.get("/api/shows")
 
     assert response.status_code == 200
-    assert '"type":"complete"' in body
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["last_fetched_at"] == "2026-06-01T08:00:00"
+    assert body["data"]["movies"][0]["movie_id"] == 1
+    assert body["data"]["movies"][0]["shows"][0]["cinema_name"] == "影院A"
 
 
-def test_fetch_show_stream_endpoint_masks_internal_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """SSE 错误事件不应直接暴露内部异常原文。"""
+def test_get_shows_endpoint_maps_repository_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """底层数据库异常应被统一异常处理器映射。"""
 
-    async def stream_show(
-        movie_ids: list[int],
-        city_id: int | None = None,
-    ) -> AsyncIterator[StreamCompleteEvent]:
-        del movie_ids, city_id
+    async def fake_payload() -> dict[str, object]:
         raise RepositoryError("底层数据库错误")
-        yield StreamCompleteEvent(type="complete", data=[])
 
-    monkeypatch.setattr(show_service, "stream_show", stream_show)
+    monkeypatch.setattr(show_service, "get_shows_for_wished_movies", fake_payload)
 
-    with client.stream("GET", "/api/shows/fetch-stream?movie_ids=1&city_id=10") as response:
-        body = "".join(response.iter_text())
+    response = client.get("/api/shows")
 
-    assert response.status_code == 200
-    assert '"type":"error"' in body
-    assert "数据库访问失败，请稍后重试" in body
+    assert response.status_code == 500
+    assert response.json() == {"success": False, "error": "数据库访问失败，请稍后重试"}

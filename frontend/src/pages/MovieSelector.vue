@@ -26,7 +26,7 @@
         <ScheduleBoard />
 
         <!-- 想看池 -->
-        <WishPool :update-form="updateForm" />
+        <WishPool />
 
         <!-- 电影列表 -->
         <div class="section-header">
@@ -88,10 +88,10 @@ const wishTogglingIds = ref(new Set())
 
 // ===== 初始化 =====
 onMounted(async () => {
-  store.pruneStaleMovieShows()
   await Promise.all([
     store.initializeScheduleSync(),
     store.initializeWishSync(),
+    store.refreshShowsFromBackend(),
   ])
   try {
     const response = await getCities()
@@ -153,12 +153,13 @@ const handleToggleWishMovie = async (movie) => {
   try {
     if (store.isInWishMovies(movie.id)) {
       await store.removeFromWishMovies(movie.id)
-      store.removeMovieShowsData(movie.id)
       ElMessage.info(`已将《${movie.title}》移出想看`)
     } else {
       await store.addToWishMovies(movie)
       ElMessage.success(`已将《${movie.title}》加入想看`)
     }
+    // 后端 wishMovies 变化后,场次列表也应该刷新一下,把新增/移除的电影同步进 movieShowsMap
+    void store.refreshShowsFromBackend()
   } catch {
     // store 已 rollback,并设置过 wishSyncError(由 watch 弹出 warning)
   } finally {

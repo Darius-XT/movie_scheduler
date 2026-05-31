@@ -9,7 +9,7 @@ from typing import cast
 import pytest
 
 from app.core.exceptions import ExternalDependencyError, RepositoryError
-from app.show.entities import FetchedShowItem, ProcessingDateProgress, ShowFetchProgressEvent
+from app.show.entities import FetchedShowItem
 from app.show.fetcher import ShowForSelectedMovieFetcher
 from app.show.gateway import ShowGateway
 from app.show.result_builder import MovieShowDataBuilder
@@ -57,19 +57,12 @@ class FakeShowGateway:
 
 def test_fetcher_builds_complete_movie_result() -> None:
     """场次抓取流程应正确聚合电影、影院和场次数据。"""
-    progress_events: list[ShowFetchProgressEvent] = []
     fetcher = ShowForSelectedMovieFetcher(
         gateway=cast(ShowGateway, FakeShowGateway()),
         builder=MovieShowDataBuilder(),
     )
 
-    result = asyncio.run(
-        fetcher.fetch_shows_for_selected_movies(
-            [1],
-            city_id=10,
-            progress_callback=progress_events.append,
-        )
-    )
+    result = asyncio.run(fetcher.fetch_shows_for_selected_movies([1], city_id=10))
 
     assert [asdict(item) for item in result] == [
         {
@@ -94,18 +87,10 @@ def test_fetcher_builds_complete_movie_result() -> None:
             ],
         }
     ]
-    event_types = [event.type for event in progress_events]
-    assert event_types[0] == "dates_found"
-    assert event_types[-1] == "movie_complete"
-    assert event_types.count("processing_date") == 2
-    assert event_types.count("processing_cinema") == 4
-    date_events = [event for event in progress_events if isinstance(event, ProcessingDateProgress)]
-    assert [event.date_idx for event in date_events] == [1, 2]
-    assert [event.total_dates for event in date_events] == [2, 2]
 
 
 def test_fetcher_skips_movie_when_degradable_error_occurs() -> None:
-    """可降级错误应只跳过当前电影，不中断整次抓取。"""
+    """可降级错误应只跳过当前电影,不中断整次抓取。"""
 
     class PartiallyFailingGateway(FakeShowGateway):
         def get_show_dates(self, movie_id: int, city_id: int) -> list[str]:

@@ -8,6 +8,8 @@
 |----|-----|------------|------|
 | `cinemas` | `app/models/cinema.py` | `app/repositories/cinema.py` | 保存影院基础信息 |
 | `movies` | `app/models/movie.py` | `app/repositories/movie.py` | 保存电影基础信息、豆瓣信息、热映状态、想看状态 |
+| `movie_shows` | `app/models/movie_show.py` | `app/repositories/movie_show.py` | 想看电影的场次缓存(每小时自动刷新) |
+| `show_fetch_runs` | `app/models/movie_show.py` | `app/repositories/movie_show.py` | 场次定时抓取任务的元信息(供前端展示上次更新时间) |
 | `planning_items` | `app/models/planning.py` | `app/repositories/planning.py` | 保存单用户行程(场次维度) |
 
 ## cinemas
@@ -41,6 +43,36 @@
 | `description` | `Text` | 可空 | 剧情简介 |
 | `first_showing_at` | `DateTime` | 可空 | 最近一次进入正在热映状态的时间 |
 | `updated_at` | `DateTime` | 默认北京时间 | 更新时间 |
+
+## movie_shows
+
+`movie_shows` 是想看电影的场次缓存,由后端定时任务每小时刷新。同一电影/影院/日期/时间组合保证唯一。
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | `Integer` | 主键，自增 | 场次 ID |
+| `movie_id` | `Integer` | 非空，索引 | 电影 ID |
+| `cinema_id` | `Integer` | 非空，索引 | 影院 ID |
+| `cinema_name` | `String(200)` | 非空 | 影院名称(快照) |
+| `date` | `String(20)` | 非空，索引 | 放映日期 |
+| `time` | `String(20)` | 非空 | 放映时间 |
+| `price` | `String(20)` | 可空 | 票价 |
+| `created_at` | `DateTime` | 默认北京时间 | 创建时间 |
+
+唯一约束: `(movie_id, cinema_id, date, time)`。
+
+## show_fetch_runs
+
+`show_fetch_runs` 记录场次定时抓取任务的元信息,供前端展示"上次更新时间"。
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | `Integer` | 主键，自增 | 任务 ID |
+| `started_at` | `DateTime` | 非空 | 开始时间 |
+| `finished_at` | `DateTime` | 可空 | 完成时间;为空表示进行中 |
+| `movie_count` | `Integer` | 非空，默认 0 | 本次抓取的想看电影数 |
+| `success_count` | `Integer` | 非空，默认 0 | 成功抓到场次的电影数 |
+| `error` | `String(500)` | 可空 | 失败原因(成功为空) |
 
 ## planning_items
 

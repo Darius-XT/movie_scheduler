@@ -42,16 +42,22 @@ export const streamMovieUpdate = (cityId) =>
   `PUT /api/planning/schedule-items` 全量替换。本地 `localStorage` 仍保留作离线回退缓存。
 - 旧的"场次维度想看池"已废弃,localStorage 中的 `wishPool` key 由 `planningStore`
   启动时主动清理。
-- `movieShowsMap` 只作为浏览器本地场次缓存使用,同一自然日内有效,跨日由 `useShowFetching.scheduleMidnightCleanup`
-  自动清空;不写入后端。
 
-场次展示统一使用 `src/utils/showTime.js` 处理开始/结束时间：场次列表、想看池和行程板都显示
-`HH:mm-HH:mm`。结束时间由场次开始时间加 `durationMinutes` 推算；展示时如果片长缺失或无效，
+## 场次自动同步
+
+- 后端 APScheduler 在服务启动时立即抓一次,之后每小时刷新一次,所有想看电影的场次写入 `movie_shows` 表。
+- 前端 `showCacheStore.refreshFromBackend()` 调 `GET /api/shows` 一次性拿到所有场次,
+  按电影分组挂在 `movieShowsMap` 中,并保存 `lastFetchedAt`(后端最近一次任务完成时间)。
+- WishPool 顶部展示 `lastFetchedAt`,不再有任何"抓取/更新场次"按钮;数据可能短暂滞后,
+  但用户加入新想看时,`MovieSelector` 会立即调一次 `refreshFromBackend()`。
+
+场次展示统一使用 `src/utils/showTime.js` 处理开始/结束时间:场次列表、想看池和行程板都显示
+`HH:mm-HH:mm`。结束时间由场次开始时间加 `durationMinutes` 推算;展示时如果片长缺失或无效,
 显示 `HH:mm-未知`。
 
-`removePastSchedules()` 清理旧行程时按场次结束时间判断，而不是只按日期判断。结束时间早于当前时间的
-行程会被移除；如果 `durationMinutes` 缺失或无效，按 180 分钟片长计算结束时间。日期或开始时间格式
-无法解析的行程会保留，避免误删。
+`removePastSchedules()` 清理旧行程时按场次结束时间判断,而不是只按日期判断。结束时间早于当前时间的
+行程会被移除;如果 `durationMinutes` 缺失或无效,按 180 分钟片长计算结束时间。日期或开始时间格式
+无法解析的行程会保留,避免误删。
 
 ## 响应解包
 

@@ -23,6 +23,7 @@ class FakeMovie:
     genres: str | None = None
     actors: str | None = None
     is_showing: bool = False
+    is_wished: bool = False
     director: str | None = None
     language: str | None = None
     duration: str | None = None
@@ -53,6 +54,7 @@ class FakeMovieSelectionResultBuilder:
             actors=None,
             release_date=None,
             is_showing=movie.is_showing,
+            is_wished=movie.is_wished,
             director=None,
             country=None,
             language=None,
@@ -85,6 +87,7 @@ def test_movie_selector_filters_showing_movies() -> None:
             "actors": None,
             "release_date": None,
             "is_showing": True,
+            "is_wished": False,
             "director": None,
             "country": None,
             "language": None,
@@ -118,6 +121,7 @@ def test_movie_selector_filters_upcoming_movies() -> None:
             "actors": None,
             "release_date": None,
             "is_showing": False,
+            "is_wished": False,
             "director": None,
             "country": None,
             "language": None,

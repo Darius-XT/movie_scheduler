@@ -18,7 +18,12 @@ export const useScheduleStore = defineStore('schedule', () => {
     scheduleSyncReady,
     scheduleSyncInFlight,
   } = storeToRefs(planningStore)
-  const { movieShowsMap } = storeToRefs(showCacheStore)
+  const {
+    movieShowsMap,
+    lastFetchedAt: showsLastFetchedAt,
+    syncing: showsSyncing,
+    syncError: showsSyncError,
+  } = storeToRefs(showCacheStore)
   const {
     cinemaUpdateMeta,
     movieUpdateMeta,
@@ -31,6 +36,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     wishMovies,
     scheduleItems,
     movieShowsMap,
+    showsLastFetchedAt,
+    showsSyncing,
+    showsSyncError,
     cinemaUpdateMeta,
     movieUpdateMeta,
     cinemaUpdateResult,
@@ -42,11 +50,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     scheduleSyncInFlight,
     setSelectedMovies: movieSelectionStore.setSelectedMovies,
     updateMovieScore: movieSelectionStore.updateMovieScore,
-    setMovieShowsData: showCacheStore.setMovieShowsData,
-    removeMovieShowsData: showCacheStore.removeMovieShowsData,
+    refreshShowsFromBackend: showCacheStore.refreshFromBackend,
     getMovieShowsData: showCacheStore.getMovieShowsData,
     hasMovieShowsData: showCacheStore.hasMovieShowsData,
-    pruneStaleMovieShows: showCacheStore.pruneStaleMovieShows,
     isInWishMovies: movieSelectionStore.isInWishMovies,
     addToWishMovies: movieSelectionStore.addToWishMovies,
     removeFromWishMovies: movieSelectionStore.removeFromWishMovies,

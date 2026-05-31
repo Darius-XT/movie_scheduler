@@ -11,7 +11,7 @@
 | 电影 | `GET` | `/api/movies/wished` | JSON | 读取全部想看电影 |
 | 电影 | `PATCH` | `/api/movies/{movie_id}/wished` | JSON | 更新单部电影的想看状态 |
 | 电影 | `POST` | `/api/movies/{movie_id}/fetch-douban` | JSON | 为单部电影抓取豆瓣评分与详情链接 |
-| 排片 | `GET` | `/api/shows/fetch-stream` | SSE | 流式抓取选中电影的排片 |
+| 排片 | `GET` | `/api/shows` | JSON | 读取想看电影的全部场次(后端每小时自动刷新) |
 | 更新 | `GET` | `/api/update/movie-stream` | SSE | 流式更新电影基础信息与详情(增量) |
 | 更新 | `GET` | `/api/update/cinema-stream` | SSE | 流式更新影院数据(增量) |
 | 计划 | `GET` | `/api/planning` | JSON | 读取单用户行程列表 |
@@ -36,7 +36,9 @@
 
 | 方法 | 路径 | 参数 | 返回 |
 |------|------|------|------|
-| `GET` | `/api/shows/fetch-stream` | query: `movie_ids=1,2`；可选 `city_id=10` | SSE 事件流 |
+| `GET` | `/api/shows` | 无 | `{"success": true, "data": {"movies": [{"movie_id": 1, "shows": [{...}]}], "last_fetched_at": "..."}}` |
+
+排片数据由后端 APScheduler 在服务启动时立即抓取一次,之后每小时自动刷新,前端只读不写。
 
 ## 更新
 

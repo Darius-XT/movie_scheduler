@@ -18,7 +18,7 @@ async def test_movie_service_uses_default_selection_mode(monkeypatch: pytest.Mon
         return [
             MovieSelectionItem(
                 id=1, title=None, score=None, douban_url=None, genres=None, actors=None,
-                release_date=None, is_showing=False, director=None, country=None,
+                release_date=None, is_showing=False, is_wished=False, director=None, country=None,
                 language=None, duration=None, description=None, first_showing_at=None,
             )
         ]

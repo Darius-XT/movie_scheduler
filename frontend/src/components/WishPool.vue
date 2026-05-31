@@ -7,26 +7,15 @@
       <div class="planning-header">
         <div class="planning-header-main">
           <span>想看</span>
+          <span class="planning-header-summary">
+            上次场次更新: {{ formattedLastFetchedAt }}
+          </span>
         </div>
         <div v-if="store.wishMovies.length > 0" class="planning-header-actions">
-          <el-button
-            type="primary"
-            size="small"
-            :loading="batchFetching"
-            @click="handleBatchFetch"
-          >
-            一键抓取&更新场次
-          </el-button>
           <el-button text size="small" @click="expandAllWishGroups">全部展开</el-button>
           <el-button text size="small" @click="collapseAllWishGroups">全部收起</el-button>
         </div>
       </div>
-      <el-progress
-        v-if="batchFetching || (batchTotal > 0 && batchDone < batchTotal)"
-        class="planning-header-progress"
-        :percentage="batchPercentage"
-        :format="() => `${batchDone}/${batchTotal} 部完成`"
-      />
       <el-tabs
         v-if="store.wishMovies.length > 0"
         v-model="activeWeekFilter"
@@ -54,14 +43,6 @@
             </span>
           </div>
           <div class="wish-pool-group-actions">
-            <el-button
-              size="small"
-              :type="group.hasShows ? 'success' : 'primary'"
-              :loading="fetchingMovieIds.has(group.movieId)"
-              @click="handleFetchOne(group.movie)"
-            >
-              {{ group.hasShows ? '更新场次' : '抓取场次' }}
-            </el-button>
             <el-button text size="small" @click="handleRemoveWishMovie(group.movie)">
               移出想看
             </el-button>
@@ -71,12 +52,9 @@
           </div>
         </div>
         <div v-if="!isWishGroupCollapsed(group.movieId)" class="wish-pool-group-body">
-          <div v-if="movieProgress.get(group.movieId)" class="wish-pool-group-progress">
-            {{ movieProgress.get(group.movieId) }}
-          </div>
           <template v-if="!group.hasShows">
             <div class="wish-pool-group-empty">
-              暂无场次,点击「抓取场次」获取
+              暂无场次,等待下一次自动抓取
             </div>
           </template>
           <template v-else>
@@ -166,32 +144,12 @@
 
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useShowFetching } from '@/composables/useShowFetching'
+import { computed, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { formatDateWithRelativeWeek, getWeekOffsetFromToday } from '@/utils/dateLabels'
 import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
 
-const props = defineProps({
-  updateForm: {
-    type: Object,
-    required: true,
-  },
-})
-
 const store = useScheduleStore()
-
-const {
-  fetchingMovieIds,
-  movieProgress,
-  handleFetchSingleShow,
-  handleBatchFetchShows,
-  batchFetching,
-  batchTotal,
-  batchDone,
-  scheduleMidnightCleanup,
-  stopMidnightCleanup,
-} = useShowFetching(store, props.updateForm)
 
 const WISH_GROUP_DEFAULT_COLLAPSED = true
 const SHOWS_PAGE_SIZE = 8
@@ -209,17 +167,12 @@ const wishGroupFilters = ref(new Map())
 const wishGroupPages = ref(new Map())
 const activeWeekFilter = ref('all')
 
-onMounted(() => {
-  scheduleMidnightCleanup()
-})
-
-onBeforeUnmount(() => {
-  stopMidnightCleanup()
-})
-
-const batchPercentage = computed(() => {
-  if (!batchTotal.value) return 0
-  return Math.round((batchDone.value / batchTotal.value) * 100)
+const formattedLastFetchedAt = computed(() => {
+  const raw = store.showsLastFetchedAt
+  if (!raw) return '暂无'
+  // 后端返回的是不带时区的北京时间 isoformat,直接当本地时间格式化
+  const cleaned = String(raw).replace('T', ' ')
+  return cleaned.length >= 19 ? cleaned.slice(0, 19) : cleaned
 })
 
 const parseMovieDurationMinutes = (durationText) => {
@@ -320,7 +273,6 @@ const groupedWishMovies = computed(() => {
       }),
     }
   }).filter((group) => {
-    // 当 week filter 不是 'all' 时,只显示有匹配周场次的电影;或者无场次的电影也保留(让用户能抓取)
     if (activeWeekFilter.value === 'all') return true
     return group.items.length > 0 || !group.hasShows
   })
@@ -450,24 +402,6 @@ const collapseAllWishGroups = () => {
   wishGroupCollapseOverrides.value = next
 }
 
-const handleFetchOne = async (movie) => {
-  if (!movie?.id) return
-  await handleFetchSingleShow(movie)
-  // 抓取完成后自动展开该电影场次
-  const next = new Map(wishGroupCollapseOverrides.value)
-  next.set(movie.id, false)
-  wishGroupCollapseOverrides.value = next
-}
-
-const handleBatchFetch = async () => {
-  if (batchFetching.value) return
-  if (store.wishMovies.length === 0) {
-    ElMessage.warning('想看列表为空')
-    return
-  }
-  await handleBatchFetchShows(store.wishMovies)
-}
-
 const handleRemoveWishMovie = async (movie) => {
   if (!movie?.id) return
   if (store.hasScheduleForMovie(movie.id)) {
@@ -489,7 +423,6 @@ const handleRemoveWishMovie = async (movie) => {
   }
   try {
     await store.removeFromWishMovies(movie.id)
-    store.removeMovieShowsData(movie.id)
     // 清理本组件内的 UI 状态
     ;[wishGroupCollapseOverrides, wishGroupFilters, wishGroupPages].forEach((mapRef) => {
       if (mapRef.value.has(movie.id)) {
@@ -523,20 +456,23 @@ const handleRemoveWishMovie = async (movie) => {
 
 .planning-header-main {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 10px;
   min-width: 0;
   flex-wrap: wrap;
+}
+
+.planning-header-summary {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .planning-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.planning-header-progress {
-  margin-top: 8px;
 }
 
 .planning-header-tabs {
@@ -603,15 +539,6 @@ const handleRemoveWishMovie = async (movie) => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.wish-pool-group-progress {
-  padding: 6px 10px;
-  background-color: #f0f9ff;
-  border-left: 3px solid #409eff;
-  color: #1d4ed8;
-  font-size: 12px;
-  border-radius: 4px;
 }
 
 .wish-pool-group-filter {
@@ -689,6 +616,10 @@ const handleRemoveWishMovie = async (movie) => {
     width: 100%;
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  .planning-header-summary {
+    white-space: normal;
   }
 }
 

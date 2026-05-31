@@ -16,6 +16,7 @@ from app.movie.entities import (
 from app.movie.gateway import movie_gateway
 from app.movie.result_builder import movie_result_builder
 from app.repositories.movie import movie_repository
+from app.repositories.movie_show import movie_show_repository
 
 SelectionMode = Literal["showing", "upcoming", "all"]
 
@@ -84,12 +85,17 @@ class MovieService:
     async def set_movie_wished(self, movie_id: int, is_wished: bool) -> MovieSelectionItem:
         """更新单部电影的想看状态。
 
+        - 加入想看:不立即抓场次,由定时任务在下一轮拉取(或用户等下一次自动刷新)。
+        - 移出想看:同步清空该电影的场次记录,避免数据库孤儿。
+
         Raises:
             AppError: 电影不存在(status_code=404)。
         """
         ok = await asyncio.to_thread(movie_repository.set_movie_wished, movie_id, is_wished)
         if not ok:
             raise AppError(f"电影不存在: {movie_id}", status_code=404)
+        if not is_wished:
+            await asyncio.to_thread(movie_show_repository.delete_for_movie, movie_id)
         movie = await asyncio.to_thread(movie_repository.get_movie_by_id, movie_id)
         if movie is None:
             raise AppError(f"电影不存在: {movie_id}", status_code=404)

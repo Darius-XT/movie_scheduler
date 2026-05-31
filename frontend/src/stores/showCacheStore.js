@@ -1,84 +1,76 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { loadFromStorage, saveToStorage } from './storage'
-
-const MOVIE_SHOWS_MAP_KEY = 'movieShowsMap'
-
-const getLocalDateKey = (timestamp) => {
-  if (!timestamp) return ''
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return ''
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const isShowCacheFromToday = (cachedAt) => {
-  if (!cachedAt) return false
-  return getLocalDateKey(cachedAt) === getLocalDateKey(Date.now())
-}
-
-const loadMovieShowsMap = () => {
-  const raw = loadFromStorage(MOVIE_SHOWS_MAP_KEY, null)
-  if (!Array.isArray(raw)) return new Map()
-  const restored = new Map()
-  raw.forEach((entry) => {
-    if (!Array.isArray(entry) || entry.length !== 2) return
-    const [movieId, showData] = entry
-    if (isShowCacheFromToday(showData?.cachedAt)) {
-      restored.set(movieId, showData)
-    }
-  })
-  return restored
-}
-
-const saveMovieShowsMap = (map) => {
-  saveToStorage(MOVIE_SHOWS_MAP_KEY, Array.from(map.entries()))
-}
+import { getShows } from '@/api'
 
 export const useShowCacheStore = defineStore('showCache', () => {
-  const movieShowsMap = ref(loadMovieShowsMap())
+  const movieShowsMap = ref(new Map())
+  const lastFetchedAt = ref(null)
+  const syncing = ref(false)
+  const syncError = ref('')
 
-  const setMovieShowsData = (movieId, showData) => {
-    movieShowsMap.value.set(movieId, showData)
-    saveMovieShowsMap(movieShowsMap.value)
+  // 后端 GET /api/shows 返回:
+  // { movies: [{ movie_id, shows: [{cinema_id, cinema_name, date, time, price}, ...] }, ...],
+  //   last_fetched_at: "..." | null }
+  //
+  // 这里把 shows 数组重新分组为前端历史结构 { cinemas: [{ cinema_id, cinema_name, shows: [...] }] },
+  // 让 WishPool 不需要改字段结构。
+  const buildMovieShowsByCinema = (shows) => {
+    const cinemaMap = new Map()
+    for (const show of shows) {
+      const cinemaId = show.cinema_id
+      if (cinemaId == null) continue
+      if (!cinemaMap.has(cinemaId)) {
+        cinemaMap.set(cinemaId, {
+          cinema_id: cinemaId,
+          cinema_name: show.cinema_name,
+          shows: [],
+        })
+      }
+      cinemaMap.get(cinemaId).shows.push({
+        date: show.date,
+        time: show.time,
+        price: show.price,
+      })
+    }
+    return { cinemas: Array.from(cinemaMap.values()) }
   }
 
-  const removeMovieShowsData = (movieId) => {
-    if (!movieShowsMap.value.has(movieId)) return
-    movieShowsMap.value.delete(movieId)
-    saveMovieShowsMap(movieShowsMap.value)
+  const refreshFromBackend = async () => {
+    if (syncing.value) return
+    syncing.value = true
+    try {
+      const response = await getShows()
+      const data = response?.data?.data || {}
+      const movies = data.movies || []
+      const nextMap = new Map()
+      for (const movie of movies) {
+        nextMap.set(movie.movie_id, buildMovieShowsByCinema(movie.shows || []))
+      }
+      movieShowsMap.value = nextMap
+      lastFetchedAt.value = data.last_fetched_at || null
+      syncError.value = ''
+    } catch (error) {
+      syncError.value = error?.response?.data?.error || error?.message || '场次同步失败'
+      console.error('场次同步失败:', error)
+    } finally {
+      syncing.value = false
+    }
   }
 
-  const getMovieShowsData = (movieId) => {
-    const showData = movieShowsMap.value.get(movieId)
-    if (!showData) return null
-    if (!isShowCacheFromToday(showData.cachedAt)) return null
-    return showData
-  }
+  const getMovieShowsData = (movieId) => movieShowsMap.value.get(movieId) || null
 
   const hasMovieShowsData = (movieId) => {
-    return getMovieShowsData(movieId) !== null
-  }
-
-  const pruneStaleMovieShows = () => {
-    let changed = false
-    movieShowsMap.value.forEach((showData, movieId) => {
-      if (!isShowCacheFromToday(showData?.cachedAt)) {
-        movieShowsMap.value.delete(movieId)
-        changed = true
-      }
-    })
-    if (changed) saveMovieShowsMap(movieShowsMap.value)
+    const data = movieShowsMap.value.get(movieId)
+    return !!(data && data.cinemas && data.cinemas.length > 0)
   }
 
   return {
     movieShowsMap,
-    setMovieShowsData,
-    removeMovieShowsData,
+    lastFetchedAt,
+    syncing,
+    syncError,
+    refreshFromBackend,
     getMovieShowsData,
     hasMovieShowsData,
-    pruneStaleMovieShows,
   }
 })

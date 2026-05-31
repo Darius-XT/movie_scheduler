@@ -23,6 +23,8 @@ export const setMovieWished = (movieId, isWished) =>
 export const fetchMovieDouban = (movieId) =>
   api.post(`/movies/${movieId}/fetch-douban`)
 
+export const getShows = () => api.get('/shows')
+
 // SSE streaming functions — return a raw Response for the caller to read
 export const streamCinemaUpdate = (cityId) =>
   fetch(
@@ -35,13 +37,5 @@ export const streamMovieUpdate = (cityId) =>
     `/api/update/movie-stream?city_id=${cityId}`,
     { headers: { Accept: 'text/event-stream' } }
   )
-
-export const streamShows = (movieIds, cityId) => {
-  const cityQuery = cityId ? `&city_id=${cityId}` : ''
-  return fetch(
-    `/api/shows/fetch-stream?movie_ids=${movieIds.join(',')}${cityQuery}`,
-    { headers: { Accept: 'text/event-stream' } }
-  )
-}
 
 export default api
