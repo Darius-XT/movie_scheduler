@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir \
     -i https://mirrors.aliyun.com/pypi/simple/ \
     --default-timeout=120 \
     "alembic>=1.18.4" \
+    "apscheduler>=3.10.0" \
     "beautifulsoup4>=4.13.5" \
     "colorlog>=6.8.0" \
     "fastapi>=0.121.3" \
