@@ -51,97 +51,17 @@
         >
           {{ (movie.douban_url || movie.score === '无豆瓣评分') ? '更新豆瓣' : '获取豆瓣' }}
         </el-button>
-        <template v-if="mode === 'select'">
-          <el-button
-            size="small"
-            :type="isInWishMovies ? 'success' : 'primary'"
-            :plain="isInWishMovies"
-            :loading="isWishToggling"
-            @click="$emit('toggle-wish-movie', movie)"
-          >
-            {{ isInWishMovies ? '已加入想看' : '加入想看' }}
-          </el-button>
-        </template>
-        <template v-else>
-          <el-button
-            :type="hasValidShows ? 'success' : 'primary'"
-            size="small"
-            :loading="isFetching"
-            :disabled="movie.is_showing === false"
-            @click="$emit('fetch-single-show', movie)"
-          >
-            {{ fetchButtonLabel }}
-          </el-button>
-          <el-button
-            v-if="hasValidShows"
-            size="small"
-            @click="toggleShows"
-          >
-            {{ showsExpanded ? '收起' : '展开' }}场次
-          </el-button>
-          <el-button
-            size="small"
-            type="danger"
-            plain
-            @click="$emit('remove-wish-movie', movie)"
-          >
-            移除
-          </el-button>
-        </template>
+        <el-button
+          size="small"
+          :type="isInWishMovies ? 'success' : 'primary'"
+          :plain="isInWishMovies"
+          :loading="isWishToggling"
+          @click="$emit('toggle-wish-movie', movie)"
+        >
+          {{ isInWishMovies ? '已加入想看' : '加入想看' }}
+        </el-button>
       </div>
     </div>
-
-    <!-- 单个电影获取进度 -->
-    <el-collapse-transition>
-      <div
-        v-if="mode === 'wish' && movieProgressText"
-        class="single-movie-progress"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <el-divider style="margin: 12px 0" />
-        <div class="progress-content">
-          <div class="progress-label">当前电影进度</div>
-          <div class="progress-text">{{ movieProgressText }}</div>
-        </div>
-      </div>
-    </el-collapse-transition>
-
-    <!-- 日期抓取进度 -->
-    <el-collapse-transition>
-      <div v-if="mode === 'wish' && movieFetchDateEntries.length > 0" class="single-movie-progress">
-        <el-divider style="margin: 12px 0" />
-        <div
-          class="date-progress-list"
-          role="status"
-          aria-live="polite"
-          :aria-label="`${movie.title} 抓取进度`"
-        >
-          <div class="progress-section-title">抓取进度</div>
-          <div
-            v-for="item in movieFetchDateEntries"
-            :key="`${movie.id}-${item.date}`"
-            class="date-progress-item"
-            :class="{ 'date-progress-item--active': item.active }"
-          >
-            <div class="date-progress-main">
-              <span class="date-progress-date">{{ formatDateWithRelativeWeek(item.date) }}</span>
-              <span class="date-progress-meta">
-                <span class="date-progress-status">{{ getDateProgressStatusLabel(item) }}</span>
-                <span class="date-progress-count">({{ item.done }}/{{ item.total || '?' }})</span>
-              </span>
-            </div>
-            <el-progress
-              :percentage="getDateProgressPercent(item)"
-              :stroke-width="8"
-              :show-text="false"
-              :status="item.total > 0 && item.done >= item.total ? 'success' : undefined"
-            />
-          </div>
-        </div>
-      </div>
-    </el-collapse-transition>
 
     <!-- 简介 -->
     <el-collapse-transition>
@@ -152,112 +72,12 @@
         </div>
       </div>
     </el-collapse-transition>
-
-    <!-- 场次列表(仅 wish 模式) -->
-    <el-collapse-transition>
-      <div v-if="mode === 'wish' && showsExpanded && hasValidShows" class="movie-shows">
-        <el-divider style="margin: 12px 0" />
-        <div class="shows-summary">
-          <el-tag type="info" size="small">
-            {{ showsData?.cinemas?.length || 0 }} 个影院
-          </el-tag>
-          <el-tag type="success" size="small">
-            {{ filteredShowCount }} / {{ getTotalShows(showsData) }} 个场次
-          </el-tag>
-          <el-radio-group
-            class="show-view-mode"
-            size="small"
-            v-model="showViewMode"
-          >
-            <el-radio-button label="time">按日期</el-radio-button>
-            <el-radio-button label="cinema">按影院</el-radio-button>
-          </el-radio-group>
-        </div>
-        <div class="shows-filter-bar">
-          <el-input
-            v-model="cinemaKeyword"
-            class="shows-filter-input"
-            size="small"
-            clearable
-            placeholder="搜索影院名"
-          />
-          <el-select
-            v-model="selectedShowDate"
-            class="shows-filter-select"
-            size="small"
-            clearable
-            placeholder="全部日期"
-          >
-            <el-option
-              v-for="option in availableDateOptions"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-        </div>
-        <div v-if="displayGroups.length === 0" class="shows-empty">
-          没有匹配的场次
-        </div>
-        <template v-else>
-          <div class="time-group-list">
-            <div
-              v-for="(entry, entryIndex) in getPagedEntries()"
-              :key="`${entry.cinemaId}-${entry.date}-${entry.time}-${entryIndex}`"
-              class="time-group-row"
-            >
-              <div class="time-group-main">
-                <span
-                  class="time-group-primary"
-                  :class="{ 'time-group-primary--cinema': showViewMode === 'cinema' }"
-                >
-                  {{ entry.primaryText }}
-                </span>
-                <span class="time-group-secondary">{{ entry.secondaryText }}</span>
-              </div>
-              <div class="time-group-actions">
-                <span class="time-group-price">{{ formatShowPrice(entry.price) }}</span>
-                <el-button
-                  size="small"
-                  type="success"
-                  :plain="isEntryInSchedule(entry)"
-                  :disabled="isEntryInSchedule(entry)"
-                  @click="$emit('add-to-schedule', entry)"
-                >
-                  {{ isEntryInSchedule(entry) ? '已加入行程' : '加入行程' }}
-                </el-button>
-              </div>
-            </div>
-          </div>
-          <el-pagination
-            v-if="allEntries.length > SHOWS_PAGE_SIZE"
-            class="time-group-pagination"
-            small
-            background
-            layout="prev, pager, next, total"
-            :page-size="SHOWS_PAGE_SIZE"
-            :total="allEntries.length"
-            :current-page="currentPage"
-            @current-change="(page) => (currentPage = page)"
-          />
-        </template>
-        <div class="shows-collapse-footer">
-          <el-button text type="primary" @click="toggleShows">
-            <el-icon><ArrowUp /></el-icon>
-            收起场次信息
-          </el-button>
-        </div>
-      </div>
-    </el-collapse-transition>
   </el-card>
 </template>
 
 <script setup>
-import { ArrowUp } from '@element-plus/icons-vue'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { formatDateWithRelativeWeek } from '@/utils/dateLabels'
-import { formatShowTimeRange } from '@/utils/showTime'
 
 const props = defineProps({
   movie: {
@@ -268,15 +88,6 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
-  mode: {
-    type: String,
-    default: 'select',
-    validator: (v) => ['select', 'wish'].includes(v),
-  },
-  isFetching: {
-    type: Boolean,
-    default: false,
-  },
   isDoubanFetching: {
     type: Boolean,
     default: false,
@@ -285,209 +96,24 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  movieProgressText: {
-    type: String,
-    default: '',
-  },
-  movieFetchDateEntries: {
-    type: Array,
-    default: () => [],
-  },
-  showsData: {
-    type: Object,
-    default: null,
-  },
-  hasValidShows: {
-    type: Boolean,
-    default: false,
-  },
 })
 
 defineEmits([
-  'fetch-single-show',
   'fetch-douban',
   'toggle-wish-movie',
-  'remove-wish-movie',
-  'add-to-schedule',
 ])
 
 const store = useScheduleStore()
 
 const descriptionExpanded = ref(false)
-const showsExpanded = ref(false)
-const showViewMode = ref('time')
-const cinemaKeyword = ref('')
-const selectedShowDate = ref('')
 
 const movieRegion = computed(() => String(props.movie?.country || '').trim())
 
 const isInWishMovies = computed(() => store.isInWishMovies(props.movie?.id))
 
-const fetchButtonLabel = computed(() => {
-  if (props.movie.is_showing === false) return '暂未上映'
-  if (props.hasValidShows) return '更新场次'
-  return '抓取场次'
-})
-
 const toggleDescription = () => {
   descriptionExpanded.value = !descriptionExpanded.value
 }
-
-const toggleShows = () => {
-  showsExpanded.value = !showsExpanded.value
-}
-
-defineExpose({ toggleShows, showsExpanded })
-
-const formatShowPrice = (price) => {
-  const normalized = String(price ?? '').trim()
-  if (!normalized || normalized === '0' || normalized === '0.0' || normalized === '0.00') return '暂无价格'
-  return `￥${normalized}`
-}
-
-const parseMovieDurationMinutes = (durationText) => {
-  const normalized = String(durationText ?? '').trim()
-  const match = normalized.match(/(\d+)/)
-  return match ? Number(match[1]) : null
-}
-
-const getTotalShows = (movieShowData) => {
-  if (!movieShowData || !movieShowData.cinemas) return 0
-  return movieShowData.cinemas.reduce((total, cinema) => total + (cinema.shows?.length || 0), 0)
-}
-
-const getDateProgressPercent = (item) => {
-  if (!item.total) return 0
-  return Math.min(100, Math.round((item.done / item.total) * 100))
-}
-
-const getDateProgressStatusLabel = (item) => {
-  if (item.total > 0 && item.done >= item.total) return '已完成'
-  if (item.active) return '进行中'
-  return '等待中'
-}
-
-const isEntryInSchedule = (entry) => store.isInSchedule(entry.key)
-
-const createShowEntry = (cinema, show) => ({
-  key: `${props.movie.id}-${cinema.cinema_id}-${show.date}-${show.time}`,
-  movieId: props.movie.id,
-  movieTitle: props.movie.title,
-  date: show.date,
-  formattedDate: formatDateWithRelativeWeek(show.date || '未标注日期'),
-  time: show.time,
-  cinemaId: cinema.cinema_id,
-  cinemaName: cinema.cinema_name,
-  price: show.price,
-  durationMinutes: parseMovieDurationMinutes(props.movie?.duration),
-})
-
-const availableDateOptions = computed(() => {
-  if (props.mode !== 'wish' || !props.showsData?.cinemas) return []
-  const dateSet = new Set()
-  props.showsData.cinemas.forEach((cinema) => {
-    ;(cinema.shows || []).forEach((show) => {
-      if (show.date) dateSet.add(show.date)
-    })
-  })
-  return Array.from(dateSet)
-    .sort((a, b) => String(a).localeCompare(String(b)))
-    .map((date) => ({ value: date, label: formatDateWithRelativeWeek(date) }))
-})
-
-const matchesCinemaKeyword = (cinemaName) => {
-  const keyword = cinemaKeyword.value.trim().toLowerCase()
-  if (!keyword) return true
-  return String(cinemaName || '').toLowerCase().includes(keyword)
-}
-
-const matchesSelectedDate = (date) => {
-  if (!selectedShowDate.value) return true
-  return date === selectedShowDate.value
-}
-
-const filteredCinemaShows = computed(() => {
-  if (props.mode !== 'wish' || !props.showsData?.cinemas) return []
-  return props.showsData.cinemas
-    .filter((cinema) => matchesCinemaKeyword(cinema.cinema_name))
-    .map((cinema) => ({
-      ...cinema,
-      shows: (cinema.shows || []).filter((show) => matchesSelectedDate(show.date)),
-    }))
-    .filter((cinema) => cinema.shows.length > 0)
-})
-
-const filteredShowCount = computed(() =>
-  filteredCinemaShows.value.reduce((total, cinema) => total + cinema.shows.length, 0),
-)
-
-const displayGroups = computed(() => {
-  const cinemas = filteredCinemaShows.value
-  if (cinemas.length === 0) return []
-  const mode = showViewMode.value
-  const groups = new Map()
-
-  cinemas.forEach((cinema) => {
-    cinema.shows.forEach((show) => {
-      const date = show.date || '未标注日期'
-      const groupKey = mode === 'cinema' ? `${cinema.cinema_id}` : date
-
-      if (!groups.has(groupKey)) {
-        groups.set(groupKey, {
-          groupKey,
-          groupTitle:
-            mode === 'cinema' ? cinema.cinema_name : formatDateWithRelativeWeek(date),
-          sortKey: mode === 'cinema' ? cinema.cinema_name : date,
-          entries: [],
-        })
-      }
-
-      groups.get(groupKey).entries.push(createShowEntry(cinema, show))
-    })
-  })
-
-  return Array.from(groups.values())
-    .sort((a, b) => String(a.sortKey).localeCompare(String(b.sortKey)))
-    .map((group) => ({
-      ...group,
-      entries: [...group.entries]
-        .sort((a, b) => {
-          if (mode === 'cinema') {
-            const dateCompare = String(a.date || '').localeCompare(String(b.date || ''))
-            if (dateCompare !== 0) return dateCompare
-          }
-          if (mode === 'time') {
-            const cinemaCompare = String(a.cinemaName || '').localeCompare(String(b.cinemaName || ''))
-            if (cinemaCompare !== 0) return cinemaCompare
-          }
-          return String(a.time || '').localeCompare(String(b.time || ''))
-        })
-        .map((entry) => ({
-          ...entry,
-          primaryText: mode === 'cinema' ? entry.formattedDate : entry.cinemaName,
-          secondaryText: mode === 'cinema'
-            ? formatShowTimeRange(entry.time, entry.durationMinutes)
-            : `${entry.formattedDate} ${formatShowTimeRange(entry.time, entry.durationMinutes)}`,
-        })),
-    }))
-})
-
-// ===== 分页 =====
-const SHOWS_PAGE_SIZE = 8
-const currentPage = ref(1)
-
-const allEntries = computed(() =>
-  displayGroups.value.flatMap((group) => group.entries),
-)
-
-const getPagedEntries = () => {
-  const start = (currentPage.value - 1) * SHOWS_PAGE_SIZE
-  return allEntries.value.slice(start, start + SHOWS_PAGE_SIZE)
-}
-
-watch([showViewMode, cinemaKeyword, selectedShowDate], () => {
-  currentPage.value = 1
-})
 </script>
 
 <style scoped>
@@ -608,199 +234,6 @@ watch([showViewMode, cinemaKeyword, selectedShowDate], () => {
   font-size: 14px;
 }
 
-.movie-shows {
-  margin-top: 8px;
-}
-
-.shows-summary {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.shows-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.shows-filter-input {
-  flex: 1 1 200px;
-  min-width: 160px;
-  max-width: 320px;
-}
-
-.shows-filter-select {
-  flex: 0 0 200px;
-}
-
-.shows-empty {
-  padding: 24px 12px;
-  background-color: #fafbff;
-  border: 1px dashed #d7e6ff;
-  border-radius: 6px;
-  color: #94a3b8;
-  font-size: 13px;
-  text-align: center;
-}
-
-.show-view-mode {
-  margin-left: auto;
-}
-
-.single-movie-progress {
-  margin-top: 0;
-}
-
-.progress-content {
-  padding: 8px 12px;
-  background-color: #f0f9ff;
-  border-radius: 4px;
-  border-left: 3px solid #409eff;
-}
-
-.progress-label {
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1d4ed8;
-}
-
-.progress-text {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #409eff;
-  line-height: 1.5;
-}
-
-.date-progress-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.progress-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.date-progress-item {
-  padding: 10px 12px;
-  background-color: #f8fbff;
-  border: 1px solid #d9ecff;
-  border-radius: 6px;
-}
-
-.date-progress-item--active {
-  border-color: #409eff;
-  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.15);
-}
-
-.date-progress-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: #409eff;
-}
-
-.date-progress-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.date-progress-date {
-  font-weight: 500;
-}
-
-.date-progress-status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background-color: #eaf3ff;
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.date-progress-count {
-  color: #606266;
-}
-
-.time-group-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.time-group-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  background-color: #f5f7fb;
-}
-
-.time-group-main {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.time-group-primary {
-  min-width: 56px;
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.time-group-primary--cinema {
-  min-width: 0;
-}
-
-.time-group-secondary {
-  color: #475569;
-  font-size: 13px;
-}
-
-.time-group-price {
-  color: #111827;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.time-group-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.time-group-pagination {
-  justify-content: flex-end;
-  margin-top: 8px;
-}
-
-.shows-collapse-footer {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-  padding-top: 4px;
-}
-
-.shows-collapse-footer .el-button {
-  gap: 6px;
-}
-
 @media (max-width: 960px) {
   .movie-header {
     flex-direction: column;
@@ -811,22 +244,11 @@ watch([showViewMode, cinemaKeyword, selectedShowDate], () => {
     width: 100%;
     flex-wrap: wrap;
   }
-
-  .show-view-mode {
-    margin-left: 0;
-    width: 100%;
-  }
 }
 
 @media (max-width: 640px) {
   .movie-actions .el-button {
     flex: 1 1 140px;
-  }
-
-  .date-progress-main {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
   }
 
   .movie-secondary-meta {
@@ -836,38 +258,6 @@ watch([showViewMode, cinemaKeyword, selectedShowDate], () => {
   .meta-item {
     min-height: 28px;
     padding: 0 10px;
-  }
-
-  .shows-summary {
-    align-items: flex-start;
-  }
-
-  .shows-filter-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .shows-filter-input,
-  .shows-filter-select {
-    width: 100%;
-    max-width: none;
-    flex: none;
-  }
-
-  .time-group-row {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .time-group-main {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-  }
-
-  .time-group-actions {
-    flex-direction: column;
-    align-items: flex-start;
   }
 }
 </style>
