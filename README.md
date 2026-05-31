@@ -110,12 +110,12 @@ MOVIE_SCHEDULER_CORS_ORIGINS=["*"]
 
 - 获取城市列表：`GET /api/cities`
 - 更新影院数据：`GET /api/update/cinema-stream?city_id=10`
-- 更新电影数据：`GET /api/update/movie-stream?city_id=10`
+- 电影自动更新状态：`GET /api/update/movies/status`(后端每小时整点自动更新电影信息与想看电影场次)
 - 选择待查询电影：`POST /api/movies/select`
 - 想看列表读取：`GET /api/movies/wished`
 - 想看状态切换：`PATCH /api/movies/{movie_id}/wished`
 - 获取豆瓣信息：`POST /api/movies/{movie_id}/fetch-douban`
-- 拉取排片数据:`GET /api/shows`(后端每小时自动刷新想看电影的场次)
+- 拉取排片数据:`GET /api/shows`(随电影信息一起每小时整点自动刷新)
 - 读取行程：`GET /api/planning`;全量替换行程：`PUT /api/planning/schedule-items`
 
 部分接口使用 SSE 流式返回，前端会逐步展示更新进度。

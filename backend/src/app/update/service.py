@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from datetime import datetime
 from typing import cast
 
 from app.core.config import config_manager
 from app.core.exceptions import AppError
+from app.core.logger import logger
 from app.models.movie import MovieWriteData
 from app.repositories.movie import movie_repository
 from app.update.cinema.updater import CinemaInfoUpdater
@@ -66,6 +68,18 @@ class UpdateService:
             success_count=success_count,
             failure_count=failure_count,
         )
+
+    async def refresh_movies(self) -> None:
+        """定时任务入口:更新电影信息(增量),失败时只记日志不抛。"""
+        try:
+            await self.update_movie(city_id=None)
+            logger.info("电影定时更新完成")
+        except Exception as error:  # noqa: BLE001
+            logger.error("电影定时更新失败: %s", error)
+
+    async def get_movies_last_updated_at(self) -> datetime | None:
+        """返回数据库中电影最近一次被写入的时间。"""
+        return await asyncio.to_thread(movie_repository.get_movies_last_updated_at)
 
     async def fetch_douban_for_movie(self, movie_id: int) -> DoubanMovieSupplement:
         """为单部电影抓取豆瓣评分与详情链接并持久化。

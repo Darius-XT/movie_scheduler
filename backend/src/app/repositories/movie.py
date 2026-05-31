@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import database_manager
@@ -89,6 +92,15 @@ class MovieRepository:
         except SQLAlchemyError as error:
             logger.error("获取电影数量失败: %s", error)
             raise RepositoryError("读取电影数量失败") from error
+
+    def get_movies_last_updated_at(self) -> datetime | None:
+        """获取 movies 表中最大的 updated_at,作为"上次自动更新时间"。"""
+        try:
+            with database_manager.session() as session:
+                return session.query(func.max(Movie.updated_at)).scalar()
+        except SQLAlchemyError as error:
+            logger.error("读取电影最新更新时间失败: %s", error)
+            raise RepositoryError("读取电影最新更新时间失败") from error
 
     def get_movies_without_details(self) -> list[Movie]:
         """获取缺少详情的电影。"""

@@ -12,45 +12,17 @@ from fastapi.responses import StreamingResponse
 
 from app.core.exceptions import AppError, RepositoryError
 from app.update.entities import UpdateProgressEvent
-from app.update.result_builder import UpdateCinemaResult, UpdateMovieResult
+from app.update.result_builder import UpdateCinemaResult
 from app.update.schemas import (
     FetchMovieDoubanData,
     FetchMovieDoubanResponse,
+    MovieUpdateStatusData,
+    MovieUpdateStatusResponse,
     UpdateCinemaData,
-    UpdateMovieBaseInfo,
-    UpdateMovieData,
-    UpdateMovieExtraInfo,
-    UpdateMovieInputStats,
-    UpdateMovieResultStats,
 )
 from app.update.service import update_service
 
 router = APIRouter()
-
-
-def build_update_movie_data(result: UpdateMovieResult) -> UpdateMovieData:
-    """将电影更新结果转换为响应数据对象。"""
-    return UpdateMovieData(
-        base_info=UpdateMovieBaseInfo(
-            input_stats=UpdateMovieInputStats(
-                scraped_total=result.base_info.input_stats.scraped_total,
-                showing=result.base_info.input_stats.showing,
-                upcoming=result.base_info.input_stats.upcoming,
-                duplicate=result.base_info.input_stats.duplicate,
-                deduplicated_total=result.base_info.input_stats.deduplicated_total,
-            ),
-            result_stats=UpdateMovieResultStats(
-                existing=result.base_info.result_stats.existing,
-                added=result.base_info.result_stats.added,
-                added_movie_ids=result.base_info.result_stats.added_movie_ids,
-                updated=result.base_info.result_stats.updated,
-                updated_movie_ids=result.base_info.result_stats.updated_movie_ids,
-                removed=result.base_info.result_stats.removed,
-                total=result.base_info.result_stats.total,
-            ),
-        ),
-        extra_info=UpdateMovieExtraInfo(updated_count=result.extra_info.updated_count),
-    )
 
 
 def build_update_cinema_data(result: UpdateCinemaResult) -> UpdateCinemaData:
@@ -98,31 +70,6 @@ async def _drain_sse_queue(
             task.cancel()
 
 
-async def encode_update_movie_stream(city_id: int) -> AsyncIterator[str]:
-    """将电影更新过程编码为 SSE 文本帧。"""
-    event_queue: asyncio.Queue[dict[str, object] | None] = asyncio.Queue()
-    loop = asyncio.get_running_loop()
-    push_progress = _make_progress_pusher(loop, event_queue)
-
-    async def run_update() -> None:
-        try:
-            result = await update_service.update_movie(
-                city_id=city_id,
-                progress_callback=push_progress,
-            )
-            payload: dict[str, object] = {"type": "complete", "data": build_update_movie_data(result).model_dump()}
-            loop.call_soon_threadsafe(event_queue.put_nowait, payload)
-        except Exception as error:
-            error_payload: dict[str, object] = {"type": "error", "error": map_update_stream_error(error)}
-            loop.call_soon_threadsafe(event_queue.put_nowait, error_payload)
-        finally:
-            loop.call_soon_threadsafe(event_queue.put_nowait, None)
-
-    task = asyncio.create_task(run_update())
-    async for frame in _drain_sse_queue(event_queue, task):
-        yield frame
-
-
 async def encode_update_cinema_stream(city_id: int) -> AsyncIterator[str]:
     """将影院更新过程编码为 SSE 文本帧。"""
     event_queue: asyncio.Queue[dict[str, object] | None] = asyncio.Queue()
@@ -148,21 +95,23 @@ async def encode_update_cinema_stream(city_id: int) -> AsyncIterator[str]:
         yield frame
 
 
-@router.get("/update/movie-stream")
-async def update_movie_stream(city_id: int) -> StreamingResponse:
-    """以 SSE 方式流式返回电影更新文案进度(增量)。"""
-    return StreamingResponse(
-        encode_update_movie_stream(city_id=city_id),
-        media_type="text/event-stream",
-    )
-
-
 @router.get("/update/cinema-stream")
 async def update_cinema_stream(city_id: int) -> StreamingResponse:
     """以 SSE 方式流式返回影院更新文案进度(增量)。"""
     return StreamingResponse(
         encode_update_cinema_stream(city_id=city_id),
         media_type="text/event-stream",
+    )
+
+
+@router.get("/update/movies/status", response_model=MovieUpdateStatusResponse)
+async def get_movie_update_status() -> MovieUpdateStatusResponse:
+    """返回电影定时更新的最后一次完成时间。"""
+    last_updated_at = await update_service.get_movies_last_updated_at()
+    return MovieUpdateStatusResponse(
+        data=MovieUpdateStatusData(
+            last_updated_at=last_updated_at.isoformat() if last_updated_at else None,
+        ),
     )
 
 

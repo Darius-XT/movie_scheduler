@@ -27,8 +27,8 @@ export const selectMovies = (selectionMode = 'all') =>
   api.post('/movies/select', { selection_mode: selectionMode })
 
 // SSE 流式请求同样封装在这里
-export const streamMovieUpdate = (cityId) =>
-  fetch(`/api/update/movie-stream?city_id=${cityId}`)
+export const streamCinemaUpdate = (cityId) =>
+  fetch(`/api/update/cinema-stream?city_id=${cityId}`)
 ```
 
 后端长时任务通过 **SSE** 推送进度，前端用 `fetch` stream 接收，不用轮询。

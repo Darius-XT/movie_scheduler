@@ -25,16 +25,12 @@ export const fetchMovieDouban = (movieId) =>
 
 export const getShows = () => api.get('/shows')
 
+export const getMovieUpdateStatus = () => api.get('/update/movies/status')
+
 // SSE streaming functions — return a raw Response for the caller to read
 export const streamCinemaUpdate = (cityId) =>
   fetch(
     `/api/update/cinema-stream?city_id=${cityId}`,
-    { headers: { Accept: 'text/event-stream' } }
-  )
-
-export const streamMovieUpdate = (cityId) =>
-  fetch(
-    `/api/update/movie-stream?city_id=${cityId}`,
     { headers: { Accept: 'text/event-stream' } }
   )
 

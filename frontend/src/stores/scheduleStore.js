@@ -26,9 +26,9 @@ export const useScheduleStore = defineStore('schedule', () => {
   } = storeToRefs(showCacheStore)
   const {
     cinemaUpdateMeta,
-    movieUpdateMeta,
     cinemaUpdateResult,
-    movieUpdateResult,
+    movieLastUpdatedAt,
+    movieStatusError,
   } = storeToRefs(updateMetaStore)
 
   return {
@@ -40,9 +40,9 @@ export const useScheduleStore = defineStore('schedule', () => {
     showsSyncing,
     showsSyncError,
     cinemaUpdateMeta,
-    movieUpdateMeta,
     cinemaUpdateResult,
-    movieUpdateResult,
+    movieLastUpdatedAt,
+    movieStatusError,
     wishSyncError,
     wishSyncReady,
     scheduleSyncError,
@@ -64,7 +64,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     removePastSchedules: planningStore.removePastSchedules,
     hasScheduleForMovie: planningStore.hasScheduleForMovie,
     recordCinemaUpdate: updateMetaStore.recordCinemaUpdate,
-    recordMovieUpdate: updateMetaStore.recordMovieUpdate,
+    refreshMovieStatus: updateMetaStore.refreshMovieStatus,
     initializeScheduleSync: planningStore.initializeScheduleSync,
     persistScheduleToBackend: planningStore.persistScheduleToBackend,
   }

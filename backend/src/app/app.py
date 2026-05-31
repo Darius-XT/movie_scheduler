@@ -9,19 +9,19 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.bootstrap import bootstrap_runtime
 from app.core.config import config_manager
+from app.core.scheduler import auto_update_scheduler
 from app.error_handlers import register_exception_handlers
 from app.routes import api_router
-from app.show.scheduler import show_scheduler
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """应用生命周期:启动调度器,关闭时停止。"""
-    show_scheduler.start()
+    """应用生命周期:启动自动更新调度器,关闭时停止。"""
+    auto_update_scheduler.start()
     try:
         yield
     finally:
-        show_scheduler.shutdown()
+        auto_update_scheduler.shutdown()
 
 
 def create_app() -> FastAPI:

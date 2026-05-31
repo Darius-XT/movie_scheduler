@@ -49,52 +49,27 @@
               {{ getCinemaUpdateSummary() }}
             </div>
           </div>
-          <div class="update-action-row">
+          <div class="update-action-row update-action-row--info">
             <div class="update-action-meta update-action-meta--left">
-              <span v-if="movieUpdateMeta.lastUpdatedAt">
-                <el-tooltip
-                  :content="`更新用时 ${formatDurationMs(movieUpdateMeta.durationMs)}`"
-                  placement="top"
-                >
-                  <span class="update-meta-trigger">
-                    {{ formatUpdateTimestamp(movieUpdateMeta.lastUpdatedAt) }}
-                  </span>
-                </el-tooltip>
+              <span v-if="movieLastUpdatedAt">
+                {{ formatIsoTimestamp(movieLastUpdatedAt) }}
               </span>
               <span v-else>暂无更新记录</span>
             </div>
-            <el-button
-              type="success"
-              :loading="movieLoading"
-              :disabled="!updateForm.cityId"
-              @click="handleUpdateMovie"
-              style="width: 120px"
-            >
-              更新电影信息
-            </el-button>
-            <div class="update-action-meta update-action-meta--right">
-              {{ getMovieUpdateSummary() }}
-            </div>
+            <div class="update-action-static-label">电影信息每小时自动更新</div>
+            <div class="update-action-meta update-action-meta--right"></div>
           </div>
         </div>
       </el-form-item>
     </el-form>
 
-    <!-- 更新结果进度 -->
-    <div v-if="cinemaUpdateProgress || movieUpdateProgress" class="update-results">
+    <!-- 影院更新进度 -->
+    <div v-if="cinemaUpdateProgress" class="update-results">
       <el-divider style="margin: 12px 0" />
-
-      <div v-if="cinemaUpdateProgress" class="fetch-progress">
+      <div class="fetch-progress">
         <div class="progress-content">
           <div class="progress-label">影院更新进度</div>
           <div class="progress-text">{{ cinemaUpdateProgress }}</div>
-        </div>
-      </div>
-
-      <div v-if="movieUpdateProgress" class="fetch-progress">
-        <div class="progress-content">
-          <div class="progress-label">电影更新进度</div>
-          <div class="progress-text">{{ movieUpdateProgress }}</div>
         </div>
       </div>
     </div>
@@ -102,7 +77,7 @@
 </template>
 
 <script setup>
-import { streamCinemaUpdate, streamMovieUpdate } from '@/api'
+import { streamCinemaUpdate } from '@/api'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -122,14 +97,11 @@ const props = defineProps({
 const store = useScheduleStore()
 
 const cinemaLoading = ref(false)
-const movieLoading = ref(false)
 const cinemaUpdateProgress = ref('')
-const movieUpdateProgress = ref('')
 
 const cinemaResult = computed(() => store.cinemaUpdateResult)
-const movieResult = computed(() => store.movieUpdateResult)
 const cinemaUpdateMeta = computed(() => store.cinemaUpdateMeta)
-const movieUpdateMeta = computed(() => store.movieUpdateMeta)
+const movieLastUpdatedAt = computed(() => store.movieLastUpdatedAt)
 
 const formatUpdateTimestamp = (timestamp) => {
   if (!timestamp) return '暂无'
@@ -144,6 +116,13 @@ const formatUpdateTimestamp = (timestamp) => {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
+const formatIsoTimestamp = (raw) => {
+  if (!raw) return '暂无'
+  // 后端返回的是北京时间 isoformat (无时区),直接当本地时间格式化
+  const cleaned = String(raw).replace('T', ' ')
+  return cleaned.length >= 19 ? cleaned.slice(0, 19) : cleaned
+}
+
 const formatDurationMs = (durationMs) => {
   if (typeof durationMs !== 'number' || Number.isNaN(durationMs) || durationMs < 0) return '暂无'
   if (durationMs < 1000) return `${durationMs} 毫秒`
@@ -156,17 +135,6 @@ const formatDurationMs = (durationMs) => {
 const getCinemaUpdateSummary = () => {
   if (!cinemaResult.value) return '暂无结果'
   return `成功 ${cinemaResult.value.success_count} / 失败 ${cinemaResult.value.failure_count}`
-}
-
-const getMovieUpdateSummary = () => {
-  if (!movieResult.value) return '暂无结果'
-  return [
-    `抓取 ${movieResult.value.base_info?.input_stats?.scraped_total || 0}`,
-    `去重后 ${movieResult.value.base_info?.input_stats?.deduplicated_total || 0}`,
-    `新增 ${movieResult.value.base_info?.result_stats?.added || 0}`,
-    `更新 ${movieResult.value.base_info?.result_stats?.updated || 0}`,
-    `删除 ${movieResult.value.base_info?.result_stats?.removed || 0}`,
-  ].join(' / ')
 }
 
 const readSseStream = async (response, onData) => {
@@ -219,40 +187,6 @@ const handleUpdateCinema = async () => {
       cinemaUpdateProgress.value = ''
     }
     cinemaLoading.value = false
-  }
-}
-
-const handleUpdateMovie = async () => {
-  movieLoading.value = true
-  store.recordMovieUpdate(null, null)
-  movieUpdateProgress.value = ''
-  const startedAt = Date.now()
-  try {
-    const response = await streamMovieUpdate(props.updateForm.cityId)
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    if (!response.body) throw new Error('未收到更新响应流')
-
-    await readSseStream(response, (data) => {
-      if (data.type === 'progress') {
-        movieUpdateProgress.value = data.message || '正在更新电影信息'
-      } else if (data.type === 'complete') {
-        store.recordMovieUpdate(data.data, Date.now() - startedAt)
-        movieUpdateProgress.value = '电影信息更新完成'
-        ElMessage.success('电影信息更新成功')
-      } else if (data.type === 'error') {
-        movieUpdateProgress.value = ''
-        ElMessage.error('更新失败: ' + data.error)
-      }
-    })
-  } catch (error) {
-    ElMessage.error('更新失败: ' + error.message)
-  } finally {
-    if (movieResult.value) {
-      window.setTimeout(() => { movieUpdateProgress.value = '' }, 1200)
-    } else {
-      movieUpdateProgress.value = ''
-    }
-    movieLoading.value = false
   }
 }
 </script>
@@ -345,6 +279,14 @@ const handleUpdateMovie = async () => {
 .update-meta-trigger {
   cursor: default;
   border-bottom: 1px dashed rgba(100, 116, 139, 0.45);
+}
+
+.update-action-static-label {
+  width: 120px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .update-results {
