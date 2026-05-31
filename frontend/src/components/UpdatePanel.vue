@@ -3,6 +3,9 @@
     <h3 class="section-title">
       <el-icon><Setting /></el-icon>
       <span>信息更新</span>
+      <span class="section-title-meta">
+        上次电影更新: {{ movieLastUpdatedAt ? formatIsoTimestamp(movieLastUpdatedAt) : '暂无' }}
+      </span>
     </h3>
     <el-form :model="updateForm" label-width="84px" size="default">
       <el-form-item label="选择城市">
@@ -48,16 +51,6 @@
             <div class="update-action-meta update-action-meta--right">
               {{ getCinemaUpdateSummary() }}
             </div>
-          </div>
-          <div class="update-action-row update-action-row--info">
-            <div class="update-action-meta update-action-meta--left">
-              <span v-if="movieLastUpdatedAt">
-                {{ formatIsoTimestamp(movieLastUpdatedAt) }}
-              </span>
-              <span v-else>暂无更新记录</span>
-            </div>
-            <div class="update-action-static-label">电影信息每小时自动更新</div>
-            <div class="update-action-meta update-action-meta--right"></div>
           </div>
         </div>
       </el-form-item>
@@ -216,6 +209,15 @@ const handleUpdateCinema = async () => {
   color: #333;
   width: 100%;
   justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.section-title-meta {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .info-update-section :deep(.el-form-item) {
@@ -279,14 +281,6 @@ const handleUpdateCinema = async () => {
 .update-meta-trigger {
   cursor: default;
   border-bottom: 1px dashed rgba(100, 116, 139, 0.45);
-}
-
-.update-action-static-label {
-  width: 120px;
-  text-align: center;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
 }
 
 .update-results {
