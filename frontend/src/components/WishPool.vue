@@ -522,12 +522,20 @@ const getMovieYear = (movie) => {
   return match ? match[1] : ''
 }
 
+const getWishGroupMovieScoreMeta = (movie) => {
+  const score = String(movie?.score || '').trim()
+  if (!score) return '未获取评分'
+  if (score === '无豆瓣评分') return score
+  return `评分 ${score}`
+}
+
 const getWishGroupMovieMeta = (movie) => {
   if (!movie) return ''
   const metaParts = [
     getMovieYear(movie),
     String(movie.director || '').trim(),
     String(movie.country || '').trim(),
+    getWishGroupMovieScoreMeta(movie),
   ].filter(Boolean)
   return metaParts.join(' · ')
 }
