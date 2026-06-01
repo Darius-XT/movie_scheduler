@@ -68,6 +68,15 @@
             />
           </el-select>
         </div>
+        <div class="wish-global-filter-field wish-weekend-filter-field">
+          <el-checkbox
+            :model-value="globalWishFilter.weekendOnly"
+            class="wish-weekend-checkbox"
+            @update:model-value="handleGlobalWeekendOnlyChange"
+          >
+            只看周末
+          </el-checkbox>
+        </div>
       </div>
     </template>
     <div v-if="groupedWishMovies.length > 0" class="wish-pool-list">
@@ -125,6 +134,13 @@
                 :value="dateOption.value"
               />
             </el-select>
+            <el-checkbox
+              :model-value="getWishGroupFilter(group.movieId).weekendOnly"
+              class="wish-weekend-checkbox"
+              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { weekendOnly: Boolean(value) })"
+            >
+              只看周末
+            </el-checkbox>
             <span
               v-if="getFilteredWishItems(group).length !== group.items.length"
               class="wish-pool-group-filter-summary"
@@ -199,6 +215,7 @@ import {
   formatDateAsWeekdayWithMonthDay,
   formatDateWithRelativeWeek,
   getWeekOffsetFromToday,
+  isWeekendDate,
 } from '@/utils/dateLabels'
 import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
 
@@ -213,13 +230,18 @@ const WEEK_FILTER_DEFINITIONS = [
   { value: 'next', label: '下周', offset: 1 },
 ]
 
-const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinemaId: '', cinema: '', date: '' })
+const EMPTY_WISH_GROUP_FILTER = Object.freeze({
+  cinemaId: '',
+  cinema: '',
+  date: '',
+  weekendOnly: false,
+})
 
 const wishGroupCollapseOverrides = ref(new Map())
 const wishGroupFilters = ref(new Map())
 const wishGroupPages = ref(new Map())
 const activeWeekFilter = ref('all')
-const globalWishFilter = ref({ cinemaId: '', date: '' })
+const globalWishFilter = ref({ cinemaId: '', date: '', weekendOnly: false })
 
 const normalizeFilterValue = (value) => {
   if (value == null) return ''
@@ -288,8 +310,9 @@ const buildCinemaOptions = (items) => {
   return Array.from(cinemaMap.values()).sort((a, b) => a.label.localeCompare(b.label, 'zh'))
 }
 
-const buildDateOptions = (items) => {
-  const uniqueDates = Array.from(new Set(items.map((item) => item.date).filter(Boolean))).sort()
+const buildDateOptions = (items, { weekendOnly = false } = {}) => {
+  const sourceItems = weekendOnly ? items.filter((item) => isWeekendDate(item.date)) : items
+  const uniqueDates = Array.from(new Set(sourceItems.map((item) => item.date).filter(Boolean))).sort()
   return uniqueDates.map((date) => ({ value: date, label: formatWishDateFilterLabel(date) }))
 }
 
@@ -304,7 +327,9 @@ const activeWeekShowEntries = computed(() => {
 
 const globalCinemaOptions = computed(() => buildCinemaOptions(activeWeekShowEntries.value))
 
-const globalDateOptions = computed(() => buildDateOptions(activeWeekShowEntries.value))
+const globalDateOptions = computed(() =>
+  buildDateOptions(activeWeekShowEntries.value, { weekendOnly: globalWishFilter.value.weekendOnly })
+)
 
 const globalDatePlaceholder = computed(() => {
   if (activeWeekFilter.value === 'all') return '全部日期'
@@ -399,14 +424,19 @@ const weekFilterOptions = computed(() => {
   }))
 })
 
-const normalizeWishGroupFilter = (filter = EMPTY_WISH_GROUP_FILTER) => ({
-  cinemaId: normalizeFilterValue(filter.cinemaId),
-  cinema: String(filter.cinema || ''),
-  date: normalizeFilterValue(filter.date),
-})
+const normalizeWishGroupFilter = (filter = EMPTY_WISH_GROUP_FILTER) => {
+  const date = normalizeFilterValue(filter.date)
+  const weekendOnly = Boolean(filter.weekendOnly)
+  return {
+    cinemaId: normalizeFilterValue(filter.cinemaId),
+    cinema: String(filter.cinema || ''),
+    date: weekendOnly && !isWeekendDate(date) ? '' : date,
+    weekendOnly,
+  }
+}
 
 const isWishGroupFilterEmpty = (filter) => {
-  return !filter.cinemaId && !filter.cinema && !filter.date
+  return !filter.cinemaId && !filter.cinema && !filter.date && !filter.weekendOnly
 }
 
 const getCinemaLabelById = (cinemaId) => {
@@ -442,10 +472,22 @@ const handleGlobalDateChange = (value) => {
   applyGlobalFilterPatchToGroups({ date })
 }
 
+const handleGlobalWeekendOnlyChange = (value) => {
+  const weekendOnly = Boolean(value)
+  const nextGlobalFilter = normalizeWishGroupFilter({ ...globalWishFilter.value, weekendOnly })
+  globalWishFilter.value = {
+    cinemaId: nextGlobalFilter.cinemaId,
+    date: nextGlobalFilter.date,
+    weekendOnly: nextGlobalFilter.weekendOnly,
+  }
+  applyGlobalFilterPatchToGroups({ weekendOnly })
+}
+
 const pruneInvalidGlobalWishFilter = () => {
   const current = {
     cinemaId: normalizeFilterValue(globalWishFilter.value.cinemaId),
     date: normalizeFilterValue(globalWishFilter.value.date),
+    weekendOnly: Boolean(globalWishFilter.value.weekendOnly),
   }
   const validCinemaIds = new Set(globalCinemaOptions.value.map((option) => option.value))
   const validDates = new Set(globalDateOptions.value.map((option) => option.value))
@@ -454,7 +496,11 @@ const pruneInvalidGlobalWishFilter = () => {
 
   if (nextCinemaId === current.cinemaId && nextDate === current.date) return
 
-  globalWishFilter.value = { cinemaId: nextCinemaId, date: nextDate }
+  globalWishFilter.value = {
+    cinemaId: nextCinemaId,
+    date: nextDate,
+    weekendOnly: current.weekendOnly,
+  }
   const patch = {}
   if (nextCinemaId !== current.cinemaId) {
     patch.cinemaId = nextCinemaId
@@ -536,8 +582,8 @@ const getWishGroupCinemaOptions = (group) => {
 
 const getWishGroupDateOptions = (group) => {
   if (!group?.items) return []
-  const options = buildDateOptions(group.items)
   const filter = getWishGroupFilter(group.movieId)
+  const options = buildDateOptions(group.items, { weekendOnly: filter.weekendOnly })
   if (!filter.date || options.some((option) => option.value === filter.date)) return options
   return [
     { value: filter.date, label: formatWishDateFilterLabel(filter.date) },
@@ -550,8 +596,9 @@ const getFilteredWishItems = (group) => {
   const targetCinemaId = normalizeFilterValue(filter.cinemaId)
   const cinemaKeyword = String(filter.cinema || '').trim().toLowerCase()
   const targetDate = String(filter.date || '').trim()
-  if (!targetCinemaId && !cinemaKeyword && !targetDate) return group.items
+  if (!targetCinemaId && !cinemaKeyword && !targetDate && !filter.weekendOnly) return group.items
   return group.items.filter((item) => {
+    if (filter.weekendOnly && !isWeekendDate(item.date)) return false
     if (targetDate && item.date !== targetDate) return false
     if (targetCinemaId && normalizeFilterValue(item.cinemaId) !== targetCinemaId) return false
     if (cinemaKeyword && !String(item.cinemaName || '').toLowerCase().includes(cinemaKeyword)) return false
@@ -707,6 +754,22 @@ const handleRemoveWishMovie = async (movie) => {
 
 .wish-global-filter-select--date {
   width: 180px;
+}
+
+.wish-weekend-filter-field {
+  min-height: 24px;
+}
+
+.wish-weekend-checkbox {
+  height: 24px;
+  margin-right: 0;
+}
+
+.wish-weekend-checkbox :deep(.el-checkbox__label) {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  padding-left: 6px;
 }
 
 .wish-pool-list {

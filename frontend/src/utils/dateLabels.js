@@ -35,6 +35,13 @@ export const getWeekOffsetFromToday = (dateText) => {
   return Math.floor((targetWeekStart.getTime() - currentWeekStart.getTime()) / (7 * DAY_MS))
 }
 
+export const isWeekendDate = (dateText) => {
+  const targetDate = parseShowDate(dateText)
+  if (!targetDate) return false
+  const weekday = targetDate.getDay()
+  return weekday === 0 || weekday === 6
+}
+
 export const formatDateAsWeekdayWithMonthDay = (dateText) => {
   if (!dateText) return ''
   const targetDate = parseShowDate(dateText)
