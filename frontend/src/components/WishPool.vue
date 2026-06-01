@@ -141,10 +141,7 @@
             >
               只看周末
             </el-checkbox>
-            <span
-              v-if="getFilteredWishItems(group).length !== group.items.length"
-              class="wish-pool-group-filter-summary"
-            >
+            <span class="wish-pool-group-filter-summary">
               {{ getFilteredWishItems(group).length }} / {{ group.items.length }}
             </span>
           </div>
