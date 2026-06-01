@@ -93,51 +93,51 @@
           </div>
         </div>
         <div v-if="!isWishGroupCollapsed(group.movieId)" class="wish-pool-group-body">
+          <div class="wish-pool-group-filter">
+            <el-select
+              :model-value="getWishGroupFilter(group.movieId).cinemaId"
+              class="wish-pool-group-filter-input"
+              size="small"
+              filterable
+              clearable
+              placeholder="全部影院"
+              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { cinemaId: normalizeFilterValue(value), cinema: '' })"
+            >
+              <el-option
+                v-for="cinemaOption in getWishGroupCinemaOptions(group)"
+                :key="cinemaOption.value"
+                :label="cinemaOption.label"
+                :value="cinemaOption.value"
+              />
+            </el-select>
+            <el-select
+              :model-value="getWishGroupFilter(group.movieId).date"
+              class="wish-pool-group-filter-select"
+              size="small"
+              clearable
+              :placeholder="globalDatePlaceholder"
+              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { date: value ?? '' })"
+            >
+              <el-option
+                v-for="dateOption in getWishGroupDateOptions(group)"
+                :key="dateOption.value"
+                :label="dateOption.label"
+                :value="dateOption.value"
+              />
+            </el-select>
+            <span
+              v-if="getFilteredWishItems(group).length !== group.items.length"
+              class="wish-pool-group-filter-summary"
+            >
+              {{ getFilteredWishItems(group).length }} / {{ group.items.length }}
+            </span>
+          </div>
           <template v-if="!group.hasShows">
             <div class="wish-pool-group-empty">
               暂无场次,等待下一次自动抓取
             </div>
           </template>
           <template v-else>
-            <div v-if="group.items.length > 1" class="wish-pool-group-filter">
-              <el-select
-                :model-value="getWishGroupFilter(group.movieId).cinemaId"
-                class="wish-pool-group-filter-input"
-                size="small"
-                filterable
-                clearable
-                placeholder="全部影院"
-                @update:model-value="(value) => updateWishGroupFilter(group.movieId, { cinemaId: normalizeFilterValue(value), cinema: '' })"
-              >
-                <el-option
-                  v-for="cinemaOption in getWishGroupCinemaOptions(group)"
-                  :key="cinemaOption.value"
-                  :label="cinemaOption.label"
-                  :value="cinemaOption.value"
-                />
-              </el-select>
-              <el-select
-                :model-value="getWishGroupFilter(group.movieId).date"
-                class="wish-pool-group-filter-select"
-                size="small"
-                clearable
-                :placeholder="globalDatePlaceholder"
-                @update:model-value="(value) => updateWishGroupFilter(group.movieId, { date: value ?? '' })"
-              >
-                <el-option
-                  v-for="dateOption in getWishGroupDateOptions(group)"
-                  :key="dateOption.value"
-                  :label="dateOption.label"
-                  :value="dateOption.value"
-                />
-              </el-select>
-              <span
-                v-if="getFilteredWishItems(group).length !== group.items.length"
-                class="wish-pool-group-filter-summary"
-              >
-                {{ getFilteredWishItems(group).length }} / {{ group.items.length }}
-              </span>
-            </div>
             <div
               v-if="getFilteredWishItems(group).length === 0"
               class="wish-pool-group-empty"
@@ -536,7 +536,13 @@ const getWishGroupCinemaOptions = (group) => {
 
 const getWishGroupDateOptions = (group) => {
   if (!group?.items) return []
-  return buildDateOptions(group.items)
+  const options = buildDateOptions(group.items)
+  const filter = getWishGroupFilter(group.movieId)
+  if (!filter.date || options.some((option) => option.value === filter.date)) return options
+  return [
+    { value: filter.date, label: formatWishDateFilterLabel(filter.date) },
+    ...options,
+  ]
 }
 
 const getFilteredWishItems = (group) => {
