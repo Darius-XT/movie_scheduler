@@ -60,6 +60,8 @@ class CinemaInfoClient:
             "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
             "Connection": "keep-alive",
             "Host": "apis.netstart.cn",
+            "Origin": "https://www.maoyan.com",
+            "Referer": "https://www.maoyan.com/",
             "sec-ch-ua": '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"macOS"',
