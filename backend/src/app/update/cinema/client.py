@@ -92,7 +92,7 @@ class CinemaInfoClient:
     def _fetch(self, city_id: int, page: int) -> str | None:
         """发起 HTTP 请求，失败返回 None。"""
         offset = (page - 1) * 20
-        url = f"{self.base_url}?keyword='影'&ci={city_id}&offset={offset}"
+        url = f"{self.base_url}?keyword=影&ci={city_id}&offset={offset}"
         try:
             logger.debug("开始获取影院数据: page=%s, offset=%s, url=%s", page, offset, url)
 
