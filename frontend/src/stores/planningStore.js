@@ -1,29 +1,25 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { getPlanning, saveScheduleItems } from '@/api'
 import { getShowEndDate } from '@/utils/showTime'
-import { loadFromStorage, removeFromStorage, saveToStorage } from './storage'
+import { removeFromStorage } from './storage'
 
-const SCHEDULE_ITEMS_KEY = 'scheduleItems'
+const LEGACY_SCHEDULE_ITEMS_KEY = 'scheduleItems'
 const LEGACY_WISH_POOL_KEY = 'wishPool'
 
 export const usePlanningStore = defineStore('planning', () => {
-  // Clean up legacy localStorage key (场次级想看池已废弃)
+  // 清理历史 localStorage:排片以后端为唯一 source of truth,不再做本地缓存
+  // (老版本的 scheduleItems 缓存会在多设备场景下用旧数据覆盖远端,故彻底移除)
   removeFromStorage(LEGACY_WISH_POOL_KEY)
+  removeFromStorage(LEGACY_SCHEDULE_ITEMS_KEY)
 
-  const scheduleItems = ref(loadFromStorage(SCHEDULE_ITEMS_KEY, []))
+  const scheduleItems = ref([])
   const scheduleSyncError = ref('')
   const scheduleSyncReady = ref(false)
   const scheduleSyncInFlight = ref(false)
 
   let suppressSchedulePersist = false
   let scheduleSyncPending = false
-
-  watch(scheduleItems, (val) => saveToStorage(SCHEDULE_ITEMS_KEY, val), { deep: true })
-
-  const hasLocalSchedule = () => scheduleItems.value.length > 0
-
-  const hasRemoteSchedule = (planning) => (planning?.schedule_items?.length || 0) > 0
 
   const applyRemoteSchedule = (planning) => {
     suppressSchedulePersist = true
@@ -56,12 +52,7 @@ export const usePlanningStore = defineStore('planning', () => {
   const initializeScheduleSync = async () => {
     try {
       const response = await getPlanning()
-      const remotePlanning = response.data.data
-      if (hasRemoteSchedule(remotePlanning)) {
-        applyRemoteSchedule(remotePlanning)
-      } else if (hasLocalSchedule()) {
-        await saveScheduleItems(scheduleItems.value)
-      }
+      applyRemoteSchedule(response.data.data)
       scheduleSyncError.value = ''
     } catch (error) {
       scheduleSyncError.value = error?.response?.data?.error || error?.message || '行程同步初始化失败'

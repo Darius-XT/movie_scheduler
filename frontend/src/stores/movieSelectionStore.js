@@ -1,19 +1,21 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { getWishedMovies, setMovieWished } from '@/api'
-import { loadFromStorage, saveToStorage } from './storage'
+import { loadFromStorage, removeFromStorage, saveToStorage } from './storage'
 
 const SELECTED_MOVIES_KEY = 'selectedMovies'
-const WISH_MOVIES_KEY = 'wishMovies'
+const LEGACY_WISH_MOVIES_KEY = 'wishMovies'
 
 export const useMovieSelectionStore = defineStore('movieSelection', () => {
+  // 想看以后端为唯一 source of truth,不再做本地缓存(多设备一致性优先于首屏占位)
+  removeFromStorage(LEGACY_WISH_MOVIES_KEY)
+
   const selectedMovies = ref(loadFromStorage(SELECTED_MOVIES_KEY, []))
-  const wishMovies = ref(loadFromStorage(WISH_MOVIES_KEY, []))
+  const wishMovies = ref([])
   const wishSyncError = ref('')
   const wishSyncReady = ref(false)
 
   watch(selectedMovies, (val) => saveToStorage(SELECTED_MOVIES_KEY, val), { deep: true })
-  watch(wishMovies, (val) => saveToStorage(WISH_MOVIES_KEY, val), { deep: true })
 
   const wishedMovieIds = computed(() => new Set(wishMovies.value.map((m) => m.id)))
 
