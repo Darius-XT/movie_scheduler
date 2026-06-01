@@ -70,9 +70,14 @@ class UpdateService:
         )
 
     async def refresh_movies(self) -> None:
-        """定时任务入口:更新电影信息(增量),失败时只记日志不抛。"""
+        """定时任务入口:更新电影信息(增量),失败时只记日志不抛。
+
+        无论本轮是否真的有字段变化,都把所有电影的 updated_at 刷一次,
+        让 max(updated_at) 反映"最近一次定时任务完成时间"。
+        """
         try:
             await self.update_movie(city_id=None)
+            await asyncio.to_thread(movie_repository.touch_all_updated_at)
             logger.info("电影定时更新完成")
         except Exception as error:  # noqa: BLE001
             logger.error("电影定时更新失败: %s", error)

@@ -102,6 +102,23 @@ class MovieRepository:
             logger.error("读取电影最新更新时间失败: %s", error)
             raise RepositoryError("读取电影最新更新时间失败") from error
 
+    def touch_all_updated_at(self) -> None:
+        """把所有 movies 的 updated_at 强制刷到当前时间。
+
+        语义:作为"自动更新任务跑完"的心跳——即便所有字段值都没变,
+        max(updated_at) 也能反映"最近一次定时任务完成时间"。
+        与 server_default 保持口径一致,直接用 SQLite 的北京时间表达式。
+        """
+        try:
+            with database_manager.transaction() as session:
+                session.query(Movie).update(
+                    {Movie.updated_at: func.datetime("now", "+8 hours")},
+                    synchronize_session=False,
+                )
+        except SQLAlchemyError as error:
+            logger.error("刷新电影 updated_at 失败: %s", error)
+            raise RepositoryError("刷新电影 updated_at 失败") from error
+
     def get_movies_without_details(self) -> list[Movie]:
         """获取缺少详情的电影。"""
         try:
