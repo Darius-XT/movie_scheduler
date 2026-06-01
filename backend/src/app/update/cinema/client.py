@@ -55,20 +55,11 @@ class CinemaInfoClient:
         self.base_url = "https://apis.netstart.cn/maoyan/search/cinemas"
         self.timeout = 30
         self.headers = {
-            "Accept": "application/json",
-            "Accept-Encoding": "gzip, deflate",
+            "Accept": "application/json, text/plain, */*",
             "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Connection": "keep-alive",
-            "Host": "apis.netstart.cn",
-            "Origin": "https://www.maoyan.com",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
             "Referer": "https://www.maoyan.com/",
-            "sec-ch-ua": '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"macOS"',
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "cross-site",
-            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+            "Origin": "https://www.maoyan.com",
         }
 
     def fetch_page(
