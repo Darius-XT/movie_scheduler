@@ -21,12 +21,34 @@ const parseShowDate = (dateText) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+const formatMonthDay = (date) => {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${month}-${day}`
+}
+
 export const getWeekOffsetFromToday = (dateText) => {
   const targetDate = parseShowDate(dateText)
   if (!targetDate) return null
   const currentWeekStart = getWeekStart(new Date())
   const targetWeekStart = getWeekStart(targetDate)
   return Math.floor((targetWeekStart.getTime() - currentWeekStart.getTime()) / (7 * DAY_MS))
+}
+
+export const formatDateAsWeekdayWithMonthDay = (dateText) => {
+  if (!dateText) return ''
+  const targetDate = parseShowDate(dateText)
+  if (!targetDate) return dateText
+
+  const weekday = WEEKDAY_LABELS[targetDate.getDay()]
+  const diffWeeks = getWeekOffsetFromToday(dateText)
+  let prefix = ''
+  if (diffWeeks === 0) prefix = '本'
+  else if (diffWeeks === 1) prefix = '下'
+  else if (diffWeeks === 2) prefix = '下下'
+  else if (diffWeeks === -1) prefix = '上'
+
+  return `${prefix}${weekday} ${formatMonthDay(targetDate)}`
 }
 
 export const formatDateWithRelativeWeek = (dateText) => {

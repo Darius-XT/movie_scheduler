@@ -28,6 +28,47 @@
           :label="`${filter.label} (${filter.count})`"
         />
       </el-tabs>
+      <div v-if="store.wishMovies.length > 0" class="wish-global-filter">
+        <div class="wish-global-filter-field">
+          <span class="wish-global-filter-label">影院</span>
+          <el-select
+            :model-value="globalWishFilter.cinemaId"
+            class="wish-global-filter-select wish-global-filter-select--cinema"
+            filterable
+            clearable
+            size="small"
+            placeholder="全部影院"
+            :disabled="globalCinemaOptions.length === 0"
+            @update:model-value="handleGlobalCinemaChange"
+          >
+            <el-option
+              v-for="cinemaOption in globalCinemaOptions"
+              :key="cinemaOption.value"
+              :label="cinemaOption.label"
+              :value="cinemaOption.value"
+            />
+          </el-select>
+        </div>
+        <div class="wish-global-filter-field">
+          <span class="wish-global-filter-label">日期</span>
+          <el-select
+            :model-value="globalWishFilter.date"
+            class="wish-global-filter-select wish-global-filter-select--date"
+            clearable
+            size="small"
+            :placeholder="globalDatePlaceholder"
+            :disabled="globalDateOptions.length === 0"
+            @update:model-value="handleGlobalDateChange"
+          >
+            <el-option
+              v-for="dateOption in globalDateOptions"
+              :key="dateOption.value"
+              :label="dateOption.label"
+              :value="dateOption.value"
+            />
+          </el-select>
+        </div>
+      </div>
     </template>
     <div v-if="groupedWishMovies.length > 0" class="wish-pool-list">
       <div
@@ -59,20 +100,28 @@
           </template>
           <template v-else>
             <div v-if="group.items.length > 1" class="wish-pool-group-filter">
-              <el-input
-                :model-value="getWishGroupFilter(group.movieId).cinema"
+              <el-select
+                :model-value="getWishGroupFilter(group.movieId).cinemaId"
                 class="wish-pool-group-filter-input"
                 size="small"
+                filterable
                 clearable
-                placeholder="搜索影院名"
-                @update:model-value="(value) => updateWishGroupFilter(group.movieId, { cinema: value })"
-              />
+                placeholder="全部影院"
+                @update:model-value="(value) => updateWishGroupFilter(group.movieId, { cinemaId: normalizeFilterValue(value), cinema: '' })"
+              >
+                <el-option
+                  v-for="cinemaOption in getWishGroupCinemaOptions(group)"
+                  :key="cinemaOption.value"
+                  :label="cinemaOption.label"
+                  :value="cinemaOption.value"
+                />
+              </el-select>
               <el-select
                 :model-value="getWishGroupFilter(group.movieId).date"
                 class="wish-pool-group-filter-select"
                 size="small"
                 clearable
-                placeholder="全部日期"
+                :placeholder="globalDatePlaceholder"
                 @update:model-value="(value) => updateWishGroupFilter(group.movieId, { date: value ?? '' })"
               >
                 <el-option
@@ -146,7 +195,11 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { formatDateWithRelativeWeek, getWeekOffsetFromToday } from '@/utils/dateLabels'
+import {
+  formatDateAsWeekdayWithMonthDay,
+  formatDateWithRelativeWeek,
+  getWeekOffsetFromToday,
+} from '@/utils/dateLabels'
 import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
 
 const store = useScheduleStore()
@@ -160,12 +213,18 @@ const WEEK_FILTER_DEFINITIONS = [
   { value: 'next', label: '下周', offset: 1 },
 ]
 
-const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinema: '', date: '' })
+const EMPTY_WISH_GROUP_FILTER = Object.freeze({ cinemaId: '', cinema: '', date: '' })
 
 const wishGroupCollapseOverrides = ref(new Map())
 const wishGroupFilters = ref(new Map())
 const wishGroupPages = ref(new Map())
 const activeWeekFilter = ref('all')
+const globalWishFilter = ref({ cinemaId: '', date: '' })
+
+const normalizeFilterValue = (value) => {
+  if (value == null) return ''
+  return String(value).trim()
+}
 
 const formattedLastFetchedAt = computed(() => {
   const raw = store.showsLastFetchedAt
@@ -210,6 +269,47 @@ const matchesActiveWeekFilter = (item) => {
   if (activeWeekFilter.value === 'all') return true
   return getItemWeekFilterValue(item) === activeWeekFilter.value
 }
+
+const formatWishDateFilterLabel = (date) => {
+  if (activeWeekFilter.value === 'all') return formatDateWithRelativeWeek(date)
+  return formatDateAsWeekdayWithMonthDay(date)
+}
+
+const buildCinemaOptions = (items) => {
+  const cinemaMap = new Map()
+  items.forEach((item) => {
+    const cinemaId = normalizeFilterValue(item.cinemaId)
+    if (!cinemaId || cinemaMap.has(cinemaId)) return
+    cinemaMap.set(cinemaId, {
+      value: cinemaId,
+      label: String(item.cinemaName || '').trim() || `影院 ${cinemaId}`,
+    })
+  })
+  return Array.from(cinemaMap.values()).sort((a, b) => a.label.localeCompare(b.label, 'zh'))
+}
+
+const buildDateOptions = (items) => {
+  const uniqueDates = Array.from(new Set(items.map((item) => item.date).filter(Boolean))).sort()
+  return uniqueDates.map((date) => ({ value: date, label: formatWishDateFilterLabel(date) }))
+}
+
+const activeWeekFilterLabel = computed(() => {
+  const definition = WEEK_FILTER_DEFINITIONS.find((entry) => entry.value === activeWeekFilter.value)
+  return definition?.label || '全部'
+})
+
+const activeWeekShowEntries = computed(() => {
+  return store.wishMovies.flatMap((movie) => buildShowEntries(movie)).filter(matchesActiveWeekFilter)
+})
+
+const globalCinemaOptions = computed(() => buildCinemaOptions(activeWeekShowEntries.value))
+
+const globalDateOptions = computed(() => buildDateOptions(activeWeekShowEntries.value))
+
+const globalDatePlaceholder = computed(() => {
+  if (activeWeekFilter.value === 'all') return '全部日期'
+  return `${activeWeekFilterLabel.value}日期`
+})
 
 const formatShowPrice = (price) => {
   const normalized = String(price ?? '').trim()
@@ -299,8 +399,78 @@ const weekFilterOptions = computed(() => {
   }))
 })
 
+const normalizeWishGroupFilter = (filter = EMPTY_WISH_GROUP_FILTER) => ({
+  cinemaId: normalizeFilterValue(filter.cinemaId),
+  cinema: String(filter.cinema || ''),
+  date: normalizeFilterValue(filter.date),
+})
+
+const isWishGroupFilterEmpty = (filter) => {
+  return !filter.cinemaId && !filter.cinema && !filter.date
+}
+
+const getCinemaLabelById = (cinemaId) => {
+  const normalizedCinemaId = normalizeFilterValue(cinemaId)
+  const option = globalCinemaOptions.value.find((item) => item.value === normalizedCinemaId)
+  return option?.label || normalizedCinemaId
+}
+
+const applyGlobalFilterPatchToGroups = (patch) => {
+  const next = new Map(wishGroupFilters.value)
+  store.wishMovies.forEach((movie) => {
+    const current = normalizeWishGroupFilter(next.get(movie.id))
+    const nextFilter = normalizeWishGroupFilter({ ...current, ...patch })
+    if (isWishGroupFilterEmpty(nextFilter)) {
+      next.delete(movie.id)
+    } else {
+      next.set(movie.id, nextFilter)
+    }
+  })
+  wishGroupFilters.value = next
+  wishGroupPages.value = new Map()
+}
+
+const handleGlobalCinemaChange = (value) => {
+  const cinemaId = normalizeFilterValue(value)
+  globalWishFilter.value = { ...globalWishFilter.value, cinemaId }
+  applyGlobalFilterPatchToGroups({ cinemaId, cinema: '' })
+}
+
+const handleGlobalDateChange = (value) => {
+  const date = normalizeFilterValue(value)
+  globalWishFilter.value = { ...globalWishFilter.value, date }
+  applyGlobalFilterPatchToGroups({ date })
+}
+
+const pruneInvalidGlobalWishFilter = () => {
+  const current = {
+    cinemaId: normalizeFilterValue(globalWishFilter.value.cinemaId),
+    date: normalizeFilterValue(globalWishFilter.value.date),
+  }
+  const validCinemaIds = new Set(globalCinemaOptions.value.map((option) => option.value))
+  const validDates = new Set(globalDateOptions.value.map((option) => option.value))
+  const nextCinemaId = current.cinemaId && !validCinemaIds.has(current.cinemaId) ? '' : current.cinemaId
+  const nextDate = current.date && !validDates.has(current.date) ? '' : current.date
+
+  if (nextCinemaId === current.cinemaId && nextDate === current.date) return
+
+  globalWishFilter.value = { cinemaId: nextCinemaId, date: nextDate }
+  const patch = {}
+  if (nextCinemaId !== current.cinemaId) {
+    patch.cinemaId = nextCinemaId
+    patch.cinema = ''
+  }
+  if (nextDate !== current.date) patch.date = nextDate
+  applyGlobalFilterPatchToGroups(patch)
+}
+
 watch(activeWeekFilter, () => {
   wishGroupPages.value = new Map()
+  pruneInvalidGlobalWishFilter()
+})
+
+watch([globalCinemaOptions, globalDateOptions], () => {
+  pruneInvalidGlobalWishFilter()
 })
 
 const getMovieYear = (movie) => {
@@ -333,14 +503,15 @@ const toggleWishGroup = (movieId) => {
 }
 
 const getWishGroupFilter = (movieId) => {
-  return wishGroupFilters.value.get(movieId) || EMPTY_WISH_GROUP_FILTER
+  const filter = wishGroupFilters.value.get(movieId)
+  return filter ? normalizeWishGroupFilter(filter) : EMPTY_WISH_GROUP_FILTER
 }
 
 const updateWishGroupFilter = (movieId, patch) => {
   const current = getWishGroupFilter(movieId)
-  const nextFilter = { ...current, ...patch }
+  const nextFilter = normalizeWishGroupFilter({ ...current, ...patch })
   const next = new Map(wishGroupFilters.value)
-  if (!nextFilter.cinema && !nextFilter.date) {
+  if (isWishGroupFilterEmpty(nextFilter)) {
     next.delete(movieId)
   } else {
     next.set(movieId, nextFilter)
@@ -353,19 +524,30 @@ const updateWishGroupFilter = (movieId, patch) => {
   }
 }
 
+const getWishGroupCinemaOptions = (group) => {
+  const options = buildCinemaOptions(group?.items || [])
+  const filter = getWishGroupFilter(group.movieId)
+  if (!filter.cinemaId || options.some((option) => option.value === filter.cinemaId)) return options
+  return [
+    { value: filter.cinemaId, label: getCinemaLabelById(filter.cinemaId) },
+    ...options,
+  ]
+}
+
 const getWishGroupDateOptions = (group) => {
   if (!group?.items) return []
-  const uniqueDates = Array.from(new Set(group.items.map((item) => item.date).filter(Boolean))).sort()
-  return uniqueDates.map((date) => ({ value: date, label: formatDateWithRelativeWeek(date) }))
+  return buildDateOptions(group.items)
 }
 
 const getFilteredWishItems = (group) => {
   const filter = getWishGroupFilter(group.movieId)
+  const targetCinemaId = normalizeFilterValue(filter.cinemaId)
   const cinemaKeyword = String(filter.cinema || '').trim().toLowerCase()
   const targetDate = String(filter.date || '').trim()
-  if (!cinemaKeyword && !targetDate) return group.items
+  if (!targetCinemaId && !cinemaKeyword && !targetDate) return group.items
   return group.items.filter((item) => {
     if (targetDate && item.date !== targetDate) return false
+    if (targetCinemaId && normalizeFilterValue(item.cinemaId) !== targetCinemaId) return false
     if (cinemaKeyword && !String(item.cinemaName || '').toLowerCase().includes(cinemaKeyword)) return false
     return true
   })
@@ -485,6 +667,40 @@ const handleRemoveWishMovie = async (movie) => {
 
 .planning-header-tabs :deep(.el-tabs__nav-wrap::after) {
   height: 1px;
+}
+
+.wish-global-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+  background-color: #f8fafc;
+}
+
+.wish-global-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wish-global-filter-label {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wish-global-filter-select--cinema {
+  width: 260px;
+}
+
+.wish-global-filter-select--date {
+  width: 180px;
 }
 
 .wish-pool-list {
@@ -639,6 +855,18 @@ const handleRemoveWishMovie = async (movie) => {
 
   .wish-pool-group-filter-input,
   .wish-pool-group-filter-select {
+    width: 100%;
+  }
+
+  .wish-global-filter {
+    align-items: stretch;
+  }
+
+  .wish-global-filter-field {
+    width: 100%;
+  }
+
+  .wish-global-filter-select {
     width: 100%;
   }
 }
