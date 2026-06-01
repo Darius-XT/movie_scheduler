@@ -77,6 +77,15 @@
             只看周末
           </el-checkbox>
         </div>
+        <div class="wish-global-filter-field wish-weekend-filter-field">
+          <el-checkbox
+            :model-value="globalWishFilter.joinableOnly"
+            class="wish-weekend-checkbox"
+            @update:model-value="handleGlobalJoinableOnlyChange"
+          >
+            可加入行程
+          </el-checkbox>
+        </div>
       </div>
     </template>
     <div v-if="groupedWishMovies.length > 0" class="wish-pool-list">
@@ -140,6 +149,13 @@
               @update:model-value="(value) => updateWishGroupFilter(group.movieId, { weekendOnly: Boolean(value) })"
             >
               只看周末
+            </el-checkbox>
+            <el-checkbox
+              :model-value="getWishGroupFilter(group.movieId).joinableOnly"
+              class="wish-weekend-checkbox"
+              @update:model-value="(value) => updateWishGroupFilter(group.movieId, { joinableOnly: Boolean(value) })"
+            >
+              可加入行程
             </el-checkbox>
             <span class="wish-pool-group-filter-summary">
               {{ getFilteredWishItems(group).length }} / {{ group.items.length }}
@@ -232,13 +248,19 @@ const EMPTY_WISH_GROUP_FILTER = Object.freeze({
   cinema: '',
   date: '',
   weekendOnly: false,
+  joinableOnly: false,
 })
 
 const wishGroupCollapseOverrides = ref(new Map())
 const wishGroupFilters = ref(new Map())
 const wishGroupPages = ref(new Map())
 const activeWeekFilter = ref('all')
-const globalWishFilter = ref({ cinemaId: '', date: '', weekendOnly: false })
+const globalWishFilter = ref({
+  cinemaId: '',
+  date: '',
+  weekendOnly: false,
+  joinableOnly: false,
+})
 
 const normalizeFilterValue = (value) => {
   if (value == null) return ''
@@ -366,6 +388,10 @@ const getScheduleConflict = (showEntry) => {
   }) || null
 }
 
+const isShowEntryJoinable = (showEntry) => {
+  return !store.isInSchedule(showEntry.key) && !getScheduleConflict(showEntry)
+}
+
 const handleAddToSchedule = (showEntry) => {
   if (store.isInSchedule(showEntry.key)) return
   const conflictItem = getScheduleConflict(showEntry)
@@ -429,11 +455,16 @@ const normalizeWishGroupFilter = (filter = EMPTY_WISH_GROUP_FILTER) => {
     cinema: String(filter.cinema || ''),
     date: weekendOnly && !isWeekendDate(date) ? '' : date,
     weekendOnly,
+    joinableOnly: Boolean(filter.joinableOnly),
   }
 }
 
 const isWishGroupFilterEmpty = (filter) => {
-  return !filter.cinemaId && !filter.cinema && !filter.date && !filter.weekendOnly
+  return !filter.cinemaId
+    && !filter.cinema
+    && !filter.date
+    && !filter.weekendOnly
+    && !filter.joinableOnly
 }
 
 const getCinemaLabelById = (cinemaId) => {
@@ -476,15 +507,28 @@ const handleGlobalWeekendOnlyChange = (value) => {
     cinemaId: nextGlobalFilter.cinemaId,
     date: nextGlobalFilter.date,
     weekendOnly: nextGlobalFilter.weekendOnly,
+    joinableOnly: nextGlobalFilter.joinableOnly,
   }
   applyGlobalFilterPatchToGroups({ weekendOnly })
 }
+
+const handleGlobalJoinableOnlyChange = (value) => {
+  const joinableOnly = Boolean(value)
+  globalWishFilter.value = { ...globalWishFilter.value, joinableOnly }
+  applyGlobalFilterPatchToGroups({ joinableOnly })
+}
+
+const hasActiveJoinableOnlyFilter = computed(() => {
+  if (globalWishFilter.value.joinableOnly) return true
+  return Array.from(wishGroupFilters.value.values()).some((filter) => Boolean(filter?.joinableOnly))
+})
 
 const pruneInvalidGlobalWishFilter = () => {
   const current = {
     cinemaId: normalizeFilterValue(globalWishFilter.value.cinemaId),
     date: normalizeFilterValue(globalWishFilter.value.date),
     weekendOnly: Boolean(globalWishFilter.value.weekendOnly),
+    joinableOnly: Boolean(globalWishFilter.value.joinableOnly),
   }
   const validCinemaIds = new Set(globalCinemaOptions.value.map((option) => option.value))
   const validDates = new Set(globalDateOptions.value.map((option) => option.value))
@@ -497,6 +541,7 @@ const pruneInvalidGlobalWishFilter = () => {
     cinemaId: nextCinemaId,
     date: nextDate,
     weekendOnly: current.weekendOnly,
+    joinableOnly: current.joinableOnly,
   }
   const patch = {}
   if (nextCinemaId !== current.cinemaId) {
@@ -515,6 +560,15 @@ watch(activeWeekFilter, () => {
 watch([globalCinemaOptions, globalDateOptions], () => {
   pruneInvalidGlobalWishFilter()
 })
+
+watch(
+  () => store.scheduleItems.map((item) => `${item.key}:${item.date}:${item.time}:${item.durationMinutes}`).join('|'),
+  () => {
+    if (hasActiveJoinableOnlyFilter.value) {
+      wishGroupPages.value = new Map()
+    }
+  }
+)
 
 const getMovieYear = (movie) => {
   const releaseDate = String(movie?.release_date || '').trim()
@@ -601,9 +655,18 @@ const getFilteredWishItems = (group) => {
   const targetCinemaId = normalizeFilterValue(filter.cinemaId)
   const cinemaKeyword = String(filter.cinema || '').trim().toLowerCase()
   const targetDate = String(filter.date || '').trim()
-  if (!targetCinemaId && !cinemaKeyword && !targetDate && !filter.weekendOnly) return group.items
+  if (
+    !targetCinemaId
+    && !cinemaKeyword
+    && !targetDate
+    && !filter.weekendOnly
+    && !filter.joinableOnly
+  ) {
+    return group.items
+  }
   return group.items.filter((item) => {
     if (filter.weekendOnly && !isWeekendDate(item.date)) return false
+    if (filter.joinableOnly && !isShowEntryJoinable(item)) return false
     if (targetDate && item.date !== targetDate) return false
     if (targetCinemaId && normalizeFilterValue(item.cinemaId) !== targetCinemaId) return false
     if (cinemaKeyword && !String(item.cinemaName || '').toLowerCase().includes(cinemaKeyword)) return false
