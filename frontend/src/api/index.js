@@ -23,7 +23,8 @@ export const setMovieWished = (movieId, isWished) =>
 export const fetchMovieDouban = (movieId) =>
   api.post(`/movies/${movieId}/fetch-douban`)
 
-export const getShows = () => api.get('/shows')
+export const getShows = (movieId = null) =>
+  api.get('/shows', movieId == null ? undefined : { params: { movie_id: movieId } })
 
 export const getMovieUpdateStatus = () => api.get('/update/movies/status')
 

@@ -17,6 +17,7 @@ from app.movie.gateway import movie_gateway
 from app.movie.result_builder import movie_result_builder
 from app.repositories.movie import movie_repository
 from app.repositories.movie_show import movie_show_repository
+from app.show.service import show_service
 
 SelectionMode = Literal["showing", "upcoming", "all"]
 
@@ -85,7 +86,7 @@ class MovieService:
     async def set_movie_wished(self, movie_id: int, is_wished: bool) -> MovieSelectionItem:
         """更新单部电影的想看状态。
 
-        - 加入想看:不立即抓场次,由定时任务在下一轮拉取(或用户等下一次自动刷新)。
+        - 加入想看:清空场次刷新时间,并在后台立即抓取该电影场次。
         - 移出想看:同步清空该电影的场次记录,避免数据库孤儿。
 
         Raises:
@@ -94,7 +95,9 @@ class MovieService:
         ok = await asyncio.to_thread(movie_repository.set_movie_wished, movie_id, is_wished)
         if not ok:
             raise AppError(f"电影不存在: {movie_id}", status_code=404)
-        if not is_wished:
+        if is_wished:
+            self._schedule_movie_show_refresh(movie_id)
+        else:
             await asyncio.to_thread(movie_show_repository.delete_for_movie, movie_id)
         movie = await asyncio.to_thread(movie_repository.get_movie_by_id, movie_id)
         if movie is None:
@@ -105,6 +108,9 @@ class MovieService:
         if selection_mode not in {"showing", "upcoming", "all"}:
             raise AppError("无效的上映状态筛选值", status_code=422)
         return selection_mode
+
+    def _schedule_movie_show_refresh(self, movie_id: int) -> None:
+        asyncio.create_task(show_service.refresh_movie_shows(movie_id))
 
 
 movie_service = MovieService()

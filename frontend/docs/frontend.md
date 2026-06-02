@@ -47,9 +47,10 @@ export const streamCinemaUpdate = (cityId) =>
 
 - 后端 APScheduler 在服务启动时立即抓一次,之后每小时刷新一次,所有想看电影的场次写入 `movie_shows` 表。
 - 前端 `showCacheStore.refreshFromBackend()` 调 `GET /api/shows` 一次性拿到所有场次,
-  按电影分组挂在 `movieShowsMap` 中,并保存 `lastFetchedAt`(后端最近一次任务完成时间)。
-- WishPool 顶部展示 `lastFetchedAt`,不再有任何"抓取/更新场次"按钮;数据可能短暂滞后,
-  但用户加入新想看时,`MovieSelector` 会立即调一次 `refreshFromBackend()`。
+  按电影分组挂在 `movieShowsMap` 中,并保存 `lastFetchedAt`(想看电影 `shows_updated_at` 的最大值)。
+- 用户加入新想看时,后端后台抓该电影场次;前端每 10 秒调用一次
+  `GET /api/shows?movie_id={id}`,最多轮询 3 分钟,只更新该电影在 `movieShowsMap` 中的缓存。
+- WishPool 顶部展示 `lastFetchedAt`,不再有任何"抓取/更新场次"按钮;数据可能短暂滞后。
 
 场次展示统一使用 `src/utils/showTime.js` 处理开始/结束时间:场次列表、想看池和行程板都显示
 `HH:mm-HH:mm`。结束时间由场次开始时间加 `durationMinutes` 推算;展示时如果片长缺失或无效,

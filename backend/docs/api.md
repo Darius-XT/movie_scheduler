@@ -11,7 +11,7 @@
 | 电影 | `GET` | `/api/movies/wished` | JSON | 读取全部想看电影 |
 | 电影 | `PATCH` | `/api/movies/{movie_id}/wished` | JSON | 更新单部电影的想看状态 |
 | 电影 | `POST` | `/api/movies/{movie_id}/fetch-douban` | JSON | 为单部电影抓取豆瓣评分与详情链接 |
-| 排片 | `GET` | `/api/shows` | JSON | 读取想看电影的全部场次(后端每小时自动刷新) |
+| 排片 | `GET` | `/api/shows` | JSON | 读取想看电影的全部或单部场次(后端每小时自动刷新) |
 | 更新 | `GET` | `/api/update/movies/status` | JSON | 读取电影信息上次自动更新时间 |
 | 更新 | `GET` | `/api/update/cinema-stream` | SSE | 流式更新影院数据(手动触发,增量) |
 | 计划 | `GET` | `/api/planning` | JSON | 读取单用户行程列表 |
@@ -37,8 +37,9 @@
 | 方法 | 路径 | 参数 | 返回 |
 |------|------|------|------|
 | `GET` | `/api/shows` | 无 | `{"success": true, "data": {"movies": [{"movie_id": 1, "shows": [{...}]}], "last_fetched_at": "..."}}` |
+| `GET` | `/api/shows` | query: `movie_id=1` | `{"success": true, "data": {"movies": [{"movie_id": 1, "shows": [...]}], "last_fetched_at": "..."}}` |
 
-排片数据由后端每个整点(分钟 0)自动刷新一次,服务启动时也会立即刷一次。前端只读不写。
+排片数据由后端每个整点(分钟 0)自动刷新一次,服务启动时也会立即刷一次。加入想看时后端会后台刷新该电影场次,前端可用 `movie_id` 参数轮询单部电影。
 
 ## 更新
 
@@ -49,7 +50,8 @@
 
 电影信息与想看电影场次由同一个调度任务串行执行:每个整点(分钟 0)自动跑一次,
 服务启动时立即跑一次。前端通过轮询 `GET /api/update/movies/status` 感知更新时间变化,
-自动重新筛选电影列表;场次时间则通过 `GET /api/shows` 的 `last_fetched_at` 字段展示。
+自动重新筛选电影列表;场次时间则通过 `GET /api/shows` 的 `last_fetched_at` 字段展示,
+该字段来自想看电影的 `movies.shows_updated_at`。
 影院信息仍走手动按钮 `GET /api/update/cinema-stream`。
 
 ## 计划
@@ -58,4 +60,3 @@
 |------|------|---------------|------|
 | `GET` | `/api/planning` | 无 | `{"success": true, "data": {"schedule_items": [...]}}` |
 | `PUT` | `/api/planning/schedule-items` | body: `{"schedule_items": [...]}` | `{"success": true, "data": {"schedule_items": [...]}}` |
-

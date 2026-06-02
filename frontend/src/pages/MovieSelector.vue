@@ -88,11 +88,16 @@ const wishTogglingIds = ref(new Set())
 
 // ===== 初始化 =====
 onMounted(async () => {
-  await Promise.all([
+  const cityTask = loadCities()
+  await Promise.allSettled([
+    cityTask,
     store.initializeScheduleSync(),
     store.initializeWishSync(),
-    store.refreshShowsFromBackend(),
   ])
+  void store.refreshShowsFromBackend()
+})
+
+const loadCities = async () => {
   try {
     const response = await getCities()
     cities.value = response.data.data.cities
@@ -102,7 +107,7 @@ onMounted(async () => {
   } catch (error) {
     console.error('获取城市列表失败:', error)
   }
-})
+}
 
 watch(
   () => store.scheduleSyncError,
@@ -113,6 +118,13 @@ watch(
 
 watch(
   () => store.wishSyncError,
+  (message) => {
+    if (message) ElMessage.warning(message)
+  }
+)
+
+watch(
+  () => store.showsSyncError,
   (message) => {
     if (message) ElMessage.warning(message)
   }
@@ -153,13 +165,14 @@ const handleToggleWishMovie = async (movie) => {
   try {
     if (store.isInWishMovies(movie.id)) {
       await store.removeFromWishMovies(movie.id)
+      store.removeMovieShows(movie.id)
       ElMessage.info(`已将《${movie.title}》移出想看`)
     } else {
       await store.addToWishMovies(movie)
+      store.removeMovieShows(movie.id)
+      void store.pollMovieShowsUntilUpdated(movie.id)
       ElMessage.success(`已将《${movie.title}》加入想看`)
     }
-    // 后端 wishMovies 变化后,场次列表也应该刷新一下,把新增/移除的电影同步进 movieShowsMap
-    void store.refreshShowsFromBackend()
   } catch {
     // store 已 rollback,并设置过 wishSyncError(由 watch 弹出 warning)
   } finally {

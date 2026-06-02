@@ -29,6 +29,7 @@ class MovieWriteData(TypedDict, total=False):
     description: NotRequired[str | None]
     first_showing_at: NotRequired[date | datetime | None]
     is_wished: NotRequired[bool]
+    shows_updated_at: NotRequired[datetime | None]
 
 
 # 对应数据库中的 movies 表
@@ -71,6 +72,11 @@ class Movie(Base):
         onupdate=func.datetime("now", "+8 hours"),
         comment="更新时间（北京时间）",
     )
+    shows_updated_at = Column(
+        DateTime,
+        nullable=True,
+        comment="场次最近一次刷新完成时间（北京时间）",
+    )
 
     # 设置直接 print 对象时会打印的输出
     def __repr__(self):
@@ -95,4 +101,5 @@ class Movie(Base):
             description=data.get("description"),
             first_showing_at=data.get("first_showing_at"),
             is_wished=bool(data.get("is_wished", False)),
+            shows_updated_at=data.get("shows_updated_at"),
         )

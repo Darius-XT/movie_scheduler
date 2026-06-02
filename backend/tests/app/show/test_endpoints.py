@@ -17,7 +17,8 @@ def test_get_shows_endpoint_returns_movies_and_last_fetched_at(
 ) -> None:
     """GET /api/shows 应返回想看电影的场次和最近一次抓取完成时间。"""
 
-    async def fake_payload() -> dict[str, object]:
+    async def fake_payload(movie_id: int | None = None) -> dict[str, object]:
+        assert movie_id is None
         return {
             "movies": [
                 {
@@ -48,10 +49,34 @@ def test_get_shows_endpoint_returns_movies_and_last_fetched_at(
     assert body["data"]["movies"][0]["shows"][0]["cinema_name"] == "影院A"
 
 
+def test_get_shows_endpoint_accepts_movie_id_query(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GET /api/shows?movie_id=... 应把单片参数传给 service。"""
+
+    async def fake_payload(movie_id: int | None = None) -> dict[str, object]:
+        assert movie_id == 2
+        return {
+            "movies": [{"movie_id": 2, "shows": []}],
+            "last_fetched_at": "2026-06-02T12:30:00",
+        }
+
+    monkeypatch.setattr(show_service, "get_shows_for_wished_movies", fake_payload)
+
+    response = client.get("/api/shows?movie_id=2")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "movies": [{"movie_id": 2, "shows": []}],
+        "last_fetched_at": "2026-06-02T12:30:00",
+    }
+
+
 def test_get_shows_endpoint_maps_repository_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """底层数据库异常应被统一异常处理器映射。"""
 
-    async def fake_payload() -> dict[str, object]:
+    async def fake_payload(movie_id: int | None = None) -> dict[str, object]:
+        del movie_id
         raise RepositoryError("底层数据库错误")
 
     monkeypatch.setattr(show_service, "get_shows_for_wished_movies", fake_payload)

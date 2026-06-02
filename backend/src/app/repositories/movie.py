@@ -78,11 +78,45 @@ class MovieRepository:
                 if movie is None:
                     logger.warning("设置想看状态失败,电影不存在: ID %s", movie_id)
                     return False
-                movie.is_wished = bool(is_wished)
+                setattr(movie, "is_wished", bool(is_wished))
+                if is_wished:
+                    setattr(movie, "shows_updated_at", None)
             return True
         except SQLAlchemyError as error:
             logger.error("设置电影想看状态失败: %s", error)
             raise RepositoryError("设置电影想看状态失败") from error
+
+    def touch_shows_updated_at(self, movie_id: int) -> bool:
+        """刷新单部电影的场次更新时间,电影不存在时返回 False。"""
+        try:
+            with database_manager.transaction() as session:
+                updated = (
+                    session.query(Movie)
+                    .filter(Movie.id == movie_id)
+                    .update(
+                        {Movie.shows_updated_at: func.datetime("now", "+8 hours")},
+                        synchronize_session=False,
+                    )
+                )
+            return bool(updated)
+        except SQLAlchemyError as error:
+            logger.error("刷新电影场次更新时间失败: %s", error)
+            raise RepositoryError("刷新电影场次更新时间失败") from error
+
+    def get_latest_shows_updated_at(self, movie_ids: list[int]) -> datetime | None:
+        """读取指定电影中最大的场次更新时间。"""
+        if not movie_ids:
+            return None
+        try:
+            with database_manager.session() as session:
+                return (
+                    session.query(func.max(Movie.shows_updated_at))
+                    .filter(Movie.id.in_(movie_ids))
+                    .scalar()
+                )
+        except SQLAlchemyError as error:
+            logger.error("读取电影场次更新时间失败: %s", error)
+            raise RepositoryError("读取电影场次更新时间失败") from error
 
     def get_movies_count(self) -> int:
         """获取电影总数。"""

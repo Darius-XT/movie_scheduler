@@ -56,16 +56,3 @@ class MovieShow(Base):
             time=data["time"],
             price=data.get("price"),
         )
-
-
-class ShowFetchRun(Base):
-    """单次场次批量抓取任务的元信息。"""
-
-    __tablename__ = "show_fetch_runs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True, comment="任务ID")
-    started_at = Column(DateTime, nullable=False, comment="开始时间(北京时间)")
-    finished_at = Column(DateTime, nullable=True, comment="完成时间(北京时间);为空表示进行中")
-    movie_count = Column(Integer, nullable=False, server_default="0", comment="本次抓取的电影数量")
-    success_count = Column(Integer, nullable=False, server_default="0", comment="成功抓到场次的电影数")
-    error = Column(String(500), nullable=True, comment="失败原因(成功为空)")
