@@ -1,37 +1,39 @@
 # 当前领域地图
 
-本文记录后端当前的业务边界和主要目录职责。通用目录设计规则、文件命名和新增目录判断标准见 [architecture.md](architecture.md)。
+本文记录后端当前的业务边界与各 feature 目录职责。通用结构规则见 [architecture.md](architecture.md)。具体文件列表以 `backend/src/movie_scheduler/` 源码为准,本文不维护完整目录树。
 
-具体文件列表以 `backend/src/app/` 源码为准，不在本文维护完整目录树，避免目录快照过期。
+## features/
 
-## 顶层目录
+| 目录 | 拥有的表 | 职责 |
+|------|---------|------|
+| `city/` | (无) | 当前可选城市列表(静态,从 `config.city_mapping` 读取) |
+| `cinema/` | `cinemas` | 抓取猫眼影院列表 + 增量 upsert;SSE 流式更新接口 |
+| `movie/` | `movies` | 电影筛选、想看状态;编排三个数据源的电影信息更新;`update-douban` 单片接口 |
+| `plan/` | `planning_items` | 单用户行程(场次维度)的全量读取与全量替换 |
+| `show/` | `movie_shows` | 抓取猫眼场次/日期/影院 → 写场次缓存;前端读 wishMovies 场次 |
 
-| 目录 | 职责 |
-|------|------|
-| `core/` | 配置、数据库连接、日志、应用异常、启动初始化、自动更新调度器(`scheduler.py`) |
-| `models/` | SQLAlchemy ORM 实体，按资源或表主题拆分 |
-| `repositories/` | 数据库读写封装，按资源或聚合根拆分 |
-| `city/` | 当前可选城市列表 |
-| `movie/` | 电影筛选、想看状态、展示用电影数据组装,以及电影相关外部访问编排 |
-| `planning/` | 单用户行程(场次维度)持久化 |
-| `show/` | 排片抓取流程,按日期、影院、场次拆分外部访问 |
-| `update/` | 影院、电影基础信息、豆瓣信息、额外详情的更新流程 |
+## features/movie/ 嵌套子领域
 
-> 定时任务在 `core/scheduler.py` 中编排:每个整点串行触发"电影信息增量更新 + 想看电影场次抓取",
-> 服务启动时立即跑一次。
+```
+features/movie/
+├── update_base/    # 猫眼 /films 列表抓取 → 增量 upsert movies 基础字段
+├── update_douban/  # 豆瓣移动版搜索 → 补充 movies.score, movies.douban_url
+└── update_extra/   # 猫眼 /movie/intro → 补充 director/country/language/duration/description
+```
 
-## 重要子领域
+三个子领域都不写自己的表(共享 `features/movie/models.py` 里的 `movies`),不暴露 endpoint,各自只有 `service.py`(+ 占位 `schemas.py`)。父 `features/movie/service.py` 负责串联这三个子领域。
 
-| 目录 | 职责 |
-|------|------|
-| `update/cinema/` | 影院基础信息更新流程，包含外部访问对象和更新编排 |
-| `update/movie/` | 电影信息更新的父领域，编排多个电影数据来源的更新 |
-| `update/movie/base/` | 电影基础信息来源的访问、实体和更新流程 |
-| `update/movie/douban/` | 豆瓣电影信息访问、补充和更新流程 |
-| `update/movie/extra/` | 电影额外详情来源的访问、实体和更新流程 |
+## 定时任务
+
+`core/scheduler.py` 用 APScheduler 在每个整点(分钟 0)串行触发:
+
+1. `movie_service.refresh_all_movies()` — 跑 `update_base` + `update_extra`(豆瓣不走定时,只走单片接口)
+2. `show_service.refresh_wished_movie_shows()` — 抓所有想看电影的场次
+
+服务启动时立即跑一次,不等下个整点。
 
 ## 维护约定
 
-- 新增顶层领域或业务子领域时，同步更新本文的领域地图。
-- 新增、删除、移动普通文件时，优先更新 [architecture.md](architecture.md) 中的通用规则；本文不记录完整文件树。
-- 如果某个目录只是按角色分层，例如 `clients/`、`services/`、`builders/`，应优先回到 [architecture.md](architecture.md) 的领域目录规范检查是否必要。
+- 新增 feature 或子领域时同步更新本文
+- 文件命名/职责约束放 [architecture.md](architecture.md),本文不再列文件树
+- 如果出现某个 feature 平级文件接近模板上限(router/schemas/models/service/repository),又有新业务进来,优先拆**嵌套子领域**而不是新增角色文件
