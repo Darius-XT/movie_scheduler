@@ -7,15 +7,15 @@ import json
 import sys
 from typing import Literal
 
-from app.core.bootstrap import bootstrap_runtime
-from app.core.file_saver import file_saver
-from app.show.cinema_client import CinemaClient
-from app.show.date_client import DateClient
-from app.show.show_client import ShowClient
-from app.update.cinema.client import CinemaInfoClient
-from app.update.movie.base.client import MovieBaseInfoClient
-from app.update.movie.douban.client import DoubanApiClient
-from app.update.movie.extra.client import MovieExtraInfoClient
+from movie_scheduler.config import config_manager
+from movie_scheduler.core.db import database_manager
+from movie_scheduler.core.logging import setup_logger
+from movie_scheduler.features.cinema.service import cinema_service
+from movie_scheduler.features.movie.update_base.service import update_base_service
+from movie_scheduler.features.movie.update_douban.service import UpdateDoubanService
+from movie_scheduler.features.movie.update_extra.service import update_extra_service
+from movie_scheduler.features.show.service import show_service
+from movie_scheduler.shared.utils import file_saver
 
 # ── 调试参数统一在此处修改 ──────────────────────────────────────────────────────
 DEMO_MOVIE_ID = 1324725
@@ -75,59 +75,57 @@ def export_sample(sample_name: SampleName) -> dict[str, str]:
     """根据预设抓取并保存单个调试样本到 demo 目录。"""
     filename = SAMPLE_FILENAMES[sample_name]
     content = _fetch_sample(sample_name)
-
     if not content:
         raise ValueError(f"{sample_name} 样本抓取失败")
     if not file_saver.save_demo(content, filename):
         raise ValueError(f"{sample_name} 样本保存失败")
-
     return {"sample_name": sample_name, "filename": filename}
 
 
 def _fetch_sample(sample_name: SampleName) -> str:
-    """根据样本类型抓取原始内容。"""
+    """根据样本类型抓取原始内容。
+
+    迁移后部分内部 client 已并入 service.py 不再公开,这里直接调用 service 私有方法以保持
+    采样脚本可用。
+    """
     if sample_name == "show_dates":
-        client = DateClient()
-        dates = client.get_show_dates(DEMO_MOVIE_ID, DEMO_CITY_ID)
+        dates = show_service._get_show_dates(DEMO_MOVIE_ID, DEMO_CITY_ID)
         return json.dumps(dates, ensure_ascii=False, indent=2)
 
     if sample_name == "cinemas":
-        client = CinemaClient()
-        cinema_ids, _ = client.get_cinema_ids(
-            DEMO_MOVIE_ID, DEMO_SHOW_DATE, DEMO_CITY_ID, DEMO_CINEMA_LIMIT, DEMO_CINEMA_OFFSET
+        cinema_ids, _ = show_service._fetch_cinema_page(
+            DEMO_MOVIE_ID, DEMO_SHOW_DATE, DEMO_CITY_ID, DEMO_CINEMA_LIMIT, DEMO_CINEMA_OFFSET,
         )
         return json.dumps(cinema_ids, ensure_ascii=False, indent=2)
 
     if sample_name == "cinema_shows":
-        client = ShowClient()
-        return client.fetch_raw(DEMO_CINEMA_ID, DEMO_CITY_ID) or ""
+        from movie_scheduler.features.show.service import _CINEMA_SHOWS_BASE, _http_get_text
+        url = f"{_CINEMA_SHOWS_BASE}?cinemaId={DEMO_CINEMA_ID}&ci={DEMO_CITY_ID}"
+        return _http_get_text(url, "获取影院场次信息") or ""
 
     if sample_name == "movie_base_info":
-        client = MovieBaseInfoClient()
-        result = client.fetch_page(1, DEMO_PAGE, DEMO_CITY_ID)
+        result = update_base_service._fetch_page(1, DEMO_PAGE, DEMO_CITY_ID)
         if result is None:
             return ""
         movies, _ = result
         return json.dumps([m.__dict__ for m in movies], ensure_ascii=False, indent=2, default=str)
 
     if sample_name == "movie_extra_info":
-        client = MovieExtraInfoClient()
-        info = client.fetch_details(DEMO_MOVIE_ID)
+        info = update_extra_service._fetch_details(DEMO_MOVIE_ID)
         if info is None:
             return ""
         return json.dumps(info.__dict__, ensure_ascii=False, indent=2, default=str)
 
     if sample_name == "cinema_info":
-        client = CinemaInfoClient()
-        result = client.fetch_page(DEMO_CITY_ID, DEMO_PAGE)
+        result = cinema_service._fetch_page(DEMO_CITY_ID, DEMO_PAGE)
         if result is None:
             return ""
         cinemas, _ = result
         return json.dumps([c.__dict__ for c in cinemas], ensure_ascii=False, indent=2, default=str)
 
     # douban
-    local_client = DoubanApiClient(base_url=DEMO_DOUBAN_BASE_URL)
-    candidates = local_client.search_movies(title=DEMO_MOVIE_TITLE, page=1)
+    local_client = UpdateDoubanService(base_url=DEMO_DOUBAN_BASE_URL)
+    candidates = local_client._search_movies(title=DEMO_MOVIE_TITLE, page=1)
     return json.dumps(
         [{"title": c.title, "rating": c.rating, "cover_link": c.cover_link, "year": c.year}
          for c in candidates],
@@ -143,7 +141,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    bootstrap_runtime()
+    config_manager.reload_from_env()
+    config_manager.ensure_runtime_dirs()
+    setup_logger()
+    file_saver.initialize()
+    database_manager.initialize()
+
     parser = build_parser()
     args = parser.parse_args()
 
