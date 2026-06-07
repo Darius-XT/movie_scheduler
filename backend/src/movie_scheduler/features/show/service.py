@@ -56,18 +56,26 @@ class _ShowItem:
     price: str
 
 
+def _empty_show_items() -> list[_ShowItem]:
+    return []
+
+
+def _empty_cinema_map() -> dict[int, _CinemaShowData]:
+    return {}
+
+
 @dataclass(slots=True)
 class _CinemaShowData:
     cinema_id: int
     cinema_name: str
-    shows: list[_ShowItem] = field(default_factory=list)
+    shows: list[_ShowItem] = field(default_factory=_empty_show_items)
 
 
 @dataclass(slots=True)
 class _MovieShowData:
     movie_id: int
     movie_name: str
-    cinemas: dict[int, _CinemaShowData] = field(default_factory=dict)
+    cinemas: dict[int, _CinemaShowData] = field(default_factory=_empty_cinema_map)
 
 
 @dataclass(slots=True)
@@ -180,7 +188,7 @@ class ShowService:
         """抓取所有想看电影的场次并写入数据库,返回有场次的电影数。"""
         normalized_city_id = self._normalize_city_id(city_id)
         wished_movies = await asyncio.to_thread(movie_repository.list_wished_movies)
-        movie_ids = [int(m.id) for m in wished_movies if m.id is not None]
+        movie_ids = [int(mid) for m in wished_movies if (mid := cast(int | None, getattr(m, "id", None))) is not None]
 
         if not movie_ids:
             logger.info("场次定时抓取:想看列表为空,跳过")
@@ -224,7 +232,7 @@ class ShowService:
             return await self._get_shows_for_single_wished_movie(movie_id)
 
         wished_movies = await asyncio.to_thread(movie_repository.list_wished_movies)
-        movie_ids = [int(m.id) for m in wished_movies if m.id is not None]
+        movie_ids = [int(mid) for m in wished_movies if (mid := cast(int | None, getattr(m, "id", None))) is not None]
         shows = await asyncio.to_thread(movie_show_repository.list_for_movies, movie_ids)
         latest = await asyncio.to_thread(movie_repository.get_latest_shows_updated_at, movie_ids)
 
@@ -451,7 +459,7 @@ class ShowService:
             cinemas_data = data_section.get("cinemas", [])
             if not cinemas_data:
                 return [], False
-            cinema_ids = [int(c["id"]) for c in cinemas_data if c.get("id") is not None]
+            cinema_ids = [int(cid) for c in cinemas_data if (cid := c.get("id")) is not None]
             has_more = data_section.get("paging", {}).get("hasMore", True)
             return cinema_ids, has_more is False
         except json.JSONDecodeError as error:

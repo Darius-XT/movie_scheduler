@@ -130,8 +130,10 @@ class MovieService:
         return not bool(movie.is_showing)
 
     def _build_movie_item(self, movie: Movie) -> dict[str, object]:
+        movie_id = cast(int | None, getattr(movie, "id", None))
+        first_showing_at = cast(object, getattr(movie, "first_showing_at", None))
         return {
-            "id": int(cast(int, movie.id)) if movie.id is not None else None,
+            "id": int(movie_id) if movie_id is not None else None,
             "title": movie.title,
             "score": movie.score,
             "douban_url": movie.douban_url,
@@ -145,7 +147,7 @@ class MovieService:
             "language": movie.language,
             "duration": movie.duration,
             "description": movie.description,
-            "first_showing_at": str(movie.first_showing_at) if movie.first_showing_at else None,
+            "first_showing_at": str(first_showing_at) if first_showing_at else None,
         }
 
     def _normalize_selection_mode(self, selection_mode: SelectionMode) -> SelectionMode:
