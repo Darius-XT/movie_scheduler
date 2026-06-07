@@ -20,6 +20,7 @@ export const usePlanningStore = defineStore('planning', () => {
 
   let suppressSchedulePersist = false
   let scheduleSyncPending = false
+  let inFlightPersistPromise = null
 
   const applyRemoteSchedule = (planning) => {
     suppressSchedulePersist = true
@@ -29,24 +30,28 @@ export const usePlanningStore = defineStore('planning', () => {
 
   const persistScheduleToBackend = async () => {
     if (!scheduleSyncReady.value || suppressSchedulePersist) return
-    if (scheduleSyncInFlight.value) {
+    if (inFlightPersistPromise) {
       scheduleSyncPending = true
-      return
+      return inFlightPersistPromise
     }
     scheduleSyncInFlight.value = true
-    try {
-      await saveScheduleItems(scheduleItems.value)
-      scheduleSyncError.value = ''
-    } catch (error) {
-      scheduleSyncError.value = error?.response?.data?.error || error?.message || '行程同步失败'
-      console.error('保存行程失败:', error)
-    } finally {
-      scheduleSyncInFlight.value = false
-      if (scheduleSyncPending) {
-        scheduleSyncPending = false
-        void persistScheduleToBackend()
+    inFlightPersistPromise = (async () => {
+      try {
+        await saveScheduleItems(scheduleItems.value)
+        scheduleSyncError.value = ''
+      } catch (error) {
+        scheduleSyncError.value = error?.response?.data?.error || error?.message || '行程同步失败'
+        console.error('保存行程失败:', error)
+      } finally {
+        scheduleSyncInFlight.value = false
+        inFlightPersistPromise = null
+        if (scheduleSyncPending) {
+          scheduleSyncPending = false
+          void persistScheduleToBackend()
+        }
       }
-    }
+    })()
+    return inFlightPersistPromise
   }
 
   const initializeScheduleSync = async () => {

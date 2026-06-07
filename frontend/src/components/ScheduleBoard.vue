@@ -12,6 +12,13 @@
           <el-button
             text
             size="small"
+            @click="openManualAddDialog"
+          >
+            手动添加
+          </el-button>
+          <el-button
+            text
+            size="small"
             :disabled="store.scheduleItems.length === 0"
             @click="handleRemovePastSchedules"
           >
@@ -57,16 +64,91 @@
       </div>
     </div>
     <el-empty v-else description="还没有安排好的行程" />
+
+    <el-dialog
+      v-model="manualAddDialogVisible"
+      title="手动添加行程"
+      width="480px"
+      align-center
+      append-to-body
+      @closed="resetManualForm"
+    >
+      <el-form
+        ref="manualFormRef"
+        :model="manualForm"
+        :rules="manualFormRules"
+        label-width="72px"
+        @submit.prevent="handleManualAddSubmit"
+      >
+        <el-form-item label="电影名" prop="movieTitle">
+          <el-input
+            v-model="manualForm.movieTitle"
+            maxlength="100"
+            placeholder="电影标题"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="日期" prop="date">
+          <el-date-picker
+            v-model="manualForm.date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择日期"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="时间" prop="time">
+          <el-time-picker
+            v-model="manualForm.time"
+            format="HH:mm"
+            value-format="HH:mm"
+            placeholder="选择开场时间"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="影院" prop="cinemaName">
+          <el-input
+            v-model="manualForm.cinemaName"
+            maxlength="100"
+            placeholder="影院名(留空显示为'其他')"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="价格" prop="price">
+          <el-input
+            v-model="manualForm.price"
+            maxlength="20"
+            placeholder="价格(可选)"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="片长" prop="durationMinutes">
+          <el-input-number
+            v-model="manualForm.durationMinutes"
+            :min="1"
+            :max="600"
+            :step="5"
+            controls-position="right"
+            placeholder="分钟(可选)"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="manualAddDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleManualAddSubmit">添加</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
 
 <script setup>
 import { Check } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { formatDateWithRelativeWeek } from '@/utils/dateLabels'
-import { formatShowTimeRange } from '@/utils/showTime'
+import { formatShowTimeRange, parseShowTimeToMinutes, UNKNOWN_SHOW_DURATION_MINUTES } from '@/utils/showTime'
 
 const store = useScheduleStore()
 
@@ -99,6 +181,125 @@ const handleRemovePastSchedules = () => {
   } else {
     ElMessage.info('没有可移除的旧行程')
   }
+}
+
+// ===== 手动添加行程 =====
+const manualAddDialogVisible = ref(false)
+const manualFormRef = ref(null)
+
+const createEmptyManualForm = () => ({
+  movieTitle: '',
+  date: '',
+  time: '',
+  cinemaName: '',
+  price: '',
+  durationMinutes: null,
+})
+
+const manualForm = reactive(createEmptyManualForm())
+
+const manualFormRules = {
+  movieTitle: [
+    {
+      required: true,
+      validator: (_rule, value, callback) => {
+        if (!String(value ?? '').trim()) callback(new Error('请输入电影名'))
+        else callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+  date: [{ required: true, message: '请选择日期', trigger: 'change' }],
+  time: [{ required: true, message: '请选择开场时间', trigger: 'change' }],
+}
+
+const resetManualForm = () => {
+  Object.assign(manualForm, createEmptyManualForm())
+  manualFormRef.value?.clearValidate()
+}
+
+const openManualAddDialog = () => {
+  resetManualForm()
+  manualAddDialogVisible.value = true
+}
+
+const resolveScheduleItemDuration = (item) => {
+  if (typeof item?.durationMinutes === 'number' && item.durationMinutes > 0) {
+    return item.durationMinutes
+  }
+  return UNKNOWN_SHOW_DURATION_MINUTES
+}
+
+const findManualScheduleConflict = (date, time, durationMinutes) => {
+  const targetStart = parseShowTimeToMinutes(time)
+  if (targetStart == null) return null
+  const targetDuration = typeof durationMinutes === 'number' && durationMinutes > 0
+    ? durationMinutes
+    : UNKNOWN_SHOW_DURATION_MINUTES
+  const targetEnd = targetStart + targetDuration
+  return store.scheduleItems.find((item) => {
+    if (item.date !== date) return false
+    const itemStart = parseShowTimeToMinutes(item.time)
+    if (itemStart == null) return item.time === time
+    const itemEnd = itemStart + resolveScheduleItemDuration(item)
+    return targetStart < itemEnd && itemStart < targetEnd
+  }) || null
+}
+
+const buildManualScheduleKey = () => {
+  const cryptoApi = typeof window !== 'undefined' ? window.crypto : null
+  if (cryptoApi?.randomUUID) return `manual-${cryptoApi.randomUUID()}`
+  const random = Math.random().toString(36).slice(2, 10)
+  return `manual-${performance.now().toString(36)}-${random}`
+}
+
+const handleManualAddSubmit = async () => {
+  if (!manualFormRef.value) return
+  try {
+    await manualFormRef.value.validate()
+  } catch {
+    return
+  }
+  const movieTitle = manualForm.movieTitle.trim()
+  if (!movieTitle) return
+  const cinemaName = manualForm.cinemaName.trim() || '其他'
+  const price = manualForm.price.trim()
+  const durationMinutes = typeof manualForm.durationMinutes === 'number' && manualForm.durationMinutes > 0
+    ? manualForm.durationMinutes
+    : null
+
+  const conflict = findManualScheduleConflict(manualForm.date, manualForm.time, durationMinutes)
+  if (conflict) {
+    ElMessage.warning(
+      `时间冲突:${manualForm.date} ${manualForm.time} 与《${conflict.movieTitle}》(${conflict.time}) 冲突`
+    )
+    return
+  }
+
+  const newKey = buildManualScheduleKey()
+  store.addToSchedule({
+    key: newKey,
+    movieId: 0,
+    movieTitle,
+    date: manualForm.date,
+    time: manualForm.time,
+    cinemaId: 0,
+    cinemaName,
+    price,
+    durationMinutes,
+  })
+
+  // 手动行程在前端没有任何其他 source of truth(WishPool 不会重建它),
+  // 必须等后端写入成功才能关闭对话框;失败则本地回滚,避免页面刷新后悄无声息丢失。
+  await store.persistScheduleToBackend()
+  if (store.scheduleSyncError) {
+    store.removeFromSchedule(newKey)
+    ElMessage.error(`添加行程失败:${store.scheduleSyncError}`)
+    return
+  }
+
+  ElMessage.success(`已添加《${movieTitle}》到行程`)
+  manualAddDialogVisible.value = false
 }
 </script>
 

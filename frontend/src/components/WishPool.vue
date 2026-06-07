@@ -230,7 +230,7 @@ import {
   getWeekOffsetFromToday,
   isWeekendDate,
 } from '@/utils/dateLabels'
-import { formatShowTimeRange, parseShowTimeToMinutes } from '@/utils/showTime'
+import { formatShowTimeRange, parseShowTimeToMinutes, UNKNOWN_SHOW_DURATION_MINUTES } from '@/utils/showTime'
 
 const store = useScheduleStore()
 
@@ -366,7 +366,12 @@ const getShowEntryDurationMinutes = (showEntry) => {
     return showEntry.durationMinutes
   }
   const movie = store.wishMovies.find((item) => item.id === showEntry?.movieId)
-  return parseMovieDurationMinutes(movie?.duration)
+  const parsed = parseMovieDurationMinutes(movie?.duration)
+  if (parsed != null) return parsed
+  // 手动添加的行程没有对应 wishMovie,可能没填片长,这里用默认值做冲突检测的回退,
+  // 与 planningStore.removePastSchedules 走的 UNKNOWN_SHOW_DURATION_MINUTES 保持一致。
+  if (showEntry?.movieId === 0) return UNKNOWN_SHOW_DURATION_MINUTES
+  return null
 }
 
 const formatWishItemTimeRange = (item) => formatShowTimeRange(item.time, getShowEntryDurationMinutes(item))
