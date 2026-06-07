@@ -30,7 +30,8 @@ class AutoUpdateScheduler:
         if self._scheduler is not None:
             return
         scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
-        scheduler.add_job(
+        # apscheduler 3.x 没有 type stubs, add_job 的 **trigger_args 被推断为 Unknown
+        scheduler.add_job(  # pyright: ignore[reportUnknownMemberType]
             self._run_all,
             trigger=CronTrigger(minute=0, timezone="Asia/Shanghai"),
             id="auto_update_movies_and_shows",

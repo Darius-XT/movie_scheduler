@@ -1,4 +1,10 @@
-"""手动抓取并保存调试样本。"""
+"""手动抓取并保存调试样本。
+
+本脚本是 service 的"调试反射": 故意调用 service / module 内部的私有抓取函数
+(以 `_` 开头),以便单独采集每个上游接口的原始响应,因此关掉 `reportPrivateUsage`
+误报。生产代码请走 service 的公开方法。
+"""
+# pyright: reportPrivateUsage=false
 
 from __future__ import annotations
 
