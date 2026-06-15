@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from typing import Literal, cast
 
 from movie_scheduler.config import config_manager
-from movie_scheduler.core.exceptions import AppError
+from movie_scheduler.core.exceptions import AppError, RepositoryError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.movie.update_base.service import (
+    BaseInfoUpdateStats,
     UpdateBaseProgressEvent,
     update_base_service,
 )
@@ -22,6 +23,7 @@ from movie_scheduler.features.movie.update_douban.service import (
 )
 from movie_scheduler.features.movie.update_extra.service import update_extra_service
 from movie_scheduler.features.show.service import show_service
+from movie_scheduler.shared.sse import stream_with_progress
 
 SelectionMode = Literal["showing", "upcoming", "all"]
 
@@ -64,11 +66,11 @@ class MovieService:
         self,
         city_id: int | None = None,
         progress_callback: Callable[[UpdateBaseProgressEvent], None] | None = None,
-    ) -> None:
-        """更新所有电影信息(增量): 基础列表 → 额外详情。"""
+    ) -> BaseInfoUpdateStats:
+        """更新所有电影信息(增量): 基础列表 → 额外详情。返回基础信息阶段的统计。"""
         normalized_city_id = self._normalize_city_id(city_id)
         logger.info("开始更新所有电影信息, city_id=%s", normalized_city_id)
-        await asyncio.to_thread(
+        stats = await asyncio.to_thread(
             update_base_service.update_all, normalized_city_id, progress_callback,
         )
         await update_extra_service.update_all(progress_callback=progress_callback)
@@ -77,6 +79,7 @@ class MovieService:
                 message="正在汇总电影更新结果", stage="finalizing_movie_update",
             ))
         logger.info("所有电影信息更新完成")
+        return stats
 
     async def refresh_all_movies(self) -> None:
         """定时任务入口: 更新电影信息(增量), 失败时只记日志不抛。
@@ -90,6 +93,34 @@ class MovieService:
             logger.info("电影定时更新完成")
         except Exception as error:  # noqa: BLE001
             logger.error("电影定时更新失败: %s", error)
+
+    async def stream_movie_update(self, city_id: int) -> AsyncIterator[str]:
+        """将电影更新过程编码为 SSE 文本帧。"""
+
+        async def run(push_progress: Callable[[dict[str, object]], None]) -> dict[str, object]:
+            def forward(event: UpdateBaseProgressEvent) -> None:
+                push_progress({
+                    "stage": event.stage,
+                    "message": event.message,
+                    "current": event.current,
+                    "total": event.total,
+                    "city_id": event.city_id,
+                    "page": event.page,
+                })
+
+            stats = await self.update_movies(city_id=city_id, progress_callback=forward)
+            # 与定时任务一致, 手动更新也刷一次 updated_at, 让 last_updated_at 反映本次完成
+            await asyncio.to_thread(movie_repository.touch_all_updated_at)
+            last_updated_at = await asyncio.to_thread(movie_repository.get_movies_last_updated_at)
+            return {
+                "added": stats.result_stats.added,
+                "updated": stats.result_stats.updated,
+                "removed": stats.result_stats.removed,
+                "last_updated_at": last_updated_at.isoformat() if last_updated_at else None,
+            }
+
+        async for frame in stream_with_progress(run, map_error=self._map_stream_error):
+            yield frame
 
     async def update_movie_douban(self, movie_id: int) -> DoubanMovieSupplement:
         """为单部电影抓取豆瓣评分与详情链接并持久化。"""
@@ -162,6 +193,13 @@ class MovieService:
         if normalized not in config_manager.city_mapping.values():
             raise AppError("city_id 不在当前支持的城市范围内", status_code=422)
         return normalized
+
+    def _map_stream_error(self, error: Exception) -> str:
+        if isinstance(error, AppError):
+            return error.message
+        if isinstance(error, RepositoryError):
+            return "数据库访问失败,请稍后重试"
+        return "更新失败,请稍后重试"
 
 
 movie_service = MovieService()

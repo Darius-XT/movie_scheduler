@@ -12,6 +12,21 @@ export const useShowCacheStore = defineStore('showCache', () => {
   const syncError = ref('')
   const moviePollingIds = ref(new Set())
 
+  // 手动「更新场次」按钮的统计 + 用时,只在内存里,不持久化(以后端 last_fetched_at 为权威)
+  const showsUpdateMeta = ref({ lastUpdatedAt: null, durationMs: null })
+  const showsUpdateResult = ref(null)
+
+  const recordShowUpdate = (result, durationMs, lastFetchedAtFromBackend) => {
+    showsUpdateResult.value = result
+    showsUpdateMeta.value = {
+      lastUpdatedAt: lastFetchedAtFromBackend || null,
+      durationMs,
+    }
+    if (lastFetchedAtFromBackend) {
+      lastFetchedAt.value = lastFetchedAtFromBackend
+    }
+  }
+
   // 后端 GET /api/shows 返回:
   // { movies: [{ movie_id, shows: [{cinema_id, cinema_name, date, time, price}, ...] }, ...],
   //   last_fetched_at: "..." | null }
@@ -133,6 +148,9 @@ export const useShowCacheStore = defineStore('showCache', () => {
     lastFetchedAt,
     syncing,
     syncError,
+    showsUpdateMeta,
+    showsUpdateResult,
+    recordShowUpdate,
     refreshFromBackend,
     refreshMovieFromBackend,
     pollMovieShowsUntilUpdated,

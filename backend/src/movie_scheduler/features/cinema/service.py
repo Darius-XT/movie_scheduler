@@ -17,6 +17,7 @@ from movie_scheduler.core.logging import logger
 from movie_scheduler.features.cinema.models import CinemaWriteData
 from movie_scheduler.features.cinema.repository import cinema_repository
 from movie_scheduler.features.cinema.schemas import CinemaUpdateResult, CinemaUpsertData
+from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -97,43 +98,21 @@ class CinemaService:
 
     async def stream_cinema_update(self, city_id: int) -> AsyncIterator[str]:
         """将影院更新过程编码为 SSE 文本帧。"""
-        event_queue: asyncio.Queue[dict[str, object] | None] = asyncio.Queue()
-        loop = asyncio.get_running_loop()
 
-        def push_progress(event: _CinemaUpdateProgressEvent) -> None:
-            payload: dict[str, object] = {
-                "type": "progress",
-                "stage": event.stage,
-                "message": event.message,
-                "city_id": event.city_id,
-                "page": event.page,
-            }
-            loop.call_soon_threadsafe(event_queue.put_nowait, payload)
+        async def run(push_progress: Callable[[dict[str, object]], None]) -> dict[str, object]:
+            def forward(event: _CinemaUpdateProgressEvent) -> None:
+                push_progress({
+                    "stage": event.stage,
+                    "message": event.message,
+                    "city_id": event.city_id,
+                    "page": event.page,
+                })
 
-        async def run_update() -> None:
-            try:
-                result = await self.update_cinemas(city_id=city_id, progress_callback=push_progress)
-                payload: dict[str, object] = {
-                    "type": "complete",
-                    "data": {"success_count": result.success_count, "failure_count": result.failure_count},
-                }
-                loop.call_soon_threadsafe(event_queue.put_nowait, payload)
-            except Exception as error:
-                error_payload: dict[str, object] = {"type": "error", "error": self._map_stream_error(error)}
-                loop.call_soon_threadsafe(event_queue.put_nowait, error_payload)
-            finally:
-                loop.call_soon_threadsafe(event_queue.put_nowait, None)
+            result = await self.update_cinemas(city_id=city_id, progress_callback=forward)
+            return {"success_count": result.success_count, "failure_count": result.failure_count}
 
-        task = asyncio.create_task(run_update())
-        try:
-            while True:
-                event = await event_queue.get()
-                if event is None:
-                    break
-                yield f"data: {json.dumps(event, ensure_ascii=False, separators=(',', ':'))}\n\n"
-        finally:
-            if not task.done():
-                task.cancel()
+        async for frame in stream_with_progress(run, map_error=self._map_stream_error):
+            yield frame
 
     # ---------- 内部: 抓取 + 落库 ----------
 

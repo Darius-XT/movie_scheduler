@@ -26,7 +26,7 @@
         <ScheduleBoard />
 
         <!-- 想看池 -->
-        <WishPool />
+        <WishPool :update-form="updateForm" />
 
         <!-- 电影列表 -->
         <div class="section-header">

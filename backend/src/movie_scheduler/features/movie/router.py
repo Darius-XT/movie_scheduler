@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from movie_scheduler.features.movie.schemas import (
     MovieDetailData,
@@ -55,6 +56,15 @@ async def get_movie_update_status() -> MovieUpdateStatusResponse:
         data=MovieUpdateStatusData(
             last_updated_at=last_updated_at.isoformat() if last_updated_at else None,
         ),
+    )
+
+
+@router.get("/movies/update-stream")
+async def update_movies_stream(city_id: int) -> StreamingResponse:
+    """以 SSE 方式流式返回电影更新进度(增量)。"""
+    return StreamingResponse(
+        movie_service.stream_movie_update(city_id=city_id),
+        media_type="text/event-stream",
     )
 
 

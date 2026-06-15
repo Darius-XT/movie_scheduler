@@ -35,4 +35,16 @@ export const streamCinemaUpdate = (cityId) =>
     { headers: { Accept: 'text/event-stream' } }
   )
 
+export const streamMovieUpdate = (cityId) =>
+  fetch(
+    `/api/movies/update-stream?city_id=${cityId}`,
+    { headers: { Accept: 'text/event-stream' } }
+  )
+
+export const streamShowUpdate = (cityId) =>
+  fetch(
+    `/api/shows/update-stream?city_id=${cityId}`,
+    { headers: { Accept: 'text/event-stream' } }
+  )
+
 export default api

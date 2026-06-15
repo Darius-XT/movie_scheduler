@@ -3,9 +3,6 @@
     <h3 class="section-title">
       <el-icon><Setting /></el-icon>
       <span>信息更新</span>
-      <span class="section-title-meta">
-        上次电影更新: {{ movieLastUpdatedAt ? formatIsoTimestamp(movieLastUpdatedAt) : '暂无' }}
-      </span>
     </h3>
     <el-form :model="updateForm" label-width="84px" size="default">
       <el-form-item label="选择城市">
@@ -26,37 +23,66 @@
       <el-form-item class="update-action-form-item">
         <div class="update-action-list">
           <div class="update-action-row">
-            <div class="update-action-meta update-action-meta--left">
+            <el-button
+              type="primary"
+              :loading="cinemaLoading"
+              :disabled="!updateForm.cityId"
+              class="update-action-button"
+              @click="handleUpdateCinema"
+            >
+              更新影院信息
+            </el-button>
+            <div class="update-action-meta update-action-meta--time">
               <span v-if="cinemaUpdateMeta.lastUpdatedAt">
                 <el-tooltip
                   :content="`更新用时 ${formatDurationMs(cinemaUpdateMeta.durationMs)}`"
                   placement="top"
                 >
                   <span class="update-meta-trigger">
-                    {{ formatUpdateTimestamp(cinemaUpdateMeta.lastUpdatedAt) }}
+                    {{ formatTimestamp(cinemaUpdateMeta.lastUpdatedAt) }}
                   </span>
                 </el-tooltip>
               </span>
               <span v-else>暂无更新记录</span>
             </div>
+            <div class="update-action-meta update-action-meta--stats">
+              {{ getCinemaUpdateSummary() }}
+            </div>
+          </div>
+
+          <div class="update-action-row">
             <el-button
               type="primary"
-              :loading="cinemaLoading"
+              :loading="movieLoading"
               :disabled="!updateForm.cityId"
-              @click="handleUpdateCinema"
-              style="width: 120px"
+              class="update-action-button"
+              @click="handleUpdateMovie"
             >
-              更新影院信息
+              更新电影信息
             </el-button>
-            <div class="update-action-meta update-action-meta--right">
-              {{ getCinemaUpdateSummary() }}
+            <div class="update-action-meta update-action-meta--time">
+              <span v-if="movieLastUpdatedAt">
+                <el-tooltip
+                  v-if="movieUpdateMeta.durationMs"
+                  :content="`更新用时 ${formatDurationMs(movieUpdateMeta.durationMs)}`"
+                  placement="top"
+                >
+                  <span class="update-meta-trigger">
+                    {{ formatTimestamp(movieLastUpdatedAt) }}
+                  </span>
+                </el-tooltip>
+                <span v-else>{{ formatTimestamp(movieLastUpdatedAt) }}</span>
+              </span>
+              <span v-else>暂无更新记录</span>
+            </div>
+            <div class="update-action-meta update-action-meta--stats">
+              {{ getMovieUpdateSummary() }}
             </div>
           </div>
         </div>
       </el-form-item>
     </el-form>
 
-    <!-- 影院更新进度 -->
     <div v-if="cinemaUpdateProgress" class="update-results">
       <el-divider style="margin: 12px 0" />
       <div class="fetch-progress">
@@ -66,15 +92,26 @@
         </div>
       </div>
     </div>
+
+    <div v-if="movieUpdateProgress" class="update-results">
+      <el-divider style="margin: 12px 0" />
+      <div class="fetch-progress">
+        <div class="progress-content">
+          <div class="progress-label">电影更新进度</div>
+          <div class="progress-text">{{ movieUpdateProgress }}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { streamCinemaUpdate } from '@/api'
+import { streamCinemaUpdate, streamMovieUpdate } from '@/api'
+import { readSseStream } from '@/api/sseStream'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { Setting } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
 const props = defineProps({
   cities: {
@@ -91,15 +128,24 @@ const store = useScheduleStore()
 
 const cinemaLoading = ref(false)
 const cinemaUpdateProgress = ref('')
+const movieLoading = ref(false)
+const movieUpdateProgress = ref('')
 
 const cinemaResult = computed(() => store.cinemaUpdateResult)
 const cinemaUpdateMeta = computed(() => store.cinemaUpdateMeta)
+const movieResult = computed(() => store.movieUpdateResult)
+const movieUpdateMeta = computed(() => store.movieUpdateMeta)
 const movieLastUpdatedAt = computed(() => store.movieLastUpdatedAt)
 
-const formatUpdateTimestamp = (timestamp) => {
-  if (!timestamp) return '暂无'
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return '暂无'
+onMounted(() => {
+  // 拉一次后端定时任务的最新时间戳, 让首次进入页面就能显示
+  void store.refreshMovieStatus()
+})
+
+const formatTimestamp = (raw) => {
+  if (raw == null) return '暂无'
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return String(raw)
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -107,13 +153,6 @@ const formatUpdateTimestamp = (timestamp) => {
   const minutes = String(date.getMinutes()).padStart(2, '0')
   const seconds = String(date.getSeconds()).padStart(2, '0')
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
-}
-
-const formatIsoTimestamp = (raw) => {
-  if (!raw) return '暂无'
-  // 后端返回的是北京时间 isoformat (无时区),直接当本地时间格式化
-  const cleaned = String(raw).replace('T', ' ')
-  return cleaned.length >= 19 ? cleaned.slice(0, 19) : cleaned
 }
 
 const formatDurationMs = (durationMs) => {
@@ -130,23 +169,9 @@ const getCinemaUpdateSummary = () => {
   return `成功 ${cinemaResult.value.success_count} / 失败 ${cinemaResult.value.failure_count}`
 }
 
-const readSseStream = async (response, onData) => {
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() || ''
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const data = JSON.parse(line.substring(6))
-      onData(data)
-    }
-  }
+const getMovieUpdateSummary = () => {
+  if (!movieResult.value) return '暂无结果'
+  return `新增 ${movieResult.value.added} / 更新 ${movieResult.value.updated} / 删除 ${movieResult.value.removed}`
 }
 
 const handleUpdateCinema = async () => {
@@ -157,7 +182,6 @@ const handleUpdateCinema = async () => {
   try {
     const response = await streamCinemaUpdate(props.updateForm.cityId)
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    if (!response.body) throw new Error('未收到更新响应流')
 
     await readSseStream(response, (data) => {
       if (data.type === 'progress') {
@@ -180,6 +204,41 @@ const handleUpdateCinema = async () => {
       cinemaUpdateProgress.value = ''
     }
     cinemaLoading.value = false
+  }
+}
+
+const handleUpdateMovie = async () => {
+  movieLoading.value = true
+  movieUpdateProgress.value = ''
+  const startedAt = Date.now()
+  let succeeded = false
+  try {
+    const response = await streamMovieUpdate(props.updateForm.cityId)
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+
+    await readSseStream(response, (data) => {
+      if (data.type === 'progress') {
+        movieUpdateProgress.value = data.message || '正在更新电影信息'
+      } else if (data.type === 'complete') {
+        const { added, updated, removed, last_updated_at } = data.data || {}
+        store.recordMovieUpdate({ added, updated, removed }, Date.now() - startedAt, last_updated_at)
+        movieUpdateProgress.value = '电影信息更新完成'
+        succeeded = true
+        ElMessage.success('电影信息更新成功')
+      } else if (data.type === 'error') {
+        movieUpdateProgress.value = ''
+        ElMessage.error('更新失败: ' + data.error)
+      }
+    })
+  } catch (error) {
+    ElMessage.error('更新失败: ' + error.message)
+  } finally {
+    if (succeeded) {
+      window.setTimeout(() => { movieUpdateProgress.value = '' }, 1200)
+    } else {
+      movieUpdateProgress.value = ''
+    }
+    movieLoading.value = false
   }
 }
 </script>
@@ -210,14 +269,6 @@ const handleUpdateCinema = async () => {
   width: 100%;
   justify-content: flex-start;
   flex-wrap: wrap;
-}
-
-.section-title-meta {
-  margin-left: 4px;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 400;
-  white-space: nowrap;
 }
 
 .info-update-section :deep(.el-form-item) {
@@ -254,10 +305,14 @@ const handleUpdateCinema = async () => {
 
 .update-action-row {
   display: grid;
-  grid-template-columns: max-content auto minmax(0, 1fr);
+  grid-template-columns: 120px max-content minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   width: 100%;
+}
+
+.update-action-button {
+  width: 120px;
 }
 
 .update-action-meta {
@@ -268,13 +323,11 @@ const handleUpdateCinema = async () => {
   white-space: nowrap;
 }
 
-.update-action-meta--left {
-  width: 110px;
-  flex: 0 0 110px;
-  text-align: left;
+.update-action-meta--time {
+  width: 150px;
 }
 
-.update-action-meta--right {
+.update-action-meta--stats {
   color: #409eff;
 }
 

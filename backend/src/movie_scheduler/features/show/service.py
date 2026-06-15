@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TypedDict, cast
@@ -28,6 +28,7 @@ from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.show.models import MovieShowWriteData
 from movie_scheduler.features.show.repository import movie_show_repository
+from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -35,6 +36,26 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # =============================================================================
 # 内部数据结构
 # =============================================================================
+
+@dataclass(slots=True)
+class ShowUpdateProgressEvent:
+    """场次更新过程中向 SSE 推送的进度事件。"""
+
+    message: str
+    stage: str
+    current: int | None = None
+    total: int | None = None
+    city_id: int | None = None
+
+
+@dataclass(slots=True)
+class ShowUpdateStats:
+    """场次更新结果(对外暴露)。"""
+
+    added: int
+    removed: int
+    movies_with_shows: int
+
 
 @dataclass(slots=True)
 class _FetchedShowItem:
@@ -184,24 +205,79 @@ class ShowService:
 
     # ---------- 对外: 定时抓取 + 单片抓取 ----------
 
-    async def refresh_wished_movie_shows(self, city_id: int | None = None) -> int:
-        """抓取所有想看电影的场次并写入数据库,返回有场次的电影数。"""
+    async def refresh_wished_movie_shows(
+        self,
+        city_id: int | None = None,
+        progress_callback: Callable[[ShowUpdateProgressEvent], None] | None = None,
+    ) -> ShowUpdateStats:
+        """抓取所有想看电影的场次并写入数据库,返回新增/删除场次统计与有场次的电影数。"""
         normalized_city_id = self._normalize_city_id(city_id)
         wished_movies = await asyncio.to_thread(movie_repository.list_wished_movies)
         movie_ids = [int(mid) for m in wished_movies if (mid := cast(int | None, getattr(m, "id", None))) is not None]
 
         if not movie_ids:
             logger.info("场次定时抓取:想看列表为空,跳过")
-            return 0
+            if progress_callback is not None:
+                progress_callback(ShowUpdateProgressEvent(
+                    message="想看列表为空,无需抓取场次",
+                    stage="empty_wishlist",
+                    city_id=normalized_city_id,
+                ))
+            return ShowUpdateStats(added=0, removed=0, movies_with_shows=0)
 
         try:
+            if progress_callback is not None:
+                progress_callback(ShowUpdateProgressEvent(
+                    message=f"开始抓取 {len(movie_ids)} 部想看电影的场次",
+                    stage="fetching_shows",
+                    total=len(movie_ids),
+                    city_id=normalized_city_id,
+                ))
             results = await self._fetch_shows_for_selected_movies(movie_ids, city_id=normalized_city_id)
-            success_count = await self._persist_results(movie_ids, results)
-            logger.info("场次定时抓取完成: %s/%s 部电影有场次", success_count, len(movie_ids))
-            return success_count
+
+            if progress_callback is not None:
+                progress_callback(ShowUpdateProgressEvent(
+                    message="正在写入数据库", stage="persisting_shows",
+                    city_id=normalized_city_id,
+                ))
+            stats = await self._persist_results(movie_ids, results)
+            logger.info(
+                "场次定时抓取完成: %s/%s 部电影有场次, 新增 %s 场, 删除 %s 场",
+                stats.movies_with_shows, len(movie_ids), stats.added, stats.removed,
+            )
+            return stats
         except Exception as error:
             logger.error("场次定时抓取失败: %s", error)
-            return 0
+            raise
+
+    async def stream_show_update(self, city_id: int) -> AsyncIterator[str]:
+        """将场次更新过程编码为 SSE 文本帧。"""
+
+        async def run(push_progress: Callable[[dict[str, object]], None]) -> dict[str, object]:
+            def forward(event: ShowUpdateProgressEvent) -> None:
+                push_progress({
+                    "stage": event.stage,
+                    "message": event.message,
+                    "current": event.current,
+                    "total": event.total,
+                    "city_id": event.city_id,
+                })
+
+            stats = await self.refresh_wished_movie_shows(
+                city_id=city_id, progress_callback=forward,
+            )
+            wished_movies = await asyncio.to_thread(movie_repository.list_wished_movies)
+            movie_ids = [int(mid) for m in wished_movies if (mid := cast(int | None, getattr(m, "id", None))) is not None]
+            last_fetched_at = await asyncio.to_thread(movie_repository.get_latest_shows_updated_at, movie_ids)
+            return {
+                "added": stats.added,
+                "removed": stats.removed,
+                "movies_with_shows": stats.movies_with_shows,
+                "last_fetched_at": self._serialize_datetime(last_fetched_at),
+            }
+
+        async for frame in stream_with_progress(run, map_error=self._map_stream_error):
+            yield frame
 
     async def refresh_movie_shows(self, movie_id: int, city_id: int | None = None) -> int:
         """抓取单部想看电影的场次并写入数据库。"""
@@ -217,9 +293,9 @@ class ShowService:
 
         try:
             results = await self._fetch_shows_for_selected_movies([movie_id], city_id=normalized_city_id)
-            success_count = await self._persist_results([movie_id], results)
-            logger.info("单片场次抓取完成: 电影 %s, 成功数 %s", movie_id, success_count)
-            return success_count
+            stats = await self._persist_results([movie_id], results)
+            logger.info("单片场次抓取完成: 电影 %s, 成功数 %s", movie_id, stats.movies_with_shows)
+            return stats.movies_with_shows
         except Exception as error:
             logger.error("单片场次抓取失败,电影 %s: %s", movie_id, error)
             return 0
@@ -612,12 +688,16 @@ class ShowService:
         self,
         movie_ids: list[int],
         results: list[_FinalMovieShowData],
-    ) -> int:
+    ) -> ShowUpdateStats:
         results_by_movie: dict[int, _FinalMovieShowData] = {r.movie_id: r for r in results}
-        success_count = 0
+        added_total = 0
+        removed_total = 0
+        movies_with_shows = 0
         for movie_id in movie_ids:
+            existing_keys = await asyncio.to_thread(self._collect_existing_show_keys, movie_id)
             if not await self._is_movie_wished(movie_id):
                 await asyncio.to_thread(movie_show_repository.delete_for_movie, movie_id)
+                removed_total += len(existing_keys)
                 continue
             result = results_by_movie.get(movie_id)
             shows: list[MovieShowWriteData] = []
@@ -632,11 +712,23 @@ class ShowService:
                             "time": show.time,
                             "price": show.price,
                         })
+            new_keys = {(s["cinema_id"], s["date"], s["time"]) for s in shows}
+            added_total += len(new_keys - existing_keys)
+            removed_total += len(existing_keys - new_keys)
             await asyncio.to_thread(movie_show_repository.replace_for_movie, movie_id, shows)
             await asyncio.to_thread(movie_repository.touch_shows_updated_at, movie_id)
             if shows:
-                success_count += 1
-        return success_count
+                movies_with_shows += 1
+        return ShowUpdateStats(
+            added=added_total, removed=removed_total, movies_with_shows=movies_with_shows,
+        )
+
+    def _collect_existing_show_keys(self, movie_id: int) -> set[tuple[int, str, str]]:
+        existing = movie_show_repository.list_for_movies([movie_id])
+        return {
+            (int(getattr(s, "cinema_id")), str(getattr(s, "date")), str(getattr(s, "time")))
+            for s in existing
+        }
 
     async def _is_movie_wished(self, movie_id: int) -> bool:
         movie = await asyncio.to_thread(movie_repository.get_movie_by_id, movie_id)
@@ -672,6 +764,13 @@ class ShowService:
 
     def _serialize_datetime(self, value: datetime | None) -> str | None:
         return value.isoformat() if value else None
+
+    def _map_stream_error(self, error: Exception) -> str:
+        if isinstance(error, AppError):
+            return error.message
+        if isinstance(error, RepositoryError):
+            return "数据库访问失败,请稍后重试"
+        return "更新失败,请稍后重试"
 
 
 show_service = ShowService()
