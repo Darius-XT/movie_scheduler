@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any, cast
@@ -11,22 +12,17 @@ from typing import Any, cast
 import requests
 import urllib3
 
+from movie_scheduler.config import config_manager
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.movie.update_base.service import UpdateBaseProgressEvent
+from movie_scheduler.shared.maoyan import build_maoyan_mobile_headers
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-_EXTRA_API_BASE = "https://apis.netstart.cn/maoyan/movie/intro"
+_EXTRA_PAGE_BASE = "https://www.maoyan.com/films"
 _EXTRA_API_TIMEOUT = 30
-_EXTRA_REQUEST_HEADERS = {
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-    "Referer": "https://www.maoyan.com/",
-    "Origin": "https://www.maoyan.com",
-}
 
 
 @dataclass(slots=True)
@@ -107,40 +103,83 @@ class UpdateExtraService:
     # ---------- 内部: 抓取 + 解析 ----------
 
     def _fetch_details(self, movie_id: int) -> _MovieExtraInfo | None:
-        json_content = self._http_get(movie_id)
-        if json_content is None:
+        html_content = self._http_get(movie_id)
+        if html_content is None:
             return None
-        return self._parse(json_content)
+        return self._parse(html_content)
 
     def _http_get(self, movie_id: int) -> str | None:
-        url = f"{_EXTRA_API_BASE}?movieId={movie_id}"
+        url = f"{_EXTRA_PAGE_BASE}/{movie_id}"
         try:
-            response = requests.get(url, headers=_EXTRA_REQUEST_HEADERS, timeout=_EXTRA_API_TIMEOUT, verify=False)
+            response = requests.get(
+                url,
+                headers=build_maoyan_mobile_headers(city_id=config_manager.city_id, hot_movie_ids=[movie_id]),
+                timeout=_EXTRA_API_TIMEOUT,
+                verify=False,
+            )
             if response.status_code == 200:
                 return response.text
             logger.error(
-                "获取电影详情请求失败: status=%s, url=%s, response=%s",
+                "获取电影详情页面失败: status=%s, url=%s, response=%s",
                 response.status_code, url, response.text[:1000],
             )
             return None
         except Exception as error:
-            logger.error("获取电影详情异常: url=%s, error=%s", url, error, exc_info=True)
+            logger.error("获取电影详情页面异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
-    def _parse(self, json_content: str) -> _MovieExtraInfo | None:
+    def _parse(self, html_content: str) -> _MovieExtraInfo | None:
         try:
-            if not json_content or not json_content.strip():
+            if not html_content or not html_content.strip() or "猫眼验证中心" in html_content:
                 return None
-            data = json.loads(json_content)
-            if not data or "data" not in data or "movie" not in data["data"]:
+            movie_data = self._extract_embedded_movie(html_content)
+            if movie_data is None:
                 return None
-            return self._extract(data["data"]["movie"])
-        except json.JSONDecodeError as error:
-            logger.error("电影详情 JSON 解析失败: %s", error)
-            return None
+            return self._extract(movie_data)
         except Exception as error:
             logger.error("解析电影详情失败: %s", error)
             return None
+
+    def _extract_embedded_movie(self, html_content: str) -> dict[str, Any] | None:
+        match = re.search(r'"movie"\s*:\s*\{', html_content)
+        if match is None:
+            return None
+        start = html_content.find("{", match.start())
+        raw_json = self._slice_json_object(html_content, start)
+        if raw_json is None:
+            return None
+        try:
+            parsed = json.loads(raw_json)
+            return cast(dict[str, Any], parsed) if isinstance(parsed, dict) else None
+        except json.JSONDecodeError as error:
+            logger.error("电影详情嵌入 JSON 解析失败: %s", error)
+            return None
+
+    def _slice_json_object(self, content: str, start: int) -> str | None:
+        if start < 0 or start >= len(content) or content[start] != "{":
+            return None
+        depth = 0
+        in_string = False
+        escaped = False
+        for index in range(start, len(content)):
+            char = content[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return content[start:index + 1]
+        return None
 
     def _extract(self, movie_data: dict[str, Any]) -> _MovieExtraInfo | None:
         try:
@@ -149,7 +188,7 @@ class UpdateExtraService:
                 language = language.lstrip(",").replace(",", "、")
             language = self._normalize_field(language, "暂无语言")
 
-            director = self._normalize_field(movie_data.get("dir"), "暂无导演")
+            director = self._normalize_field(movie_data.get("dir") or movie_data.get("director"), "暂无导演")
 
             duration = movie_data.get("dur")
             if duration is None or duration == 0:

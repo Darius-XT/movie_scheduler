@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+ARG PYTHON_BASE_IMAGE=public.ecr.aws/docker/library/python:3.11-slim
+FROM ${PYTHON_BASE_IMAGE}
 
 WORKDIR /app
 
@@ -11,6 +12,7 @@ RUN pip install --no-cache-dir \
     "beautifulsoup4>=4.13.5" \
     "colorlog>=6.8.0" \
     "fastapi>=0.121.3" \
+    "fonttools>=4.63.0" \
     "pydantic>=2.0.0" \
     "requests>=2.31.0" \
     "sqlalchemy>=2.0.0" \

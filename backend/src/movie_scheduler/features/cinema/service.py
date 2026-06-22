@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import re
 from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass
-from typing import TypedDict, cast
+from typing import cast
 
 import requests
 import urllib3
+from bs4 import BeautifulSoup
+from bs4.element import Tag
 
 from movie_scheduler.config import config_manager
 from movie_scheduler.core.exceptions import AppError, RepositoryError
@@ -17,6 +19,7 @@ from movie_scheduler.core.logging import logger
 from movie_scheduler.features.cinema.models import CinemaWriteData
 from movie_scheduler.features.cinema.repository import cinema_repository
 from movie_scheduler.features.cinema.schemas import CinemaUpdateResult, CinemaUpsertData
+from movie_scheduler.shared.maoyan import build_maoyan_web_headers, decode_maoyan_stonefont_text
 from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -32,52 +35,16 @@ class _CinemaUpdateProgressEvent:
     page: int | None = None
 
 
-class _FirstPageCinemaInfo(TypedDict, total=False):
-    name: str
-    address: str
-    price: str | int | float
-    tags: list[str]
-
-
-class _FirstPageCinemaData(TypedDict, total=False):
-    id: int
-    info: _FirstPageCinemaInfo
-
-
-class _OtherPageCinemaData(TypedDict, total=False):
-    id: int
-    nm: str
-    addr: str
-    sellPrice: str | int | float
-    allowRefund: int | bool
-    endorse: int | bool
-
-
-class _OtherPagePayload(TypedDict, total=False):
-    total: int
-    cinemas: list[_OtherPageCinemaData]
-
-
-_CINEMA_REQUEST_HEADERS = {
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-    ),
-    "Referer": "https://www.maoyan.com/",
-    "Origin": "https://www.maoyan.com",
-}
-
-_CINEMA_API_BASE = "https://apis.netstart.cn/maoyan/search/cinemas"
+_CINEMA_PAGE_BASE = "https://www.maoyan.com/cinemas"
 _CINEMA_API_TIMEOUT = 30
+_CINEMA_PAGE_SIZE = 12
 
 
 class CinemaService:
     """聚合影院抓取与更新能力(原 update/cinema 子领域整体并入)。"""
 
     def __init__(self) -> None:
-        self.session_url = _CINEMA_API_BASE
+        self.session_url = _CINEMA_PAGE_BASE
         self.timeout = _CINEMA_API_TIMEOUT
 
     # ---------- 对外: 同步入口 ----------
@@ -148,14 +115,17 @@ class CinemaService:
             if result is None:
                 logger.warning("获取第 %s 页影院数据失败,结束抓取", page)
                 break
-            cinemas_data, is_expected_empty = result
-            if is_expected_empty:
-                logger.debug("影院数据抓取完毕,共 %s 页", page - 1)
-                break
+            cinemas_data, is_last_page = result
             if not cinemas_data:
+                if is_last_page:
+                    logger.debug("影院数据抓取完毕,共 %s 页", page - 1)
+                    break
                 logger.error("第 %s 页未解析到影院数据,结束抓取", page)
                 break
             all_cinemas.extend(cinemas_data)
+            if is_last_page:
+                logger.debug("影院数据抓取完毕,共 %s 页", page)
+                break
             page += 1
         if all_cinemas:
             logger.info("成功解析到 %s 家影院数据,共 %s 页", len(all_cinemas), page - 1)
@@ -192,11 +162,16 @@ class CinemaService:
         return self._parse_page(raw_content)
 
     def _http_get(self, city_id: int, page: int) -> str | None:
-        offset = (page - 1) * 20
-        url = f"{self.session_url}?keyword=影&ci={city_id}&offset={offset}"
+        offset = (page - 1) * _CINEMA_PAGE_SIZE
+        url = self.session_url if offset == 0 else f"{self.session_url}?offset={offset}"
         try:
             logger.debug("开始获取影院数据: page=%s, offset=%s, url=%s", page, offset, url)
-            response = requests.get(url, headers=_CINEMA_REQUEST_HEADERS, timeout=self.timeout, verify=False)
+            response = requests.get(
+                url,
+                headers=build_maoyan_web_headers(city_id),
+                timeout=self.timeout,
+                verify=False,
+            )
             logger.debug("响应状态码: %s, 长度: %s 字符", response.status_code, len(response.text))
             if response.status_code == 200:
                 return response.text
@@ -209,81 +184,73 @@ class CinemaService:
             logger.error("获取影院数据异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
-    def _parse_page(self, json_content: str) -> tuple[list[CinemaUpsertData], bool]:
+    def _parse_page(self, html_content: str) -> tuple[list[CinemaUpsertData], bool]:
         try:
-            logger.debug("解析影院 JSON 内容")
-            if not json_content or not json_content.strip():
-                return [], False
-
-            parsed = json.loads(json_content)
-            if not parsed:
+            logger.debug("解析影院 HTML 内容")
+            if not html_content or not html_content.strip() or "猫眼验证中心" in html_content:
                 return [], False
 
             cinemas: list[CinemaUpsertData] = []
-            if isinstance(parsed, list):
-                for cinema_data in cast(list[_FirstPageCinemaData], parsed):
-                    cinema = self._extract_first_page_cinema(cinema_data)
-                    if cinema is not None:
-                        cinemas.append(cinema)
-                return cinemas, False
-
-            if isinstance(parsed, dict) and "cinemas" in parsed:
-                payload = cast(_OtherPagePayload, parsed)
-                if payload.get("total") == 0:
-                    logger.debug("检测到 total 为 0,这是预期中的空页")
-                    return [], True
-                for cinema_data in payload.get("cinemas", []):
-                    cinema = self._extract_other_page_cinema(cinema_data)
-                    if cinema is not None:
-                        cinemas.append(cinema)
-                return cinemas, False
-
-            logger.warning("未知的影院 JSON 结构")
-            return [], False
-        except json.JSONDecodeError as error:
-            logger.error("解析 JSON 失败: %s", error)
-            return [], False
+            soup = BeautifulSoup(html_content, "html.parser")
+            for cell in soup.select(".cinema-cell"):
+                if isinstance(cell, Tag) and (cinema := self._extract_cinema_cell(cell, html_content)) is not None:
+                    cinemas.append(cinema)
+            return cinemas, not self._has_next_page(soup)
         except Exception as error:
             logger.error("解析影院列表失败: %s", error)
             return [], False
 
-    def _extract_first_page_cinema(self, cinema_data: _FirstPageCinemaData) -> CinemaUpsertData | None:
+    def _extract_cinema_cell(self, cell: Tag, html_content: str) -> CinemaUpsertData | None:
         try:
-            info = cinema_data.get("info", {})
-            price = info.get("price", "0")
-            normalized_price = "暂无票价"
-            if price and price != "0" and (not isinstance(price, str) or price.strip()):
-                normalized_price = str(price)
-            tags = info.get("tags", [])
+            name_node = cell.select_one(".cinema-name")
+            if not isinstance(name_node, Tag):
+                return None
+            tags = [tag.get_text(" ", strip=True) for tag in cell.select(".cinema-tags-item")]
             return CinemaUpsertData(
-                id=cinema_data.get("id"),
-                name=str(info.get("name") or "暂无名称"),
-                address=str(info.get("address") or "暂无地址"),
-                price=normalized_price,
+                id=self._extract_cinema_id(name_node),
+                name=name_node.get_text(" ", strip=True) or "暂无名称",
+                address=self._extract_cinema_address(cell),
+                price=self._extract_cinema_price(cell, html_content),
                 allow_refund="退" in tags,
                 allow_endorse="改签" in tags,
             )
         except Exception as error:
-            logger.error("解析首页影院数据失败: %s", error)
+            logger.error("解析影院 HTML 单元失败: %s", error)
             return None
 
-    def _extract_other_page_cinema(self, cinema_data: _OtherPageCinemaData) -> CinemaUpsertData | None:
-        try:
-            price = cinema_data.get("sellPrice", "0")
-            normalized_price = "暂无票价"
-            if price and price != "0" and (not isinstance(price, str) or price.strip()):
-                normalized_price = str(price)
-            return CinemaUpsertData(
-                id=cinema_data.get("id"),
-                name=str(cinema_data.get("nm") or "暂无名称"),
-                address=str(cinema_data.get("addr") or "暂无地址"),
-                price=normalized_price,
-                allow_refund=bool(cinema_data.get("allowRefund", 0)),
-                allow_endorse=bool(cinema_data.get("endorse", 0)),
-            )
-        except Exception as error:
-            logger.error("解析后续页影院数据失败: %s", error)
-            return None
+    def _extract_cinema_id(self, node: Tag) -> int | None:
+        for attr_name in ("data-val", "href"):
+            raw_value = node.get(attr_name)
+            if not isinstance(raw_value, str):
+                continue
+            match = re.search(r"cinema_id\s*:\s*(\d+)|/cinema/(\d+)", raw_value)
+            if match is not None:
+                return int(match.group(1) or match.group(2))
+        return None
+
+    def _extract_cinema_address(self, cell: Tag) -> str:
+        address_node = cell.select_one(".cinema-address")
+        if not isinstance(address_node, Tag):
+            return "暂无地址"
+        address = address_node.get_text(" ", strip=True).removeprefix("地址：").strip()
+        return address or "暂无地址"
+
+    def _extract_cinema_price(self, cell: Tag, html_content: str) -> str:
+        price_node = cell.select_one(".price-num")
+        if not isinstance(price_node, Tag):
+            return "暂无票价"
+        price = price_node.get_text(" ", strip=True)
+        decoded = decode_maoyan_stonefont_text(html_content, price)
+        if decoded is not None:
+            price = decoded.strip()
+        return price if re.fullmatch(r"\d+(?:\.\d+)?", price) else "暂无票价"
+
+    def _has_next_page(self, soup: BeautifulSoup) -> bool:
+        for link in soup.select(".list-pager a"):
+            href = link.get("href") if isinstance(link, Tag) else None
+            if isinstance(href, str) and "offset=" in href and "下一页" in link.get_text(" ", strip=True):
+                return True
+        return False
 
     # ---------- 内部: 工具 ----------
 

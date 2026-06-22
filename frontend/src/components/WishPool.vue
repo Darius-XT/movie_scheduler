@@ -197,7 +197,7 @@
           </div>
           <template v-if="!group.hasShows">
             <div class="wish-pool-group-empty">
-              暂无场次,等待下一次自动抓取
+              {{ group.isLoading ? '正在抓取场次...' : '暂无场次,等待下一次自动抓取' }}
             </div>
           </template>
           <template v-else>
@@ -526,6 +526,11 @@ const handleAddToSchedule = (showEntry) => {
   ElMessage.success(`已将《${showEntry.movieTitle}》加入行程`)
 }
 
+const isMovieShowsLoading = (movieId) => {
+  const isPolling = store.isMovieShowsPolling
+  return typeof isPolling === 'function' ? isPolling(movieId) : false
+}
+
 const groupedWishMovies = computed(() => {
   return store.wishMovies.map((movie) => {
     const allEntries = buildShowEntries(movie)
@@ -534,6 +539,7 @@ const groupedWishMovies = computed(() => {
       movieId: movie.id,
       movieTitle: movie.title,
       movie,
+      isLoading: isMovieShowsLoading(movie.id),
       hasShows: allEntries.length > 0,
       items: filteredByWeek.sort((a, b) => {
         const aKey = `${a.date} ${a.time}`

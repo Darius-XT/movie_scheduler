@@ -36,6 +36,7 @@ class ConfigManager:
         self.port = 8000
         self.cors_origins = ["*"]
         self.douban_api_base_url = "http://localhost:8085"
+        self.maoyan_cookie = ""
         self.database_url = f"sqlite:///{self.db_path}"
 
     def reload_from_env(self) -> None:
@@ -53,6 +54,7 @@ class ConfigManager:
         self.port = self._get_int("MOVIE_SCHEDULER_PORT", self.port)
         self.cors_origins = self._get_json_list("MOVIE_SCHEDULER_CORS_ORIGINS", self.cors_origins)
         self.douban_api_base_url = self._get_url("MOVIE_SCHEDULER_DOUBAN_API_BASE_URL", self.douban_api_base_url)
+        self.maoyan_cookie = self._get_str("MOVIE_SCHEDULER_MAOYAN_COOKIE", self.maoyan_cookie)
         self.database_url = f"sqlite:///{self.db_path}"
 
     def ensure_runtime_dirs(self) -> None:

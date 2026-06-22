@@ -2,8 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getShows } from '@/api'
 
-const MOVIE_SHOW_POLL_INTERVAL_MS = 10_000
-const MOVIE_SHOW_POLL_MAX_ATTEMPTS = 18
+const MOVIE_SHOW_POLL_INTERVAL_MS = 15_000
+const MOVIE_SHOW_POLL_MAX_ATTEMPTS = 40
 
 export const useShowCacheStore = defineStore('showCache', () => {
   const movieShowsMap = ref(new Map())
@@ -93,8 +93,7 @@ export const useShowCacheStore = defineStore('showCache', () => {
       for (let attempt = 0; attempt < MOVIE_SHOW_POLL_MAX_ATTEMPTS; attempt += 1) {
         await wait(MOVIE_SHOW_POLL_INTERVAL_MS)
         const data = await refreshMovieFromBackend(movieId)
-        const movies = data.movies || []
-        if (movies.length === 0 || data.last_fetched_at) return
+        if (data.last_fetched_at) return
       }
     } catch {
       // 错误已写入 syncError,由页面统一展示。
@@ -143,6 +142,8 @@ export const useShowCacheStore = defineStore('showCache', () => {
     return !!(data && data.cinemas && data.cinemas.length > 0)
   }
 
+  const isMovieShowsPolling = (movieId) => moviePollingIds.value.has(movieId)
+
   return {
     movieShowsMap,
     lastFetchedAt,
@@ -157,5 +158,6 @@ export const useShowCacheStore = defineStore('showCache', () => {
     removeMovieShows,
     getMovieShowsData,
     hasMovieShowsData,
+    isMovieShowsPolling,
   }
 })

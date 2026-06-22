@@ -132,6 +132,7 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 | `MOVIE_SCHEDULER_YEAR_THRESHOLD` | 电影年份筛选阈值 |
 | `MOVIE_SCHEDULER_TIMEOUT` | 外部请求超时时间,单位秒 |
 | `MOVIE_SCHEDULER_DOUBAN_API_BASE_URL` | 豆瓣信息补充服务的基础 URL;读取时会移除末尾 `/` |
+| `MOVIE_SCHEDULER_MAOYAN_COOKIE` | 可选猫眼浏览器 Cookie;场次抓取时会自动替换 `hotMovieIds` 与 `old-moviepage-ci` |
 | `MOVIE_SCHEDULER_HOST` / `MOVIE_SCHEDULER_PORT` | 后端监听地址与端口 |
 | `MOVIE_SCHEDULER_CORS_ORIGINS` | CORS 允许来源 JSON 数组 |
 

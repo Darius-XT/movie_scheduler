@@ -64,6 +64,7 @@ export const useScheduleStore = defineStore('schedule', () => {
     removeMovieShows: showCacheStore.removeMovieShows,
     getMovieShowsData: showCacheStore.getMovieShowsData,
     hasMovieShowsData: showCacheStore.hasMovieShowsData,
+    isMovieShowsPolling: showCacheStore.isMovieShowsPolling,
     recordShowUpdate: showCacheStore.recordShowUpdate,
     isInWishMovies: movieSelectionStore.isInWishMovies,
     addToWishMovies: movieSelectionStore.addToWishMovies,

@@ -6,7 +6,6 @@ import re
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
-from http.cookiejar import Cookie, CookieJar
 from typing import Any, cast
 
 import requests
@@ -16,6 +15,7 @@ from movie_scheduler.config import config_manager
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
+from movie_scheduler.shared.maoyan import build_maoyan_web_headers
 
 _BEIJING_TZ = timezone(timedelta(hours=8))
 
@@ -77,29 +77,10 @@ class BaseInfoUpdateStats:
     result_stats: BaseInfoResultStats
 
 
-_DEFAULT_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Encoding": "gzip, deflate",
-    "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Connection": "keep-alive",
-    "Host": "www.maoyan.com",
-    "sec-ch-ua": '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"macOS"',
-    "sec-fetch-dest": "document",
-    "sec-fetch-mode": "navigate",
-    "sec-fetch-site": "none",
-    "sec-fetch-user": "?1",
-    "upgrade-insecure-requests": "1",
-    "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
-}
-
-
 class UpdateBaseService:
     """抓取猫眼电影列表并执行增量更新。"""
 
     def __init__(self) -> None:
-        self.headers = _DEFAULT_HEADERS.copy()
         self.session = requests.Session()
         self._warmed_up = False
         self._current_city_id: int | None = None
@@ -121,12 +102,16 @@ class UpdateBaseService:
         existing_movie_ids = {cast(int, m.id) for m in movie_repository.get_all_movies()}
         logger.debug("数据库当前有 %s 部电影", len(existing_movie_ids))
 
-        all_scraped, showing_ids = self._scrape_all_movies(city_id, progress_callback)
+        all_scraped, showing_ids, scrape_succeeded = self._scrape_all_movies(city_id, progress_callback)
         for movie in all_scraped:
             movie.is_showing = movie.id in showing_ids
 
         input_stats = self._build_input_stats(all_scraped, showing_ids)
-        result_stats = self._perform_incremental_update(existing_movie_ids, all_scraped)
+        result_stats = self._perform_incremental_update(
+            existing_movie_ids,
+            all_scraped,
+            remove_stale=scrape_succeeded,
+        )
         stats = BaseInfoUpdateStats(input_stats=input_stats, result_stats=result_stats)
 
         self._log_stats(stats)
@@ -149,18 +134,20 @@ class UpdateBaseService:
         self,
         city_id: int,
         progress_callback: Callable[[UpdateBaseProgressEvent], None] | None,
-    ) -> tuple[list[_ScrapedMovieBaseInfo], set[int]]:
+    ) -> tuple[list[_ScrapedMovieBaseInfo], set[int], bool]:
         all_scraped: list[_ScrapedMovieBaseInfo] = []
         showing_ids: set[int] = set()
+        scrape_succeeded = True
 
         for show_type in range(1, 3):
             show_type_name = "正在热映" if show_type == 1 else "即将上映"
-            type_movies = self._scrape_one_type(show_type, show_type_name, city_id, progress_callback)
+            type_movies, type_succeeded = self._scrape_one_type(show_type, show_type_name, city_id, progress_callback)
+            scrape_succeeded = scrape_succeeded and type_succeeded
             if show_type == 1:
                 showing_ids = {m.id for m in type_movies}
             all_scraped.extend(type_movies)
 
-        return all_scraped, showing_ids
+        return all_scraped, showing_ids, scrape_succeeded
 
     def _scrape_one_type(
         self,
@@ -168,10 +155,11 @@ class UpdateBaseService:
         show_type_name: str,
         city_id: int,
         progress_callback: Callable[[UpdateBaseProgressEvent], None] | None,
-    ) -> list[_ScrapedMovieBaseInfo]:
+    ) -> tuple[list[_ScrapedMovieBaseInfo], bool]:
         logger.debug("开始抓取 %s 电影", show_type_name)
         type_movies: list[_ScrapedMovieBaseInfo] = []
         page = 1
+        succeeded = True
         while True:
             if progress_callback is not None:
                 progress_callback(UpdateBaseProgressEvent(
@@ -181,6 +169,7 @@ class UpdateBaseService:
             result = self._fetch_page(show_type, page, city_id)
             if result is None:
                 logger.warning("获取页面失败, 跳过 page=%s", page)
+                succeeded = False
                 break
             movies_data, is_expected_empty = result
             if is_expected_empty:
@@ -188,11 +177,12 @@ class UpdateBaseService:
                 break
             if not movies_data:
                 logger.error("第 %s 页未解析到电影数据, 结束抓取", page)
+                succeeded = False
                 break
             type_movies.extend(movies_data)
             page += 1
         logger.info("%s 列表抓取完成, 共抓取 %s 部电影", show_type_name, len(type_movies))
-        return type_movies
+        return type_movies, succeeded
 
     def _fetch_page(
         self,
@@ -211,7 +201,6 @@ class UpdateBaseService:
         try:
             if self._current_city_id != city_id:
                 self.session.cookies.clear()
-                self._preset_cookies(city_id)
                 self._current_city_id = city_id
                 self._warmed_up = False
 
@@ -219,9 +208,10 @@ class UpdateBaseService:
                 self._warm_up_session(show_type, city_id)
                 self._warmed_up = True
 
+            headers = build_maoyan_web_headers(city_id)
             response = self.session.get(
                 url,
-                headers=self.headers,
+                headers=headers,
                 allow_redirects=config_manager.allow_redirects or True,
                 timeout=config_manager.timeout or 60,
             )
@@ -238,46 +228,12 @@ class UpdateBaseService:
             logger.error("获取电影列表 HTML 异常: url=%s, error=%s", url, error, exc_info=True)
             return None
 
-    def _preset_cookies(self, city_id: int) -> None:
-        domain = "www.maoyan.com"
-        path = "/"
-        city_id_str = str(city_id)
-        recent_cis = f"{city_id_str}%3D1%3D50%3D1245%3D1126"
-        cookies_to_set = [
-            ("uuid_n_v", "v1"),
-            ("uuid", "C8A7D680893511F096935750AB1698AA3C3D4230A5474A638234ED4590859DCA"),
-            ("_csrf", "f9b6559b1b01185a39433a65b188cb83193b343236faa3555dc69a7b5d2a9505"),
-            ("_ga", "GA1.1.200491387.1756952456"),
-            ("Hm_lvt_e0bacf12e04a7bd88ddbd9c74ef2b533", "1756952460"),
-            ("Hm_lpvt_e0bacf12e04a7bd88ddbd9c74ef2b533", "1758166366"),
-            ("HMACCOUNT", "FAC79C52BFC838B4"),
-            ("_lxsdk_cuid", "1991286fcf4c8-0502fc73ab8c0c-16525636-384000-1991286fcf5c8"),
-            ("_lxsdk", "C8A7D680893511F096935750AB1698AA3C3D4230A5474A638234ED4590859DCA"),
-            ("_lx_utm", "utm_source%3Dgoogle%26utm_medium%3Dorganic"),
-            ("ci", city_id_str),
-            ("recentCis", recent_cis),
-            ("old-moviepage-ci", city_id_str),
-            ("global-guide-isclose", "true"),
-            ("_ga_WN80P4PSY7", "GS2.1.s1758166366$o42$g0$t1758166366$j60$l0$h0"),
-            ("__mta", "216316201.1756952460622.1758114293338.1758166366584.22"),
-            ("_lxsdk_s", "1995ae1b8be-4e1-3c1-d13%7C%7C2"),
-        ]
-        cookie_jar = cast(CookieJar, self.session.cookies)
-        for name, value in cookies_to_set:
-            cookie_jar.set_cookie(Cookie(
-                version=0, name=name, value=value,
-                port=None, port_specified=False,
-                domain=domain, domain_specified=True, domain_initial_dot=False,
-                path=path, path_specified=True,
-                secure=False, expires=None, discard=True,
-                comment=None, comment_url=None, rest={}, rfc2109=False,
-            ))
-
     def _warm_up_session(self, show_type: int, city_id: int) -> None:
         try:
             warmup_url = f"https://www.maoyan.com/films?showType={show_type}&offset=0"
             self.session.get(
-                warmup_url, headers=self.headers,
+                warmup_url,
+                headers=build_maoyan_web_headers(city_id),
                 allow_redirects=config_manager.allow_redirects or True,
                 timeout=config_manager.timeout or 60,
             )
@@ -377,12 +333,16 @@ class UpdateBaseService:
         self,
         existing_movie_ids: set[int],
         scraped: list[_ScrapedMovieBaseInfo],
+        *,
+        remove_stale: bool = True,
     ) -> BaseInfoResultStats:
         unique_scraped = self._deduplicate(scraped)
         scraped_ids = {m.id for m in unique_scraped}
         added_ids = scraped_ids - existing_movie_ids
-        removed_ids = existing_movie_ids - scraped_ids
+        removed_ids = existing_movie_ids - scraped_ids if remove_stale else set()
         updated_ids = scraped_ids & existing_movie_ids
+        if not remove_stale:
+            logger.warning("电影列表抓取未完整成功,本轮跳过下架删除以避免误删")
 
         return BaseInfoResultStats(
             existing=len(existing_movie_ids),
