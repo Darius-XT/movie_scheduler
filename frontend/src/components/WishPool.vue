@@ -9,45 +9,10 @@
           <span>想看</span>
         </div>
         <div class="planning-header-actions">
-          <div class="update-action-row planning-update-row">
-            <el-button
-              type="primary"
-              :loading="showsLoading"
-              :disabled="!updateForm.cityId"
-              class="update-action-button"
-              @click="handleUpdateShows"
-            >
-              更新场次信息
-            </el-button>
-            <div class="update-action-meta update-action-meta--time">
-              <span v-if="showsLastUpdatedAt">
-                <el-tooltip
-                  v-if="showsUpdateMeta.durationMs"
-                  :content="`更新用时 ${formatDurationMs(showsUpdateMeta.durationMs)}`"
-                  placement="top"
-                >
-                  <span class="update-meta-trigger">
-                    {{ formatTimestamp(showsLastUpdatedAt) }}
-                  </span>
-                </el-tooltip>
-                <span v-else>{{ formatTimestamp(showsLastUpdatedAt) }}</span>
-              </span>
-              <span v-else>暂无更新记录</span>
-            </div>
-            <div class="update-action-meta update-action-meta--stats">
-              {{ getShowsUpdateSummary() }}
-            </div>
-          </div>
-          <template v-if="store.wishMovies.length > 0">
+          <div v-if="store.wishMovies.length > 0" class="planning-header-secondary-actions">
             <el-button text size="small" @click="expandAllWishGroups">全部展开</el-button>
             <el-button text size="small" @click="collapseAllWishGroups">全部收起</el-button>
-          </template>
-        </div>
-      </div>
-      <div v-if="showsUpdateProgress" class="planning-progress">
-        <div class="progress-content">
-          <div class="progress-label">场次更新进度</div>
-          <div class="progress-text">{{ showsUpdateProgress }}</div>
+          </div>
         </div>
       </div>
       <el-tabs
@@ -255,8 +220,6 @@
 </template>
 
 <script setup>
-import { streamShowUpdate } from '@/api'
-import { readSseStream } from '@/api/sseStream'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
@@ -267,13 +230,6 @@ import {
   isWeekendDate,
 } from '@/utils/dateLabels'
 import { formatShowTimeRange, parseShowTimeToMinutes, UNKNOWN_SHOW_DURATION_MINUTES } from '@/utils/showTime'
-
-const props = defineProps({
-  updateForm: {
-    type: Object,
-    required: true,
-  },
-})
 
 const store = useScheduleStore()
 
@@ -308,87 +264,6 @@ const globalWishFilter = ref({
 const normalizeFilterValue = (value) => {
   if (value == null) return ''
   return String(value).trim()
-}
-
-const showsLoading = ref(false)
-const showsUpdateProgress = ref('')
-
-const showsUpdateMeta = computed(() => store.showsUpdateMeta)
-const showsUpdateResult = computed(() => store.showsUpdateResult)
-const showsLastUpdatedAt = computed(
-  () => showsUpdateMeta.value.lastUpdatedAt || store.showsLastFetchedAt,
-)
-
-const formatTimestamp = (raw) => {
-  if (raw == null) return '暂无'
-  const date = new Date(raw)
-  if (Number.isNaN(date.getTime())) {
-    // 后端返回的是不带时区的北京时间 isoformat,直接当本地时间格式化
-    const cleaned = String(raw).replace('T', ' ')
-    return cleaned.length >= 19 ? cleaned.slice(0, 19) : cleaned
-  }
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
-  const seconds = String(date.getSeconds()).padStart(2, '0')
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
-}
-
-const formatDurationMs = (durationMs) => {
-  if (typeof durationMs !== 'number' || Number.isNaN(durationMs) || durationMs < 0) return '暂无'
-  if (durationMs < 1000) return `${durationMs} 毫秒`
-  const totalSeconds = Math.round(durationMs / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return minutes === 0 ? `${seconds} 秒` : `${minutes} 分 ${seconds} 秒`
-}
-
-const getShowsUpdateSummary = () => {
-  if (!showsUpdateResult.value) return '暂无结果'
-  return `新增 ${showsUpdateResult.value.added} 场次 / 删除 ${showsUpdateResult.value.removed} 场次`
-}
-
-const handleUpdateShows = async () => {
-  if (!props.updateForm.cityId) return
-  showsLoading.value = true
-  showsUpdateProgress.value = ''
-  const startedAt = Date.now()
-  let succeeded = false
-  try {
-    const response = await streamShowUpdate(props.updateForm.cityId)
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-
-    await readSseStream(response, (data) => {
-      if (data.type === 'progress') {
-        showsUpdateProgress.value = data.message || '正在更新场次信息'
-      } else if (data.type === 'complete') {
-        const { added, removed, last_fetched_at } = data.data || {}
-        store.recordShowUpdate({ added, removed }, Date.now() - startedAt, last_fetched_at)
-        showsUpdateProgress.value = '场次信息更新完成'
-        succeeded = true
-        ElMessage.success('场次信息更新成功')
-      } else if (data.type === 'error') {
-        showsUpdateProgress.value = ''
-        ElMessage.error('更新失败: ' + data.error)
-      }
-    })
-
-    if (succeeded) {
-      // 刷新 wishMovies 场次缓存, 让 UI 立刻看到新场次
-      void store.refreshShowsFromBackend()
-    }
-  } catch (error) {
-    ElMessage.error('更新失败: ' + error.message)
-  } finally {
-    if (succeeded) {
-      window.setTimeout(() => { showsUpdateProgress.value = '' }, 1200)
-    } else {
-      showsUpdateProgress.value = ''
-    }
-    showsLoading.value = false
-  }
 }
 
 const parseMovieDurationMinutes = (durationText) => {
@@ -880,8 +755,9 @@ const handleRemoveWishMovie = async (movie) => {
 .planning-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .planning-header-main {
@@ -896,64 +772,17 @@ const handleRemoveWishMovie = async (movie) => {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
   flex-wrap: wrap;
 }
 
-.planning-update-row {
-  display: grid;
-  grid-template-columns: 120px max-content minmax(0, 1fr);
+.planning-header-secondary-actions {
+  display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.update-action-button {
-  width: 120px;
-}
-
-.update-action-meta {
-  min-width: 0;
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: nowrap;
-}
-
-.update-action-meta--time {
-  width: 150px;
-}
-
-.update-action-meta--stats {
-  color: #409eff;
-}
-
-.update-meta-trigger {
-  cursor: default;
-  border-bottom: 1px dashed rgba(100, 116, 139, 0.45);
-}
-
-.planning-progress {
-  margin-top: 12px;
-}
-
-.planning-progress .progress-content {
-  padding: 8px 12px;
-  background-color: #f0f9ff;
-  border-radius: 4px;
-  border-left: 3px solid #409eff;
-}
-
-.planning-progress .progress-label {
-  margin-bottom: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1d4ed8;
-}
-
-.planning-progress .progress-text {
-  margin-top: 4px;
-  font-size: 13px;
-  color: #409eff;
-  line-height: 1.5;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .planning-header-tabs {

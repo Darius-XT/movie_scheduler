@@ -79,6 +79,36 @@
               {{ getMovieUpdateSummary() }}
             </div>
           </div>
+
+          <div class="update-action-row">
+            <el-button
+              type="primary"
+              :loading="showsLoading"
+              :disabled="!updateForm.cityId"
+              class="update-action-button"
+              @click="handleUpdateShows"
+            >
+              更新场次信息
+            </el-button>
+            <div class="update-action-meta update-action-meta--time">
+              <span v-if="showsLastUpdatedAt">
+                <el-tooltip
+                  v-if="showsUpdateMeta.durationMs"
+                  :content="`更新用时 ${formatDurationMs(showsUpdateMeta.durationMs)}`"
+                  placement="top"
+                >
+                  <span class="update-meta-trigger">
+                    {{ formatTimestamp(showsLastUpdatedAt) }}
+                  </span>
+                </el-tooltip>
+                <span v-else>{{ formatTimestamp(showsLastUpdatedAt) }}</span>
+              </span>
+              <span v-else>暂无更新记录</span>
+            </div>
+            <div class="update-action-meta update-action-meta--stats">
+              {{ getShowsUpdateSummary() }}
+            </div>
+          </div>
         </div>
       </el-form-item>
     </el-form>
@@ -102,11 +132,21 @@
         </div>
       </div>
     </div>
+
+    <div v-if="showsUpdateProgress" class="update-results">
+      <el-divider style="margin: 12px 0" />
+      <div class="fetch-progress">
+        <div class="progress-content">
+          <div class="progress-label">场次更新进度</div>
+          <div class="progress-text">{{ showsUpdateProgress }}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { streamCinemaUpdate, streamMovieUpdate } from '@/api'
+import { streamCinemaUpdate, streamMovieUpdate, streamShowUpdate } from '@/api'
 import { readSseStream } from '@/api/sseStream'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { Setting } from '@element-plus/icons-vue'
@@ -130,12 +170,19 @@ const cinemaLoading = ref(false)
 const cinemaUpdateProgress = ref('')
 const movieLoading = ref(false)
 const movieUpdateProgress = ref('')
+const showsLoading = ref(false)
+const showsUpdateProgress = ref('')
 
 const cinemaResult = computed(() => store.cinemaUpdateResult)
 const cinemaUpdateMeta = computed(() => store.cinemaUpdateMeta)
 const movieResult = computed(() => store.movieUpdateResult)
 const movieUpdateMeta = computed(() => store.movieUpdateMeta)
 const movieLastUpdatedAt = computed(() => store.movieLastUpdatedAt)
+const showsUpdateMeta = computed(() => store.showsUpdateMeta)
+const showsUpdateResult = computed(() => store.showsUpdateResult)
+const showsLastUpdatedAt = computed(
+  () => showsUpdateMeta.value.lastUpdatedAt || store.showsLastFetchedAt,
+)
 
 onMounted(() => {
   // 拉一次后端定时任务的最新时间戳, 让首次进入页面就能显示
@@ -172,6 +219,11 @@ const getCinemaUpdateSummary = () => {
 const getMovieUpdateSummary = () => {
   if (!movieResult.value) return '暂无结果'
   return `新增 ${movieResult.value.added} / 更新 ${movieResult.value.updated} / 删除 ${movieResult.value.removed}`
+}
+
+const getShowsUpdateSummary = () => {
+  if (!showsUpdateResult.value) return '暂无结果'
+  return `新增 ${showsUpdateResult.value.added} 场次 / 删除 ${showsUpdateResult.value.removed} 场次`
 }
 
 const handleUpdateCinema = async () => {
@@ -241,6 +293,46 @@ const handleUpdateMovie = async () => {
     movieLoading.value = false
   }
 }
+
+const handleUpdateShows = async () => {
+  if (!props.updateForm.cityId) return
+  showsLoading.value = true
+  showsUpdateProgress.value = ''
+  const startedAt = Date.now()
+  let succeeded = false
+  try {
+    const response = await streamShowUpdate(props.updateForm.cityId)
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+
+    await readSseStream(response, (data) => {
+      if (data.type === 'progress') {
+        showsUpdateProgress.value = data.message || '正在更新场次信息'
+      } else if (data.type === 'complete') {
+        const { added, removed, last_fetched_at } = data.data || {}
+        store.recordShowUpdate({ added, removed }, Date.now() - startedAt, last_fetched_at)
+        showsUpdateProgress.value = '场次信息更新完成'
+        succeeded = true
+        ElMessage.success('场次信息更新成功')
+      } else if (data.type === 'error') {
+        showsUpdateProgress.value = ''
+        ElMessage.error('更新失败: ' + data.error)
+      }
+    })
+
+    if (succeeded) {
+      void store.refreshShowsFromBackend()
+    }
+  } catch (error) {
+    ElMessage.error('更新失败: ' + error.message)
+  } finally {
+    if (succeeded) {
+      window.setTimeout(() => { showsUpdateProgress.value = '' }, 1200)
+    } else {
+      showsUpdateProgress.value = ''
+    }
+    showsLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -300,15 +392,19 @@ const handleUpdateMovie = async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 100%;
+  align-items: flex-start;
+  width: max-content;
+  max-width: 100%;
 }
 
 .update-action-row {
-  display: grid;
-  grid-template-columns: 120px max-content minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  width: auto;
+  max-width: 100%;
+  flex-wrap: wrap;
 }
 
 .update-action-button {
@@ -324,7 +420,7 @@ const handleUpdateMovie = async () => {
 }
 
 .update-action-meta--time {
-  width: 150px;
+  width: auto;
 }
 
 .update-action-meta--stats {
