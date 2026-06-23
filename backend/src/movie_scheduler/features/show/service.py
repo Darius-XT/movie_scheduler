@@ -136,9 +136,6 @@ _MAOYAN_WEB_CINEMA_BASE = "https://www.maoyan.com/cinema"
 _MAOYAN_WEB_CINEMAS_BASE = "https://www.maoyan.com/cinemas"
 _MAOYAN_MOBILE_CINEMA_BASE = "https://m.maoyan.com/cinema"
 _CINEMA_PAGE_SIZE = 12
-_SHOW_MOVIE_FETCH_CONCURRENCY = 1
-_SHOW_DATE_FETCH_CONCURRENCY = 1
-_SHOW_CINEMA_SHOW_FETCH_CONCURRENCY = 4
 
 
 def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = None) -> str | None:
@@ -362,11 +359,8 @@ class ShowService:
         """异步抓取选中电影的所有场次。"""
         logger.info("开始异步获取 %s 部电影在城市 %s 的场次信息", len(movie_ids), city_id)
 
-        movie_limiter = asyncio.Semaphore(_SHOW_MOVIE_FETCH_CONCURRENCY)
-
         async def fetch_movie(movie_id: int) -> _FinalMovieShowData | None:
-            async with movie_limiter:
-                return await self._process_single_movie(movie_id, city_id)
+            return await self._process_single_movie(movie_id, city_id)
 
         tasks = [fetch_movie(movie_id) for movie_id in movie_ids]
         movie_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -404,11 +398,8 @@ class ShowService:
             raise
 
     async def _collect_movie_cinema_ids(self, movie_id: int, city_id: int, show_dates: list[str]) -> list[int]:
-        date_limiter = asyncio.Semaphore(_SHOW_DATE_FETCH_CONCURRENCY)
-
         async def fetch_date_cinemas(show_date: str) -> list[int]:
-            async with date_limiter:
-                return await asyncio.to_thread(self._get_cinemas, movie_id, show_date, city_id)
+            return await asyncio.to_thread(self._get_cinemas, movie_id, show_date, city_id)
 
         date_tasks = [fetch_date_cinemas(show_date) for show_date in show_dates]
         date_results = await asyncio.gather(*date_tasks, return_exceptions=True)
@@ -437,11 +428,8 @@ class ShowService:
         cinema_ids: list[int],
         allowed_dates: set[str],
     ) -> dict[int, _CinemaShowData]:
-        cinema_show_limiter = asyncio.Semaphore(_SHOW_CINEMA_SHOW_FETCH_CONCURRENCY)
-
         async def fetch_cinema(cinema_id: int) -> list[_FetchedShowItem]:
-            async with cinema_show_limiter:
-                return await asyncio.to_thread(self._get_cinema_shows, cinema_id, city_id, movie_id, movie_name, None)
+            return await asyncio.to_thread(self._get_cinema_shows, cinema_id, city_id, movie_id, movie_name, None)
 
         cinema_tasks = [fetch_cinema(cinema_id) for cinema_id in cinema_ids]
         cinema_results = await asyncio.gather(*cinema_tasks, return_exceptions=True)
@@ -478,7 +466,6 @@ class ShowService:
         movie_name: str,
         city_id: int,
         show_date: str,
-        cinema_show_limiter: asyncio.Semaphore,
     ) -> dict[int, _CinemaShowData] | None:
         try:
             cinema_ids = await asyncio.to_thread(self._get_cinemas, movie_id, show_date, city_id)
@@ -486,10 +473,9 @@ class ShowService:
                 return None
 
             async def fetch_cinema(cinema_id: int) -> list[_FetchedShowItem]:
-                async with cinema_show_limiter:
-                    return await asyncio.to_thread(
-                        self._get_cinema_shows, cinema_id, city_id, movie_id, movie_name, show_date
-                    )
+                return await asyncio.to_thread(
+                    self._get_cinema_shows, cinema_id, city_id, movie_id, movie_name, show_date
+                )
 
             cinema_tasks = [fetch_cinema(cinema_id) for cinema_id in cinema_ids]
             cinema_results = await asyncio.gather(*cinema_tasks, return_exceptions=True)
