@@ -46,9 +46,9 @@ class UpdateExtraService:
     ) -> int:
         """更新电影额外详情,返回成功数量。"""
         logger.info("开始获取电影详情信息")
-        movies_to_update = await asyncio.to_thread(movie_repository.get_movies_without_details)
+        movies_to_update = await asyncio.to_thread(movie_repository.get_all_movies)
         if not movies_to_update:
-            logger.info("没有需要更新详情的电影")
+            logger.info("没有可更新详情的电影")
             return 0
 
         total = len(movies_to_update)
@@ -59,7 +59,7 @@ class UpdateExtraService:
         results = await asyncio.gather(*tasks)
         success_count = sum(1 for s in results if s)
         logger.info(
-            "额外电影信息更新统计: 成功=%d, 失败=%d, 总计=%d",
+            "额外电影信息更新统计: 更新=%d, 跳过或失败=%d, 总计=%d",
             success_count, total - success_count, total,
         )
         return success_count
@@ -87,10 +87,11 @@ class UpdateExtraService:
             if details is None:
                 logger.warning("获取或解析电影详情失败: %s (ID: %s)", movie_title, movie_id)
                 return False
-            ok = await asyncio.to_thread(
-                movie_repository.save_movie,
-                cast(MovieWriteData, asdict(details)),
-            )
+            update_data = self._build_update_data(movie, details, movie_id)
+            if update_data is None:
+                logger.debug("电影详情无变化,跳过保存: %s (ID: %s)", movie_title, movie_id)
+                return False
+            ok = await asyncio.to_thread(movie_repository.save_movie, update_data)
             if ok:
                 logger.debug("成功更新电影详情: %s (ID: %s)", movie_title, movie_id)
                 return True
@@ -101,6 +102,26 @@ class UpdateExtraService:
             return False
 
     # ---------- 内部: 抓取 + 解析 ----------
+
+    def _build_update_data(
+        self,
+        movie: object,
+        details: _MovieExtraInfo,
+        movie_id: int,
+    ) -> MovieWriteData | None:
+        update_data = cast(MovieWriteData, asdict(details))
+        update_data["id"] = movie_id
+        changed = False
+        for field_name in ("director", "country", "language", "duration", "description"):
+            current = getattr(movie, field_name, None)
+            incoming = update_data.get(field_name)
+            if not self._same_text(current, incoming):
+                changed = True
+                break
+        return update_data if changed else None
+
+    def _same_text(self, left: object, right: object) -> bool:
+        return str(left or "").strip() == str(right or "").strip()
 
     def _fetch_details(self, movie_id: int) -> _MovieExtraInfo | None:
         html_content = self._http_get(movie_id)

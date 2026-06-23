@@ -7,6 +7,32 @@ import movie_scheduler.features.show.service as show_module
 from movie_scheduler.features.show.service import ShowService
 
 
+def test_http_get_text_does_not_log_request_headers(monkeypatch) -> None:
+    messages: list[str] = []
+
+    def fake_debug(message: str, *args: object) -> None:
+        messages.append(message % args)
+
+    def fake_get(url: str, **kwargs: object) -> SimpleNamespace:
+        assert kwargs["headers"] == {"Cookie": "uuid=secret", "Accept": "text/html"}
+        return SimpleNamespace(status_code=200, text="<html></html>")
+
+    monkeypatch.setattr(show_module.logger, "debug", fake_debug)
+    monkeypatch.setattr(show_module.requests, "get", fake_get)
+
+    result = show_module._http_get_text(
+        "https://www.maoyan.com/cinema/169",
+        "获取影院场次页面",
+        headers={"Cookie": "uuid=secret", "Accept": "text/html"},
+    )
+
+    log_text = "\n".join(messages)
+    assert result == "<html></html>"
+    assert "请求详情" not in log_text
+    assert "Cookie" not in log_text
+    assert "uuid=secret" not in log_text
+
+
 def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
     service = ShowService()
     captured_shows: list[dict[str, object]] = []

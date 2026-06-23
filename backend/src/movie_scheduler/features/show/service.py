@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from time import monotonic
 from typing import TypedDict, cast
-from urllib.parse import urlsplit
 
 import requests
 import urllib3
@@ -145,7 +144,6 @@ def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = No
     try:
         effective_headers = headers or _SHOW_REQUEST_HEADERS
         logger.debug("开始%s: %s", log_label, url)
-        _log_request_details(url, log_label, effective_headers)
         response = requests.get(
             url,
             headers=effective_headers,
@@ -163,25 +161,6 @@ def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = No
     except Exception as error:
         logger.error("%s异常: url=%s, error=%s", log_label, url, error, exc_info=True)
         return None
-
-
-def _log_request_details(url: str, log_label: str, headers: dict[str, str]) -> None:
-    """打印外部请求头, 跳过 Cookie 等敏感头。"""
-    parsed = urlsplit(url)
-    path = parsed.path or "/"
-    if parsed.query:
-        path = f"{path}?{parsed.query}"
-
-    request_lines = [
-        f"GET {path} HTTP/1.1",
-        f"Host: {parsed.netloc}",
-    ]
-    for key, value in headers.items():
-        if key.lower() == "cookie":
-            continue
-        request_lines.append(f"{key}: {value}")
-
-    logger.debug("%s请求详情:\n%s", log_label, "\n".join(request_lines))
 
 
 # =============================================================================
@@ -615,7 +594,7 @@ class ShowService:
                 return cached_ids
 
         headers = build_maoyan_web_headers(city_id)
-        text = _http_get_text(_MAOYAN_WEB_HOME, "获取猫眼首页热映电影 Cookie 数据", headers=headers)
+        text = _http_get_text(_MAOYAN_WEB_HOME, "获取猫眼首页热映电影数据", headers=headers)
         hot_movie_ids = self._parse_hot_movie_ids(text or "")
         if not hot_movie_ids:
             if cached is not None:

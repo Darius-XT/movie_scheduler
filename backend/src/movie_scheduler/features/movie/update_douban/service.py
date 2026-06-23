@@ -110,9 +110,9 @@ class UpdateDoubanService:
     ) -> int:
         """更新电影豆瓣信息(增量),返回成功数量。"""
         logger.info("开始获取待补充豆瓣信息的电影")
-        movies_to_update = await asyncio.to_thread(movie_repository.get_movies_without_douban_info)
+        movies_to_update = await asyncio.to_thread(movie_repository.get_all_movies)
         if not movies_to_update:
-            logger.info("没有需要更新豆瓣信息的电影")
+            logger.info("没有可更新豆瓣信息的电影")
             return 0
 
         total = len(movies_to_update)
@@ -125,7 +125,7 @@ class UpdateDoubanService:
         results = await asyncio.gather(*[process(i, m) for i, m in enumerate(movies_to_update, start=1)])
         success_count = sum(1 for s in results if s)
         logger.info(
-            "豆瓣电影信息更新统计: 成功=%d, 失败=%d, 总计=%d",
+            "豆瓣电影信息更新统计: 更新=%d, 跳过或失败=%d, 总计=%d",
             success_count, total - success_count, total,
         )
         return success_count
@@ -168,12 +168,11 @@ class UpdateDoubanService:
             supplement = await asyncio.to_thread(
                 self.fetch_movie_supplement, cast(SupportsDoubanMatchingMovie, movie),
             )
-            ok = await asyncio.to_thread(
-                movie_repository.save_movie,
-                cast(MovieWriteData, {
-                    "id": movie_id, "score": supplement.score, "douban_url": supplement.douban_url,
-                }),
-            )
+            update_data = self._build_update_data(movie, supplement, movie_id)
+            if update_data is None:
+                logger.debug("电影豆瓣信息无变化,跳过保存: %s (ID: %s)", movie_title, movie_id)
+                return False
+            ok = await asyncio.to_thread(movie_repository.save_movie, update_data)
             if ok:
                 logger.debug("成功更新电影豆瓣信息: %s (ID: %s)", movie_title, movie_id)
                 return True
@@ -184,6 +183,40 @@ class UpdateDoubanService:
             return False
 
     # ---------- 内部: 抓取 + 解析 ----------
+
+    def _build_update_data(
+        self,
+        movie: object,
+        supplement: DoubanMovieSupplement,
+        movie_id: int,
+    ) -> MovieWriteData | None:
+        current_score = getattr(movie, "score", None)
+        current_url = getattr(movie, "douban_url", None)
+        incoming_score = supplement.score
+        incoming_url = supplement.douban_url
+
+        update_data: MovieWriteData = {"id": movie_id}
+        if self._should_update_score(current_score, incoming_score):
+            update_data["score"] = incoming_score
+        if self._should_update_url(current_url, incoming_url):
+            update_data["douban_url"] = incoming_url
+        return update_data if len(update_data) > 1 else None
+
+    def _should_update_score(self, current: object, incoming: str) -> bool:
+        current_text = str(current or "").strip()
+        incoming_text = str(incoming or "").strip()
+        if not incoming_text:
+            return False
+        if incoming_text == "无豆瓣评分" and current_text and current_text != "无豆瓣评分":
+            return False
+        return current_text != incoming_text
+
+    def _should_update_url(self, current: object, incoming: str | None) -> bool:
+        current_text = str(current or "").strip()
+        incoming_text = str(incoming or "").strip()
+        if not incoming_text and current_text:
+            return False
+        return current_text != incoming_text
 
     def _search_movies(self, title: str, page: int = 1) -> list[_DoubanSearchItem]:
         normalized_title = title.strip()
