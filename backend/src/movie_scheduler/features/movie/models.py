@@ -6,8 +6,6 @@ from datetime import date, datetime
 from typing import NotRequired, Required, TypedDict
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
-from sqlalchemy.sql import func
-
 from movie_scheduler.core.db import Base
 
 
@@ -62,9 +60,8 @@ class Movie(Base):
     )
     updated_at = Column(
         DateTime,
-        server_default=func.datetime("now", "+8 hours"),
-        onupdate=func.datetime("now", "+8 hours"),
-        comment="更新时间(北京时间)",
+        nullable=True,
+        comment="电影信息更新任务最近一次完成时间(北京时间)",
     )
     shows_updated_at = Column(
         DateTime,

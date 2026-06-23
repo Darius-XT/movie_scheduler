@@ -121,13 +121,19 @@ class MovieRepository:
     def get_movies_last_updated_at(self) -> datetime | None:
         try:
             with database_manager.session() as session:
-                return session.query(func.max(Movie.updated_at)).scalar()
+                return (
+                    session.query(Movie.updated_at)
+                    .filter(Movie.updated_at.is_not(None))
+                    .order_by(Movie.updated_at.desc())
+                    .limit(1)
+                    .scalar()
+                )
         except SQLAlchemyError as error:
             logger.error("读取电影最新更新时间失败: %s", error)
             raise RepositoryError("读取电影最新更新时间失败") from error
 
-    def touch_all_updated_at(self) -> None:
-        """把所有 movies 的 updated_at 强制刷到当前时间(自动更新任务跑完的心跳)。"""
+    def touch_movies_last_updated_at(self) -> None:
+        """Record movie-info task completion time on movie rows explicitly."""
         try:
             with database_manager.transaction() as session:
                 session.query(Movie).update(
@@ -135,8 +141,12 @@ class MovieRepository:
                     synchronize_session=False,
                 )
         except SQLAlchemyError as error:
-            logger.error("刷新电影 updated_at 失败: %s", error)
-            raise RepositoryError("刷新电影 updated_at 失败") from error
+            logger.error("刷新电影信息更新时间失败: %s", error)
+            raise RepositoryError("刷新电影信息更新时间失败") from error
+
+    def touch_all_updated_at(self) -> None:
+        """Backward-compatible wrapper for movie-info task completion time."""
+        self.touch_movies_last_updated_at()
 
     def get_movies_without_details(self) -> list[Movie]:
         try:

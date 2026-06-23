@@ -43,7 +43,7 @@
 | `duration` | `String(20)` | 可空 | 片长文本 |
 | `description` | `Text` | 可空 | 剧情简介 |
 | `first_showing_at` | `DateTime` | 可空 | 最近一次进入正在热映状态的时间 |
-| `updated_at` | `DateTime` | 默认北京时间 | 更新时间 |
+| `updated_at` | `DateTime` | 可空,手动维护 | 电影信息更新任务最近一次完成时间 |
 | `shows_updated_at` | `DateTime` | 可空 | 场次最近一次刷新完成时间 |
 
 ## movie_shows
