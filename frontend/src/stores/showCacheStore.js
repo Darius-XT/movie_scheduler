@@ -1,9 +1,13 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { getShows } from '@/api'
+import { loadFromStorage, saveToStorage } from './storage'
 
 const MOVIE_SHOW_POLL_INTERVAL_MS = 15_000
 const MOVIE_SHOW_POLL_MAX_ATTEMPTS = 40
+const SHOWS_UPDATE_META_KEY = 'showsUpdateMeta'
+const SHOWS_UPDATE_RESULT_KEY = 'showsUpdateResult'
+const EMPTY_UPDATE_META = { lastUpdatedAt: null, durationMs: null }
 
 export const useShowCacheStore = defineStore('showCache', () => {
   const movieShowsMap = ref(new Map())
@@ -12,9 +16,12 @@ export const useShowCacheStore = defineStore('showCache', () => {
   const syncError = ref('')
   const moviePollingIds = ref(new Set())
 
-  // 手动「更新场次」按钮的统计 + 用时,只在内存里,不持久化(以后端 last_fetched_at 为权威)
-  const showsUpdateMeta = ref({ lastUpdatedAt: null, durationMs: null })
-  const showsUpdateResult = ref(null)
+  // 手动「更新场次」按钮的统计 + 用时,本地持久化; lastFetchedAt 仍以后端 last_fetched_at 为权威。
+  const showsUpdateMeta = ref(loadFromStorage(SHOWS_UPDATE_META_KEY, EMPTY_UPDATE_META))
+  const showsUpdateResult = ref(loadFromStorage(SHOWS_UPDATE_RESULT_KEY, null))
+
+  watch(showsUpdateMeta, (val) => saveToStorage(SHOWS_UPDATE_META_KEY, val), { deep: true })
+  watch(showsUpdateResult, (val) => saveToStorage(SHOWS_UPDATE_RESULT_KEY, val), { deep: true })
 
   const recordShowUpdate = (result, durationMs, lastFetchedAtFromBackend) => {
     showsUpdateResult.value = result
