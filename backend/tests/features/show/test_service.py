@@ -40,7 +40,7 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
         return len(shows)
 
     monkeypatch.setattr(show_module.config_manager, "maoyan_cookie", (
-        "uuid_n_v=v1; hotMovieIds=1,2; old-moviepage-ci=1; global-guide-isclose=true"
+        "uuid_n_v=v1; hotMovieIds=1,2; old-moviepage-ci=1; ci=1126; global-guide-isclose=true"
     ))
     monkeypatch.setattr(show_module.movie_repository, "get_movie_by_id", fake_get_movie_by_id)
     monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", lambda movie_id: True)
@@ -62,8 +62,8 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
     assert "hotMovieIds=1490532,1366168" in captured_movie_headers[0]["Cookie"]
     assert "hotMovieIds=1490532,1366168" in captured_cinema_headers[0]["Cookie"]
     assert "old-moviepage-ci=10" in captured_cinema_headers[0]["Cookie"]
-    assert "; ci=" not in captured_cinema_headers[0]["Cookie"]
-    assert not captured_cinema_headers[0]["Cookie"].startswith("ci=")
+    assert "ci=10" in captured_cinema_headers[0]["Cookie"]
+    assert "ci=1126" not in captured_cinema_headers[0]["Cookie"]
 
 
 def test_hot_movie_ids_cache_expires_after_one_hour(monkeypatch) -> None:

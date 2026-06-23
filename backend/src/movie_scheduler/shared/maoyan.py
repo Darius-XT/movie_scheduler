@@ -103,6 +103,7 @@ def build_maoyan_cookie(city_id: int, *, hot_movie_ids: Sequence[int] | None = N
     if hot_movie_ids:
         pairs = _replace_cookie_value(pairs, "hotMovieIds", ",".join(str(mid) for mid in hot_movie_ids))
     pairs = _replace_cookie_value(pairs, "old-moviepage-ci", str(city_id))
+    pairs = _replace_cookie_value(pairs, "ci", str(city_id))
     return _format_cookie_pairs(pairs)
 
 
