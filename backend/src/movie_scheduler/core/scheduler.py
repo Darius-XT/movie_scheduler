@@ -2,7 +2,7 @@
 
 策略:
 - 每个整点(分钟 0)触发一次"全量自动更新":先增量更新电影信息,再为想看电影抓场次。
-- 服务启动时立即触发一次相同任务(不必等到下一个整点),前端立刻能看到数据。
+- 服务启动时只注册调度器,不立即触发更新;等下一个整点执行。
 - 两个任务串行执行(场次抓取依赖最新的 movies 表与 wishMovies 状态),
   但前端各自显示自己的"上次更新时间"。
 """
@@ -42,8 +42,6 @@ class AutoUpdateScheduler:
         scheduler.start()
         self._scheduler = scheduler
         logger.info("自动更新调度器已启动:每个整点触发一次")
-        # 启动后立即跑一次,不等下个整点
-        asyncio.create_task(self._run_all())
 
     def shutdown(self) -> None:
         """停止调度器。"""
