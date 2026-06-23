@@ -1,24 +1,12 @@
 <template>
   <div class="info-update-section">
-    <h3 class="section-title">
-      <el-icon><Setting /></el-icon>
-      <span>信息更新</span>
-    </h3>
-    <el-form :model="updateForm" label-width="84px" size="default">
-      <el-form-item label="选择城市">
-        <el-select
-          v-model="updateForm.cityId"
-          placeholder="请选择城市"
-          style="width: 80px"
-        >
-          <el-option
-            v-for="city in cities"
-            :key="city.id"
-            :label="city.name"
-            :value="city.id"
-          />
-        </el-select>
-      </el-form-item>
+    <el-form :model="updateForm" class="update-form" size="default">
+      <div class="section-toolbar">
+        <h3 class="section-title">
+          <el-icon><Setting /></el-icon>
+          <span>信息更新</span>
+        </h3>
+      </div>
 
       <el-form-item class="update-action-form-item">
         <div class="update-action-list">
@@ -30,23 +18,26 @@
               class="update-action-button"
               @click="handleUpdateCinema"
             >
-              更新影院信息
+              <el-icon><Location /></el-icon>
+              <span>影院信息</span>
             </el-button>
-            <div class="update-action-meta update-action-meta--time">
-              <span v-if="cinemaUpdateMeta.lastUpdatedAt">
-                <el-tooltip
-                  :content="`更新用时 ${formatDurationMs(cinemaUpdateMeta.durationMs)}`"
-                  placement="top"
-                >
-                  <span class="update-meta-trigger">
-                    {{ formatTimestamp(cinemaUpdateMeta.lastUpdatedAt) }}
-                  </span>
-                </el-tooltip>
-              </span>
-              <span v-else>暂无更新记录</span>
-            </div>
-            <div class="update-action-meta update-action-meta--stats">
-              {{ getCinemaUpdateSummary() }}
+            <div class="update-action-body">
+              <div class="update-action-meta update-action-meta--time">
+                <span v-if="cinemaUpdateMeta.lastUpdatedAt">
+                  <el-tooltip
+                    :content="`更新用时 ${formatDurationMs(cinemaUpdateMeta.durationMs)}`"
+                    placement="top"
+                  >
+                    <span class="update-meta-trigger">
+                      {{ formatTimestamp(cinemaUpdateMeta.lastUpdatedAt) }}
+                    </span>
+                  </el-tooltip>
+                </span>
+                <span v-else>暂无更新记录</span>
+              </div>
+              <div class="update-action-meta update-action-meta--stats">
+                {{ getCinemaUpdateSummary() }}
+              </div>
             </div>
           </div>
 
@@ -58,25 +49,28 @@
               class="update-action-button"
               @click="handleUpdateMovie"
             >
-              更新电影信息
+              <el-icon><Film /></el-icon>
+              <span>电影信息</span>
             </el-button>
-            <div class="update-action-meta update-action-meta--time">
-              <span v-if="movieLastUpdatedAt">
-                <el-tooltip
-                  v-if="movieUpdateMeta.durationMs"
-                  :content="`更新用时 ${formatDurationMs(movieUpdateMeta.durationMs)}`"
-                  placement="top"
-                >
-                  <span class="update-meta-trigger">
-                    {{ formatTimestamp(movieLastUpdatedAt) }}
-                  </span>
-                </el-tooltip>
-                <span v-else>{{ formatTimestamp(movieLastUpdatedAt) }}</span>
-              </span>
-              <span v-else>暂无更新记录</span>
-            </div>
-            <div class="update-action-meta update-action-meta--stats">
-              {{ getMovieUpdateSummary() }}
+            <div class="update-action-body">
+              <div class="update-action-meta update-action-meta--time">
+                <span v-if="movieLastUpdatedAt">
+                  <el-tooltip
+                    v-if="movieUpdateMeta.durationMs"
+                    :content="`更新用时 ${formatDurationMs(movieUpdateMeta.durationMs)}`"
+                    placement="top"
+                  >
+                    <span class="update-meta-trigger">
+                      {{ formatTimestamp(movieLastUpdatedAt) }}
+                    </span>
+                  </el-tooltip>
+                  <span v-else>{{ formatTimestamp(movieLastUpdatedAt) }}</span>
+                </span>
+                <span v-else>暂无更新记录</span>
+              </div>
+              <div class="update-action-meta update-action-meta--stats">
+                {{ getMovieUpdateSummary() }}
+              </div>
             </div>
           </div>
 
@@ -88,25 +82,28 @@
               class="update-action-button"
               @click="handleUpdateShows"
             >
-              更新场次信息
+              <el-icon><Tickets /></el-icon>
+              <span>场次信息</span>
             </el-button>
-            <div class="update-action-meta update-action-meta--time">
-              <span v-if="showsLastUpdatedAt">
-                <el-tooltip
-                  v-if="showsUpdateMeta.durationMs"
-                  :content="`更新用时 ${formatDurationMs(showsUpdateMeta.durationMs)}`"
-                  placement="top"
-                >
-                  <span class="update-meta-trigger">
-                    {{ formatTimestamp(showsLastUpdatedAt) }}
-                  </span>
-                </el-tooltip>
-                <span v-else>{{ formatTimestamp(showsLastUpdatedAt) }}</span>
-              </span>
-              <span v-else>暂无更新记录</span>
-            </div>
-            <div class="update-action-meta update-action-meta--stats">
-              {{ getShowsUpdateSummary() }}
+            <div class="update-action-body">
+              <div class="update-action-meta update-action-meta--time">
+                <span v-if="showsLastUpdatedAt">
+                  <el-tooltip
+                    v-if="showsUpdateMeta.durationMs"
+                    :content="`更新用时 ${formatDurationMs(showsUpdateMeta.durationMs)}`"
+                    placement="top"
+                  >
+                    <span class="update-meta-trigger">
+                      {{ formatTimestamp(showsLastUpdatedAt) }}
+                    </span>
+                  </el-tooltip>
+                  <span v-else>{{ formatTimestamp(showsLastUpdatedAt) }}</span>
+                </span>
+                <span v-else>暂无更新记录</span>
+              </div>
+              <div class="update-action-meta update-action-meta--stats">
+                {{ getShowsUpdateSummary() }}
+              </div>
             </div>
           </div>
         </div>
@@ -149,15 +146,11 @@
 import { streamCinemaUpdate, streamMovieUpdate, streamShowUpdate } from '@/api'
 import { readSseStream } from '@/api/sseStream'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { Setting } from '@element-plus/icons-vue'
+import { Film, Location, Setting, Tickets } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 
 const props = defineProps({
-  cities: {
-    type: Array,
-    default: () => [],
-  },
   updateForm: {
     type: Object,
     required: true,
@@ -338,27 +331,36 @@ const handleUpdateShows = async () => {
 <style scoped>
 .info-update-section {
   min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
 
-.info-update-section .el-form {
+.update-form {
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  margin-bottom: 14px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 16px 0;
+  margin: 0;
   font-size: 16px;
-  font-weight: 500;
-  color: #333;
-  width: 100%;
+  font-weight: 700;
+  color: #1f2937;
   justify-content: flex-start;
   flex-wrap: wrap;
 }
@@ -389,26 +391,39 @@ const handleUpdateShows = async () => {
 }
 
 .update-action-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-start;
-  width: max-content;
-  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 12px;
+  width: 100%;
 }
 
 .update-action-row {
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  width: auto;
-  max-width: 100%;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #ffffff;
 }
 
 .update-action-button {
-  width: 120px;
+  width: 100%;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.update-action-button :deep(.el-icon) {
+  margin-right: 4px;
+}
+
+.update-action-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 .update-action-meta {
@@ -416,7 +431,8 @@ const handleUpdateShows = async () => {
   color: #64748b;
   font-size: 12px;
   line-height: 1.5;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .update-action-meta--time {
@@ -424,7 +440,8 @@ const handleUpdateShows = async () => {
 }
 
 .update-action-meta--stats {
-  color: #409eff;
+  color: #166534;
+  font-weight: 600;
 }
 
 .update-meta-trigger {
@@ -444,7 +461,7 @@ const handleUpdateShows = async () => {
 
 .progress-content {
   padding: 8px 12px;
-  background-color: #f0f9ff;
+  background-color: #f8fafc;
   border-radius: 4px;
   border-left: 3px solid #409eff;
 }
@@ -461,5 +478,20 @@ const handleUpdateShows = async () => {
   font-size: 13px;
   color: #409eff;
   line-height: 1.5;
+}
+
+@media (max-width: 960px) {
+  .update-action-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .section-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
 }
 </style>

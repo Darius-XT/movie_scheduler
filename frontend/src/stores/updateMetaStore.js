@@ -42,9 +42,9 @@ export const useUpdateMetaStore = defineStore('updateMeta', () => {
     if (lastUpdatedAtFromBackend) backendMovieLastUpdatedAt.value = lastUpdatedAtFromBackend
   }
 
-  const movieLastUpdatedAt = computed(() => {
-    return movieUpdateMeta.value.lastUpdatedAt || backendMovieLastUpdatedAt.value
-  })
+  const movieLastUpdatedAt = computed(() => (
+    latestTimestamp(movieUpdateMeta.value.lastUpdatedAt, backendMovieLastUpdatedAt.value)
+  ))
 
   const refreshMovieStatus = async () => {
     try {
@@ -69,3 +69,14 @@ export const useUpdateMetaStore = defineStore('updateMeta', () => {
     refreshMovieStatus,
   }
 })
+
+const latestTimestamp = (left, right) => {
+  if (!left) return right || null
+  if (!right) return left || null
+  const leftTime = Date.parse(left)
+  const rightTime = Date.parse(right)
+  if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+    return String(left) > String(right) ? left : right
+  }
+  return leftTime >= rightTime ? left : right
+}

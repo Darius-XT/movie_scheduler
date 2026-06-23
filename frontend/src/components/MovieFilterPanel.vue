@@ -4,13 +4,30 @@
       <el-icon><Filter /></el-icon>
       <span>电影筛选</span>
     </h3>
-    <el-form :model="form" label-width="84px" size="default">
+    <el-form :model="form" class="filter-form" label-width="72px" size="default">
+      <el-form-item label="城市">
+        <el-select
+          v-model="updateForm.cityId"
+          placeholder="请选择城市"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="city in cities"
+            :key="city.id"
+            :label="city.name"
+            :value="city.id"
+          />
+        </el-select>
+      </el-form-item>
+
       <el-form-item label="上映状态">
         <div class="threshold-input-wrapper">
           <el-select
             v-model="form.selectionMode"
             placeholder="请选择上映状态"
-            style="width: 105px"
+            :loading="selectLoading"
+            style="width: 100%"
+            @change="handleSelectionModeChange"
           >
             <el-option
               v-for="option in selectionModeOptions"
@@ -21,17 +38,6 @@
           </el-select>
         </div>
       </el-form-item>
-
-      <el-form-item class="movie-selector-action-form-item">
-        <el-button
-          type="primary"
-          :loading="selectLoading"
-          @click="handleSelectMovies"
-          style="width: 130px"
-        >
-          筛选喜欢的电影
-        </el-button>
-      </el-form-item>
     </el-form>
   </div>
 </template>
@@ -40,16 +46,30 @@
 import { selectMovies } from '@/api'
 import { Filter } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, toRefs, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 
-const emit = defineEmits(['movies-selected'])
+const props = defineProps({
+  cities: {
+    type: Array,
+    default: () => [],
+  },
+  updateForm: {
+    type: Object,
+    required: true,
+  },
+})
+
+const { cities, updateForm } = toRefs(props)
 
 const store = useScheduleStore()
+const MOVIE_STATUS_POLL_INTERVAL_MS = 60_000
 
 const form = ref({ selectionMode: 'showing' })
 const selectLoading = ref(false)
-const lastAppliedSelectionMode = ref(null)
+const hasLoadedSelection = ref(false)
+const selectionRequestId = ref(0)
+let movieStatusPollingId = null
 
 const selectionModeOptions = [
   { label: '正在上映', value: 'showing' },
@@ -57,42 +77,54 @@ const selectionModeOptions = [
   { label: '全部', value: 'all' },
 ]
 
-const runSelection = async (mode, { silent = false } = {}) => {
+const runSelection = async (mode) => {
+  const requestId = selectionRequestId.value + 1
+  selectionRequestId.value = requestId
   selectLoading.value = true
   try {
     const response = await selectMovies(mode)
+    if (requestId !== selectionRequestId.value) return
+
     if (response.data.success) {
       const movies = response.data.data.movies
       store.setSelectedMovies(movies)
-      lastAppliedSelectionMode.value = mode
-      if (!silent) ElMessage.success(`成功筛选出 ${movies.length} 部电影`)
-      emit('movies-selected', movies)
-    } else if (!silent) {
+      hasLoadedSelection.value = true
+    } else {
       ElMessage.error('筛选失败: ' + response.data.error)
     }
   } catch (error) {
-    if (!silent) ElMessage.error('筛选失败: ' + error.message)
+    if (requestId === selectionRequestId.value) ElMessage.error('筛选失败: ' + error.message)
   } finally {
-    selectLoading.value = false
+    if (requestId === selectionRequestId.value) selectLoading.value = false
   }
 }
 
-const handleSelectMovies = async () => {
-  await runSelection(form.value.selectionMode)
+const handleSelectionModeChange = async (mode) => {
+  await runSelection(mode)
 }
 
 onMounted(async () => {
   await store.refreshMovieStatus()
+  await runSelection(form.value.selectionMode)
+  movieStatusPollingId = window.setInterval(() => {
+    void store.refreshMovieStatus()
+  }, MOVIE_STATUS_POLL_INTERVAL_MS)
 })
 
-// 手动更新电影完成后 lastUpdatedAt 会变化,自动用上次的筛选模式重新查询。
-// 必须已经做过一次筛选(lastAppliedSelectionMode 非空),否则用户可能根本没意图浏览电影列表。
+onUnmounted(() => {
+  if (movieStatusPollingId != null) {
+    window.clearInterval(movieStatusPollingId)
+    movieStatusPollingId = null
+  }
+})
+
+// 手动或定时更新电影完成后 lastUpdatedAt 会变化,自动按当前上映状态刷新列表。
 watch(
   () => store.movieLastUpdatedAt,
   (next, prev) => {
     if (!prev || !next || next === prev) return
-    if (!lastAppliedSelectionMode.value) return
-    void runSelection(lastAppliedSelectionMode.value, { silent: true })
+    if (!hasLoadedSelection.value) return
+    void runSelection(form.value.selectionMode)
   }
 )
 </script>
@@ -100,12 +132,18 @@ watch(
 <style scoped>
 .movie-selector-section {
   min-width: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #ffffff;
 }
 
-.movie-selector-section .el-form {
+.filter-form {
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -116,10 +154,10 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 16px 0;
+  margin: 0 0 18px 0;
   font-size: 16px;
-  font-weight: 500;
-  color: #333;
+  font-weight: 700;
+  color: #1f2937;
   width: 100%;
   justify-content: flex-start;
 }
@@ -128,6 +166,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .movie-selector-section :deep(.el-form-item) {
@@ -147,7 +186,9 @@ watch(
   padding-right: 12px;
 }
 
-.movie-selector-section :deep(.movie-selector-action-form-item .el-form-item__content) {
-  margin-left: 0 !important;
+@media (max-width: 960px) {
+  .movie-selector-section {
+    height: auto;
+  }
 }
 </style>

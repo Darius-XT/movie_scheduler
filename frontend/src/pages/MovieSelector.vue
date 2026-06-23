@@ -10,12 +10,11 @@
       <!-- 顶部左右布局：信息更新 + 电影筛选 -->
       <div class="top-section">
         <UpdatePanel
-          :cities="cities"
           :update-form="updateForm"
         />
         <MovieFilterPanel
+          :cities="cities"
           :update-form="updateForm"
-          @movies-selected="handleMoviesSelected"
         />
       </div>
 
@@ -130,11 +129,6 @@ watch(
   }
 )
 
-// ===== 事件处理：来自 MovieFilterPanel =====
-const handleMoviesSelected = () => {
-  // no-op now; 场次抓取已移到想看列表
-}
-
 // ===== 豆瓣信息获取 =====
 const handleFetchDouban = async (movie) => {
   if (!movie.id) return
@@ -213,25 +207,41 @@ const filteredSelectedMovies = computed(() => {
 
 <style scoped>
 .movie-scheduler-page {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
 .page-card {
   margin-bottom: 20px;
+  border-radius: 8px;
+  border-color: #e5e7eb;
+}
+
+.page-card :deep(.el-card__header) {
+  padding: 16px 20px;
+  border-bottom-color: #eef2f7;
+}
+
+.page-card :deep(.el-card__body) {
+  padding: 20px;
 }
 
 .card-header {
   font-size: 18px;
   font-weight: bold;
+  color: #111827;
 }
 
 .top-section {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
-  gap: 40px;
-  margin-bottom: 20px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background-color: #f8fafc;
 }
 
 .movies-section {
