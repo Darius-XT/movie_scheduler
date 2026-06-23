@@ -10,7 +10,8 @@ from movie_scheduler.features.show.service import ShowService
 def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
     service = ShowService()
     captured_shows: list[dict[str, object]] = []
-    captured_headers: list[dict[str, str]] = []
+    captured_movie_headers: list[dict[str, str]] = []
+    captured_cinema_headers: list[dict[str, str]] = []
     movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True)
 
     def fake_get_movie_by_id(movie_id: int) -> SimpleNamespace | None:
@@ -21,14 +22,16 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
         log_label: str,
         headers: dict[str, str] | None = None,
     ) -> str | None:
+        if url == "https://www.maoyan.com/":
+            return '<a href="/cinemas?movieId=1366168" data-val="{movieid:1366168}">ticket</a>'
         if url == "https://www.maoyan.com/cinemas?movieId=1490532":
+            captured_movie_headers.append(headers or {})
             return _MAOYAN_MOVIE_CINEMAS_HTML
         if url == "https://www.maoyan.com/cinemas?movieId=1490532&showDate=2026-06-23":
+            captured_movie_headers.append(headers or {})
             return _MAOYAN_MOVIE_DATE_CINEMAS_HTML
-        if url.startswith("https://m.maoyan.com/cinema/38931"):
-            return '<div class="list-wrap" data-movie-ids="1366168"></div>'
         if url == "https://www.maoyan.com/cinema/38931":
-            captured_headers.append(headers or {})
+            captured_cinema_headers.append(headers or {})
             return _MAOYAN_CINEMA_HTML
         return None
 
@@ -56,8 +59,40 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
         "time": "10:00",
         "price": "39.9",
     }]
-    assert "hotMovieIds=1490532,1366168" in captured_headers[0]["Cookie"]
-    assert "old-moviepage-ci=10" in captured_headers[0]["Cookie"]
+    assert "hotMovieIds=1490532,1366168" in captured_movie_headers[0]["Cookie"]
+    assert "hotMovieIds=1490532,1366168" in captured_cinema_headers[0]["Cookie"]
+    assert "old-moviepage-ci=10" in captured_cinema_headers[0]["Cookie"]
+    assert "; ci=" not in captured_cinema_headers[0]["Cookie"]
+    assert not captured_cinema_headers[0]["Cookie"].startswith("ci=")
+
+
+def test_hot_movie_ids_cache_expires_after_one_hour(monkeypatch) -> None:
+    service = ShowService()
+    now = 1_000.0
+    calls: list[str] = []
+
+    def fake_monotonic() -> float:
+        return now
+
+    def fake_http_get_text(
+        url: str,
+        log_label: str,
+        headers: dict[str, str] | None = None,
+    ) -> str | None:
+        calls.append(url)
+        movie_id = 11 if len(calls) == 1 else 22
+        return f'<a href="/cinemas?movieId={movie_id}" data-val="{{movieid:{movie_id}}}">ticket</a>'
+
+    monkeypatch.setattr(show_module, "monotonic", fake_monotonic)
+    monkeypatch.setattr(show_module, "_http_get_text", fake_http_get_text)
+    monkeypatch.setattr(show_module.config_manager, "maoyan_cookie", "hotMovieIds=1,2; old-moviepage-ci=1")
+
+    assert service._get_hot_movie_ids(10) == [11]
+    now = 1_000.0 + 3_599
+    assert service._get_hot_movie_ids(10) == [11]
+    now = 1_000.0 + 3_601
+    assert service._get_hot_movie_ids(10) == [22]
+    assert calls == ["https://www.maoyan.com/", "https://www.maoyan.com/"]
 
 
 def test_persist_results_deduplicates_show_rows(monkeypatch) -> None:

@@ -13,7 +13,9 @@ import re
 from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from time import monotonic
 from typing import TypedDict, cast
+from urllib.parse import urlsplit
 
 import requests
 import urllib3
@@ -32,7 +34,6 @@ from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.show.models import MovieShowWriteData
 from movie_scheduler.features.show.repository import movie_show_repository
 from movie_scheduler.shared.maoyan import (
-    MAOYAN_MOBILE_HEADERS,
     build_maoyan_web_headers,
     decode_maoyan_stonefont_text,
 )
@@ -132,19 +133,22 @@ _SHOW_REQUEST_HEADERS = {
 }
 
 _SHOW_API_TIMEOUT = 30
+_MAOYAN_WEB_HOME = "https://www.maoyan.com/"
 _MAOYAN_WEB_CINEMA_BASE = "https://www.maoyan.com/cinema"
 _MAOYAN_WEB_CINEMAS_BASE = "https://www.maoyan.com/cinemas"
-_MAOYAN_MOBILE_CINEMA_BASE = "https://m.maoyan.com/cinema"
 _CINEMA_PAGE_SIZE = 12
+_HOT_MOVIE_IDS_CACHE_TTL_SECONDS = 60 * 60
 
 
 def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = None) -> str | None:
     """抓取外部接口文本,失败返回 None。"""
     try:
+        effective_headers = headers or _SHOW_REQUEST_HEADERS
         logger.debug("开始%s: %s", log_label, url)
+        _log_request_details(url, log_label, effective_headers)
         response = requests.get(
             url,
-            headers=headers or _SHOW_REQUEST_HEADERS,
+            headers=effective_headers,
             timeout=_SHOW_API_TIMEOUT,
             verify=False,
         )
@@ -159,6 +163,23 @@ def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = No
     except Exception as error:
         logger.error("%s异常: url=%s, error=%s", log_label, url, error, exc_info=True)
         return None
+
+
+def _log_request_details(url: str, log_label: str, headers: dict[str, str]) -> None:
+    """打印外部请求的完整请求头, 包括 Cookie。"""
+    parsed = urlsplit(url)
+    path = parsed.path or "/"
+    if parsed.query:
+        path = f"{path}?{parsed.query}"
+
+    request_lines = [
+        f"GET {path} HTTP/1.1",
+        f"Host: {parsed.netloc}",
+    ]
+    for key, value in headers.items():
+        request_lines.append(f"{key}: {value}")
+
+    logger.debug("%s请求详情:\n%s", log_label, "\n".join(request_lines))
 
 
 # =============================================================================
@@ -218,7 +239,7 @@ class ShowService:
     """聚合场次抓取与持久化能力。"""
 
     def __init__(self) -> None:
-        self._hot_movie_ids_cache: dict[int, list[int]] = {}
+        self._hot_movie_ids_cache: dict[int, tuple[float, list[int]]] = {}
         self._movie_persist_locks: dict[int, asyncio.Lock] = {}
 
     # ---------- 对外: 定时抓取 + 单片抓取 ----------
@@ -576,47 +597,74 @@ class ShowService:
         return items
 
     def _build_maoyan_web_headers(self, city_id: int, cinema_id: int, movie_id: int) -> dict[str, str]:
-        hot_movie_ids = self._get_hot_movie_ids(city_id, cinema_id)
-        if movie_id not in hot_movie_ids:
-            hot_movie_ids = [movie_id, *hot_movie_ids]
-        return build_maoyan_web_headers(city_id, hot_movie_ids=hot_movie_ids)
+        hot_movie_ids = self._get_hot_movie_ids(city_id)
+        return build_maoyan_web_headers(city_id, hot_movie_ids=self._prepend_movie_id(hot_movie_ids, movie_id))
 
     def _build_maoyan_movie_headers(self, city_id: int, movie_id: int) -> dict[str, str]:
-        hot_movie_ids = self._get_local_movie_ids()
-        if movie_id not in hot_movie_ids:
-            hot_movie_ids = [movie_id, *hot_movie_ids]
-        return build_maoyan_web_headers(city_id, hot_movie_ids=hot_movie_ids)
+        hot_movie_ids = self._get_hot_movie_ids(city_id)
+        return build_maoyan_web_headers(city_id, hot_movie_ids=self._prepend_movie_id(hot_movie_ids, movie_id))
 
-    def _get_hot_movie_ids(self, city_id: int, cinema_id: int) -> list[int]:
-        if city_id in self._hot_movie_ids_cache:
-            return self._hot_movie_ids_cache[city_id]
+    def _get_hot_movie_ids(self, city_id: int) -> list[int]:
+        cached = self._hot_movie_ids_cache.get(city_id)
+        now = monotonic()
+        if cached is not None:
+            cached_at, cached_ids = cached
+            if now - cached_at < _HOT_MOVIE_IDS_CACHE_TTL_SECONDS:
+                return cached_ids
 
-        url = f"{_MAOYAN_MOBILE_CINEMA_BASE}/{cinema_id}?ci={int(city_id)}"
-        text = _http_get_text(url, "获取猫眼热映电影 Cookie 数据", headers=MAOYAN_MOBILE_HEADERS)
+        headers = build_maoyan_web_headers(city_id)
+        text = _http_get_text(_MAOYAN_WEB_HOME, "获取猫眼首页热映电影 Cookie 数据", headers=headers)
         hot_movie_ids = self._parse_hot_movie_ids(text or "")
         if not hot_movie_ids:
-            hot_movie_ids = self._get_local_movie_ids()
-        self._hot_movie_ids_cache[city_id] = hot_movie_ids
+            if cached is not None:
+                logger.warning("猫眼首页 hotMovieIds 解析为空,沿用过期缓存")
+                return cached[1]
+            hot_movie_ids = self._parse_hot_movie_ids_from_cookie(config_manager.maoyan_cookie)
+        if hot_movie_ids:
+            self._hot_movie_ids_cache[city_id] = (now, hot_movie_ids)
         return hot_movie_ids
 
-    def _get_local_movie_ids(self) -> list[int]:
-        try:
-            movies = movie_repository.get_all_movies(limit=100)
-        except RepositoryError:
-            logger.warning("读取本地电影列表作为 hotMovieIds 失败", exc_info=True)
-            return []
-        return [int(mid) for movie in movies if (mid := cast(int | None, getattr(movie, "id", None))) is not None]
+    def _prepend_movie_id(self, hot_movie_ids: list[int], movie_id: int) -> list[int]:
+        if movie_id in hot_movie_ids:
+            return hot_movie_ids
+        return [movie_id, *hot_movie_ids]
 
     def _parse_hot_movie_ids(self, html_content: str) -> list[int]:
-        match = re.search(r'data-movie-ids=["\']([^"\']+)["\']', html_content)
+        result: list[int] = []
+        for pattern in (
+            r'data-movie-ids=["\']([^"\']+)["\']',
+            r"/cinemas\?movieId=(\d+)",
+            r"data-val=[\"']\{movieid:(\d+)\}[\"']",
+            r"/films/(\d+)",
+        ):
+            matches = re.findall(pattern, html_content, flags=re.IGNORECASE)
+            for match in matches:
+                if isinstance(match, tuple):
+                    raw_values = match
+                else:
+                    raw_values = (match,)
+                for raw_value in raw_values:
+                    if "," in raw_value:
+                        self._append_movie_ids(result, raw_value.split(","))
+                    else:
+                        self._append_movie_ids(result, [raw_value])
+        return result
+
+    def _parse_hot_movie_ids_from_cookie(self, cookie: str) -> list[int]:
+        match = re.search(r"(?:^|;\s*)hotMovieIds=([^;]+)", cookie)
         if match is None:
             return []
         result: list[int] = []
-        for raw_id in match.group(1).split(","):
+        self._append_movie_ids(result, match.group(1).split(","))
+        return result
+
+    def _append_movie_ids(self, result: list[int], raw_ids: Sequence[str]) -> None:
+        for raw_id in raw_ids:
             normalized = raw_id.strip()
             if normalized.isdigit():
-                result.append(int(normalized))
-        return result
+                movie_id = int(normalized)
+                if movie_id not in result:
+                    result.append(movie_id)
 
     # ---------- 内部: JSON 解析 ----------
 
