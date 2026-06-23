@@ -392,11 +392,14 @@ class ShowService:
             self._merge_cinemas(movie_data, cinemas)
 
             return self._finalize_movie(movie_data)
-        except BaseException as error:
+        except asyncio.CancelledError:
+            logger.info("处理电影 ID %s 的场次任务被取消", movie_id)
+            raise
+        except Exception as error:
             if isinstance(error, _DegradableError):
                 logger.warning("处理电影 ID %s 时发生可降级错误,跳过当前电影: %s", movie_id, error)
                 return None
-            logger.error("处理电影 ID %s 时发生不可恢复错误: %s", movie_id, error)
+            logger.exception("处理电影 ID %s 时发生不可恢复错误: %s: %r", movie_id, type(error).__name__, error)
             raise
 
     async def _collect_movie_cinema_ids(self, movie_id: int, city_id: int, show_dates: list[str]) -> list[int]:
@@ -492,11 +495,14 @@ class ShowService:
                 valid.append(cinema_result)
 
             return self._build_cinemas_from_shows(valid)
-        except BaseException as error:
+        except asyncio.CancelledError:
+            logger.info("处理日期 %s 的场次任务被取消", show_date)
+            raise
+        except Exception as error:
             if isinstance(error, _DegradableError):
                 logger.warning("处理日期 %s 时发生可降级错误,跳过当前日期: %s", show_date, error)
                 return None
-            logger.error("处理日期 %s 时发生不可恢复错误: %s", show_date, error)
+            logger.exception("处理日期 %s 时发生不可恢复错误: %s: %r", show_date, type(error).__name__, error)
             raise
 
     # ---------- 内部: 上游 HTTP 调用 ----------
@@ -1098,9 +1104,18 @@ class ShowService:
         result: list[_FinalMovieShowData] = []
         for movie_result in movie_results:
             if isinstance(movie_result, BaseException):
+                if isinstance(movie_result, asyncio.CancelledError):
+                    logger.info("场次抓取任务被取消")
+                    raise movie_result
                 if isinstance(movie_result, _DegradableError):
                     logger.warning("处理电影时发生可降级错误,跳过当前电影: %s", movie_result)
                     continue
+                logger.exception(
+                    "处理电影时发生不可恢复错误: %s: %r",
+                    type(movie_result).__name__,
+                    movie_result,
+                    exc_info=(type(movie_result), movie_result, movie_result.__traceback__),
+                )
                 raise movie_result
             if isinstance(movie_result, _FinalMovieShowData) and movie_result.cinemas:
                 result.append(movie_result)

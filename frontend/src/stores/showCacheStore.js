@@ -7,7 +7,7 @@ const MOVIE_SHOW_POLL_INTERVAL_MS = 15_000
 const MOVIE_SHOW_POLL_MAX_ATTEMPTS = 40
 const SHOWS_UPDATE_META_KEY = 'showsUpdateMeta'
 const SHOWS_UPDATE_RESULT_KEY = 'showsUpdateResult'
-const EMPTY_UPDATE_META = { lastUpdatedAt: null, durationMs: null }
+const EMPTY_UPDATE_META = { durationMs: null }
 
 export const useShowCacheStore = defineStore('showCache', () => {
   const movieShowsMap = ref(new Map())
@@ -17,7 +17,8 @@ export const useShowCacheStore = defineStore('showCache', () => {
   const moviePollingIds = ref(new Set())
 
   // 手动「更新场次」按钮的统计 + 用时,本地持久化; lastFetchedAt 仍以后端 last_fetched_at 为权威。
-  const showsUpdateMeta = ref(loadFromStorage(SHOWS_UPDATE_META_KEY, EMPTY_UPDATE_META))
+  const loadedShowsUpdateMeta = loadFromStorage(SHOWS_UPDATE_META_KEY, EMPTY_UPDATE_META)
+  const showsUpdateMeta = ref({ durationMs: loadedShowsUpdateMeta?.durationMs ?? null })
   const showsUpdateResult = ref(loadFromStorage(SHOWS_UPDATE_RESULT_KEY, null))
 
   watch(showsUpdateMeta, (val) => saveToStorage(SHOWS_UPDATE_META_KEY, val), { deep: true })
@@ -26,7 +27,6 @@ export const useShowCacheStore = defineStore('showCache', () => {
   const recordShowUpdate = (result, durationMs, lastFetchedAtFromBackend) => {
     showsUpdateResult.value = result
     showsUpdateMeta.value = {
-      lastUpdatedAt: lastFetchedAtFromBackend || null,
       durationMs,
     }
     if (lastFetchedAtFromBackend) {

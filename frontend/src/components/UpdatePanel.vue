@@ -89,8 +89,8 @@
               <div class="update-action-meta update-action-meta--time">
                 <span v-if="showsLastUpdatedAt">
                   <el-tooltip
-                    v-if="showsUpdateMeta.durationMs"
-                    :content="`更新用时 ${formatDurationMs(showsUpdateMeta.durationMs)}`"
+                    v-if="showsUpdateDurationMs"
+                    :content="`更新用时 ${formatDurationMs(showsUpdateDurationMs)}`"
                     placement="top"
                   >
                     <span class="update-meta-trigger">
@@ -173,9 +173,8 @@ const movieUpdateMeta = computed(() => store.movieUpdateMeta)
 const movieLastUpdatedAt = computed(() => store.movieLastUpdatedAt)
 const showsUpdateMeta = computed(() => store.showsUpdateMeta)
 const showsUpdateResult = computed(() => store.showsUpdateResult)
-const showsLastUpdatedAt = computed(
-  () => showsUpdateMeta.value.lastUpdatedAt || store.showsLastFetchedAt,
-)
+const showsLastUpdatedAt = computed(() => store.showsLastFetchedAt)
+const showsUpdateDurationMs = computed(() => showsUpdateMeta.value.durationMs)
 
 onMounted(() => {
   // 拉一次后端定时任务的最新时间戳, 让首次进入页面就能显示
