@@ -166,7 +166,7 @@ def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = No
 
 
 def _log_request_details(url: str, log_label: str, headers: dict[str, str]) -> None:
-    """打印外部请求的完整请求头, 包括 Cookie。"""
+    """打印外部请求头, 跳过 Cookie 等敏感头。"""
     parsed = urlsplit(url)
     path = parsed.path or "/"
     if parsed.query:
@@ -177,6 +177,8 @@ def _log_request_details(url: str, log_label: str, headers: dict[str, str]) -> N
         f"Host: {parsed.netloc}",
     ]
     for key, value in headers.items():
+        if key.lower() == "cookie":
+            continue
         request_lines.append(f"{key}: {value}")
 
     logger.debug("%s请求详情:\n%s", log_label, "\n".join(request_lines))
