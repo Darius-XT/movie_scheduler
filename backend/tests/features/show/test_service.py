@@ -1,13 +1,16 @@
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
 
+from pytest import MonkeyPatch
+
 import movie_scheduler.features.show.service as show_module
 from movie_scheduler.features.show.service import ShowService
 
 
-def test_http_get_text_does_not_log_request_headers(monkeypatch) -> None:
+def test_http_get_text_does_not_log_request_headers(monkeypatch: MonkeyPatch) -> None:
     messages: list[str] = []
 
     def fake_debug(message: str, *args: object) -> None:
@@ -33,7 +36,7 @@ def test_http_get_text_does_not_log_request_headers(monkeypatch) -> None:
     assert "uuid=secret" not in log_text
 
 
-def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
+def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch: MonkeyPatch) -> None:
     service = ShowService()
     captured_shows: list[dict[str, object]] = []
     captured_movie_headers: list[dict[str, str]] = []
@@ -65,12 +68,18 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
         captured_shows.extend(shows)
         return len(shows)
 
+    def fake_touch_shows_updated_at(movie_id: int) -> bool:
+        return True
+
+    def fake_list_for_movies(movie_ids: list[int]) -> list[object]:
+        return []
+
     monkeypatch.setattr(show_module.config_manager, "maoyan_cookie", (
         "uuid_n_v=v1; hotMovieIds=1,2; old-moviepage-ci=1; ci=1126; global-guide-isclose=true"
     ))
     monkeypatch.setattr(show_module.movie_repository, "get_movie_by_id", fake_get_movie_by_id)
-    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", lambda movie_id: True)
-    monkeypatch.setattr(show_module.movie_show_repository, "list_for_movies", lambda movie_ids: [])
+    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", fake_touch_shows_updated_at)
+    monkeypatch.setattr(show_module.movie_show_repository, "list_for_movies", fake_list_for_movies)
     monkeypatch.setattr(show_module.movie_show_repository, "replace_for_movie", fake_replace_for_movie)
     monkeypatch.setattr(show_module, "_http_get_text", fake_http_get_text)
 
@@ -92,7 +101,7 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch) -> None:
     assert "ci=1126" not in captured_cinema_headers[0]["Cookie"]
 
 
-def test_hot_movie_ids_cache_expires_after_one_hour(monkeypatch) -> None:
+def test_hot_movie_ids_cache_expires_after_one_hour(monkeypatch: MonkeyPatch) -> None:
     service = ShowService()
     now = 1_000.0
     calls: list[str] = []
@@ -121,7 +130,7 @@ def test_hot_movie_ids_cache_expires_after_one_hour(monkeypatch) -> None:
     assert calls == ["https://www.maoyan.com/", "https://www.maoyan.com/"]
 
 
-def test_persist_results_deduplicates_show_rows(monkeypatch) -> None:
+def test_persist_results_deduplicates_show_rows(monkeypatch: MonkeyPatch) -> None:
     service = ShowService()
     captured_shows: list[dict[str, object]] = []
 
@@ -132,10 +141,16 @@ def test_persist_results_deduplicates_show_rows(monkeypatch) -> None:
         captured_shows.extend(shows)
         return len(shows)
 
+    def fake_list_for_movies(movie_ids: list[int]) -> list[object]:
+        return []
+
+    def fake_touch_shows_updated_at(movie_id: int) -> bool:
+        return True
+
     monkeypatch.setattr(service, "_is_movie_wished", fake_is_movie_wished)
-    monkeypatch.setattr(show_module.movie_show_repository, "list_for_movies", lambda movie_ids: [])
+    monkeypatch.setattr(show_module.movie_show_repository, "list_for_movies", fake_list_for_movies)
     monkeypatch.setattr(show_module.movie_show_repository, "replace_for_movie", fake_replace_for_movie)
-    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", lambda movie_id: True)
+    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", fake_touch_shows_updated_at)
 
     result = asyncio.run(service._persist_results(
         [1490532],

@@ -4,19 +4,50 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from contextlib import redirect_stderr, redirect_stdout
+from importlib import import_module
 from io import BytesIO, StringIO
-from typing import Any
+from typing import Protocol, cast
 
 import requests
 
 from movie_scheduler.config import config_manager
 
-try:
-    from fontTools.ttLib import TTFont
-except ImportError:  # pragma: no cover - runtime dependency, graceful fallback for lean local envs
-    TTFont = None  # type: ignore[assignment]
+
+class _StonefontGlyph(Protocol):
+    coordinates: Sequence[tuple[float, float]]
+    xMin: float
+    yMin: float
+    xMax: float
+    yMax: float
+
+
+class _StonefontGlyfTable(Protocol):
+    def __getitem__(self, glyph_name: str) -> _StonefontGlyph: ...
+
+
+class _StonefontFont(Protocol):
+    def getBestCmap(self) -> dict[int, str] | None: ...
+
+    def __getitem__(self, table_name: str) -> _StonefontGlyfTable: ...
+
+
+_TTFontFactory = Callable[[BytesIO], _StonefontFont]
+
+
+def _load_ttfont_factory() -> _TTFontFactory | None:
+    try:
+        module = import_module("fontTools.ttLib")
+    except ImportError:  # pragma: no cover - runtime dependency, graceful fallback for lean local envs
+        return None
+    factory = getattr(module, "TTFont", None)
+    if not callable(factory):
+        return None
+    return cast(_TTFontFactory, factory)
+
+
+_TTFONT_FACTORY = _load_ttfont_factory()
 
 MAOYAN_WEB_HEADERS = {
     "Accept": (
@@ -141,7 +172,7 @@ def _build_stonefont_decoder(
         return None
     if font_url in _STONEFONT_DECODER_CACHE:
         return _STONEFONT_DECODER_CACHE[font_url]
-    if TTFont is None:
+    if _TTFONT_FACTORY is None:
         return None
 
     try:
@@ -157,7 +188,7 @@ def _build_stonefont_decoder(
         font_logger.setLevel(logging.ERROR)
         try:
             with redirect_stdout(StringIO()), redirect_stderr(StringIO()):
-                font = TTFont(BytesIO(response.content))
+                font = _TTFONT_FACTORY(BytesIO(response.content))
                 cmap = font.getBestCmap() or {}
                 decoder: dict[str, str] = {}
                 for codepoint, glyph_name in cmap.items():
@@ -198,27 +229,20 @@ def _build_font_headers(headers: dict[str, str] | None) -> dict[str, str]:
     return result
 
 
-def _classify_stonefont_glyph(glyph: Any) -> str | None:
-    coordinates = list(getattr(glyph, "coordinates", []) or [])
+def _classify_stonefont_glyph(glyph: _StonefontGlyph) -> str | None:
+    coordinates = list(glyph.coordinates or [])
     if not coordinates:
         return None
 
-    x_min = getattr(glyph, "xMin", None)
-    y_min = getattr(glyph, "yMin", None)
-    x_max = getattr(glyph, "xMax", None)
-    y_max = getattr(glyph, "yMax", None)
-    if None in (x_min, y_min, x_max, y_max):
-        return None
-
-    width = int(x_max) - int(x_min)
-    height = int(y_max) - int(y_min)
+    width = int(glyph.xMax) - int(glyph.xMin)
+    height = int(glyph.yMax) - int(glyph.yMin)
     if width <= 0 or height <= 0:
         return None
 
     bitset = 0
     for x, y in coordinates:
-        x_index = min(_STONEFONT_GRID_SIZE - 1, max(0, int(((x - x_min) / width) * _STONEFONT_GRID_SIZE)))
-        y_index = min(_STONEFONT_GRID_SIZE - 1, max(0, int(((y - y_min) / height) * _STONEFONT_GRID_SIZE)))
+        x_index = min(_STONEFONT_GRID_SIZE - 1, max(0, int(((x - glyph.xMin) / width) * _STONEFONT_GRID_SIZE)))
+        y_index = min(_STONEFONT_GRID_SIZE - 1, max(0, int(((y - glyph.yMin) / height) * _STONEFONT_GRID_SIZE)))
         bitset |= 1 << (y_index * _STONEFONT_GRID_SIZE + x_index)
 
     aspect_ratio = width / height

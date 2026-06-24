@@ -624,17 +624,12 @@ class ShowService:
             r"data-val=[\"']\{movieid:(\d+)\}[\"']",
             r"/films/(\d+)",
         ):
-            matches = re.findall(pattern, html_content, flags=re.IGNORECASE)
+            matches: list[str] = re.findall(pattern, html_content, flags=re.IGNORECASE)
             for match in matches:
-                if isinstance(match, tuple):
-                    raw_values = match
+                if "," in match:
+                    self._append_movie_ids(result, match.split(","))
                 else:
-                    raw_values = (match,)
-                for raw_value in raw_values:
-                    if "," in raw_value:
-                        self._append_movie_ids(result, raw_value.split(","))
-                    else:
-                        self._append_movie_ids(result, [raw_value])
+                    self._append_movie_ids(result, [match])
         return result
 
     def _parse_hot_movie_ids_from_cookie(self, cookie: str) -> list[int]:
@@ -690,8 +685,6 @@ class ShowService:
         result: list[str] = []
         seen: set[str] = set()
         for link in soup.select('a[href*="showDate="], a[data-val*="TagName"]'):
-            if not isinstance(link, Tag):
-                continue
             raw_values = [str(value) for value in (link.get("href"), link.get("data-val")) if isinstance(value, str)]
             for raw_value in raw_values:
                 match = re.search(r"(?:showDate=|TagName:'?)(\d{4}-\d{2}-\d{2})", html.unescape(raw_value))
@@ -735,8 +728,6 @@ class ShowService:
         soup = BeautifulSoup(html_content, "html.parser")
         cinema_ids: list[int] = []
         for link in soup.select(".cinema-cell .cinema-name, .cinema-cell a[href*='/cinema/']"):
-            if not isinstance(link, Tag):
-                continue
             cinema_id = self._extract_cinema_id_from_html(link)
             if cinema_id is not None and cinema_id not in cinema_ids:
                 cinema_ids.append(cinema_id)
@@ -754,7 +745,7 @@ class ShowService:
 
     def _has_next_cinema_page(self, soup: BeautifulSoup) -> bool:
         for link in soup.select(".list-pager a"):
-            href = link.get("href") if isinstance(link, Tag) else None
+            href = link.get("href")
             if isinstance(href, str) and "offset=" in href and "下一页" in link.get_text(" ", strip=True):
                 return True
         return False
@@ -852,7 +843,7 @@ class ShowService:
         return result
 
     def _find_html_movie_sections(self, soup: BeautifulSoup, movie_id: int, movie_name: str) -> list[Tag]:
-        sections = [node for node in soup.select(".show-list, .show-list-container") if isinstance(node, Tag)]
+        sections = list(soup.select(".show-list, .show-list-container"))
         matched_sections = [
             section for section in sections if self._html_section_matches_movie(section, movie_id, movie_name)
         ]
@@ -916,7 +907,7 @@ class ShowService:
         return title.split("_", 1)[0].strip()
 
     def _extract_html_movie_id(self, element: Tag) -> int | None:
-        candidates = [element, *[node for node in element.select("[href], [data-val], [data-lab]") if isinstance(node, Tag)]]
+        candidates = [element, *element.select("[href], [data-val], [data-lab]")]
         for candidate in candidates:
             for attr_name in ("href", "data-val", "data-lab"):
                 raw_value = candidate.get(attr_name)
@@ -942,8 +933,6 @@ class ShowService:
 
     def _extract_html_show_date_from_href(self, row: Tag) -> str | None:
         for link in row.select('a[href*="/xseats/"], a[href*="/seats/"]'):
-            if not isinstance(link, Tag):
-                continue
             href = link.get("href")
             if not isinstance(href, str):
                 continue
@@ -960,8 +949,8 @@ class ShowService:
         show_list = container.find_parent(class_=re.compile(r"\bshow-list\b"))
         if not isinstance(show_list, Tag):
             return target_show_date
-        containers = [node for node in show_list.select(".plist-container") if isinstance(node, Tag)]
-        date_items = [node for node in show_list.select(".date-item") if isinstance(node, Tag)]
+        containers = list(show_list.select(".plist-container"))
+        date_items = list(show_list.select(".date-item"))
         if container not in containers:
             return target_show_date
         index = containers.index(container)
@@ -1000,7 +989,7 @@ class ShowService:
                 price = self._normalize_price_value(element.get_text(" ", strip=True), html_content)
                 if price is not None:
                     return price
-        cells = [node for node in row.select("td") if isinstance(node, Tag)]
+        cells = list(row.select("td"))
         if len(cells) >= 4:
             price = self._normalize_price_value(cells[3].get_text(" ", strip=True), html_content)
             if price is not None:

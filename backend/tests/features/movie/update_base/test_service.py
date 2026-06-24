@@ -1,4 +1,7 @@
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
+
+from pytest import MonkeyPatch
 
 import movie_scheduler.features.movie.update_base.service as base_module
 from movie_scheduler.features.movie.update_base.service import UpdateBaseService
@@ -22,16 +25,21 @@ class _FakeResponse:
 
 class _FakeSession:
     def __init__(self) -> None:
-        self.cookies = {}
+        self.cookies: dict[str, str] = {}
         self.requests: list[tuple[str, dict[str, str]]] = []
 
-    def get(self, url: str, **kwargs: object) -> _FakeResponse:
-        headers = kwargs.get("headers")
-        self.requests.append((url, headers if isinstance(headers, dict) else {}))
+    def get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        **_: object,
+    ) -> _FakeResponse:
+        self.requests.append((url, headers or {}))
         return _FakeResponse()
 
 
-def test_update_base_uses_configured_maoyan_cookie(monkeypatch) -> None:
+def test_update_base_uses_configured_maoyan_cookie(monkeypatch: MonkeyPatch) -> None:
     service = UpdateBaseService()
     fake_session = _FakeSession()
     service.session = fake_session  # type: ignore[assignment]
@@ -56,12 +64,19 @@ def test_update_base_uses_configured_maoyan_cookie(monkeypatch) -> None:
     assert "hotMovieIds=1,2" in fake_session.requests[-1][1]["Cookie"]
 
 
-def test_update_base_skips_stale_deletes_when_scrape_is_incomplete(monkeypatch) -> None:
+def test_update_base_skips_stale_deletes_when_scrape_is_incomplete(monkeypatch: MonkeyPatch) -> None:
     service = UpdateBaseService()
     deleted_ids: list[int] = []
 
-    monkeypatch.setattr(base_module.movie_repository, "get_movies_count", lambda: 2)
-    monkeypatch.setattr(base_module.movie_repository, "delete_movie", lambda movie_id: deleted_ids.append(movie_id))
+    def fake_get_movies_count() -> int:
+        return 2
+
+    def fake_delete_movie(movie_id: int) -> bool:
+        deleted_ids.append(movie_id)
+        return True
+
+    monkeypatch.setattr(base_module.movie_repository, "get_movies_count", fake_get_movies_count)
+    monkeypatch.setattr(base_module.movie_repository, "delete_movie", fake_delete_movie)
 
     result = service._perform_incremental_update({1, 2}, [], remove_stale=False)
 

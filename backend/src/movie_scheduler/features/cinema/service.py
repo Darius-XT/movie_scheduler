@@ -193,7 +193,7 @@ class CinemaService:
             cinemas: list[CinemaUpsertData] = []
             soup = BeautifulSoup(html_content, "html.parser")
             for cell in soup.select(".cinema-cell"):
-                if isinstance(cell, Tag) and (cinema := self._extract_cinema_cell(cell, html_content)) is not None:
+                if (cinema := self._extract_cinema_cell(cell, html_content)) is not None:
                     cinemas.append(cinema)
             return cinemas, not self._has_next_page(soup)
         except Exception as error:
@@ -247,7 +247,7 @@ class CinemaService:
 
     def _has_next_page(self, soup: BeautifulSoup) -> bool:
         for link in soup.select(".list-pager a"):
-            href = link.get("href") if isinstance(link, Tag) else None
+            href = link.get("href")
             if isinstance(href, str) and "offset=" in href and "下一页" in link.get_text(" ", strip=True):
                 return True
         return False

@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 from __future__ import annotations
 
 from movie_scheduler.shared.maoyan import _build_font_headers, _extract_stonefont_url

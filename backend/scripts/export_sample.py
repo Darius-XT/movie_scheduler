@@ -105,8 +105,9 @@ def _fetch_sample(sample_name: SampleName) -> str:
         return json.dumps(cinema_ids, ensure_ascii=False, indent=2)
 
     if sample_name == "cinema_shows":
-        from movie_scheduler.features.show.service import _CINEMA_SHOWS_BASE, _http_get_text
-        url = f"{_CINEMA_SHOWS_BASE}?cinemaId={DEMO_CINEMA_ID}&ci={DEMO_CITY_ID}"
+        from movie_scheduler.features.show.service import _MAOYAN_WEB_CINEMA_BASE, _http_get_text
+
+        url = f"{_MAOYAN_WEB_CINEMA_BASE}/{DEMO_CINEMA_ID}?ci={DEMO_CITY_ID}"
         return _http_get_text(url, "获取影院场次信息") or ""
 
     if sample_name == "movie_base_info":

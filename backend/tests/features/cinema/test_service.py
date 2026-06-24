@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+from pytest import MonkeyPatch
+
 import movie_scheduler.features.cinema.service as cinema_module
 from movie_scheduler.features.cinema.service import CinemaService
 
@@ -12,7 +14,7 @@ class _FakeResponse:
         self.status_code = status_code
 
 
-def test_update_cinemas_parses_maoyan_html_pages(monkeypatch) -> None:
+def test_update_cinemas_parses_maoyan_html_pages(monkeypatch: MonkeyPatch) -> None:
     service = CinemaService()
     requested_urls: list[str] = []
     saved_rows: list[dict[str, object]] = []

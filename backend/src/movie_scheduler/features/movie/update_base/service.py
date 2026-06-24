@@ -339,7 +339,7 @@ class UpdateBaseService:
         unique_scraped = self._deduplicate(scraped)
         scraped_ids = {m.id for m in unique_scraped}
         added_ids = scraped_ids - existing_movie_ids
-        removed_ids = existing_movie_ids - scraped_ids if remove_stale else set()
+        removed_ids = existing_movie_ids - scraped_ids if remove_stale else set[int]()
         updated_ids = scraped_ids & existing_movie_ids
         if not remove_stale:
             logger.warning("电影列表抓取未完整成功,本轮跳过下架删除以避免误删")

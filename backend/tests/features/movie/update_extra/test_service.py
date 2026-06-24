@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from pytest import MonkeyPatch
+
 import movie_scheduler.features.movie.update_extra.service as extra_module
 from movie_scheduler.features.movie.update_extra.service import UpdateExtraService
 
@@ -29,7 +31,7 @@ class _FakeResponse:
     """
 
 
-def test_update_extra_updates_changed_existing_movie_details(monkeypatch) -> None:
+def test_update_extra_updates_changed_existing_movie_details(monkeypatch: MonkeyPatch) -> None:
     service = UpdateExtraService()
     saved: list[dict[str, object]] = []
     movie = SimpleNamespace(
@@ -42,9 +44,19 @@ def test_update_extra_updates_changed_existing_movie_details(monkeypatch) -> Non
         description="Old description",
     )
 
-    monkeypatch.setattr(extra_module.movie_repository, "get_all_movies", lambda: [movie])
-    monkeypatch.setattr(extra_module.movie_repository, "save_movie", lambda row: saved.append(row) or True)
-    monkeypatch.setattr(extra_module.requests, "get", lambda *args, **kwargs: _FakeResponse())
+    def fake_get_all_movies() -> list[object]:
+        return [movie]
+
+    def fake_save_movie(row: dict[str, object]) -> bool:
+        saved.append(row)
+        return True
+
+    def fake_get(url: str, **kwargs: object) -> _FakeResponse:
+        return _FakeResponse()
+
+    monkeypatch.setattr(extra_module.movie_repository, "get_all_movies", fake_get_all_movies)
+    monkeypatch.setattr(extra_module.movie_repository, "save_movie", fake_save_movie)
+    monkeypatch.setattr(extra_module.requests, "get", fake_get)
 
     result = asyncio.run(service.update_all())
 
@@ -59,7 +71,7 @@ def test_update_extra_updates_changed_existing_movie_details(monkeypatch) -> Non
     }]
 
 
-def test_update_extra_skips_unchanged_movie_details(monkeypatch) -> None:
+def test_update_extra_skips_unchanged_movie_details(monkeypatch: MonkeyPatch) -> None:
     service = UpdateExtraService()
     saved: list[dict[str, object]] = []
     movie = SimpleNamespace(
@@ -72,9 +84,19 @@ def test_update_extra_skips_unchanged_movie_details(monkeypatch) -> None:
         description="New description",
     )
 
-    monkeypatch.setattr(extra_module.movie_repository, "get_all_movies", lambda: [movie])
-    monkeypatch.setattr(extra_module.movie_repository, "save_movie", lambda row: saved.append(row) or True)
-    monkeypatch.setattr(extra_module.requests, "get", lambda *args, **kwargs: _FakeResponse())
+    def fake_get_all_movies() -> list[object]:
+        return [movie]
+
+    def fake_save_movie(row: dict[str, object]) -> bool:
+        saved.append(row)
+        return True
+
+    def fake_get(url: str, **kwargs: object) -> _FakeResponse:
+        return _FakeResponse()
+
+    monkeypatch.setattr(extra_module.movie_repository, "get_all_movies", fake_get_all_movies)
+    monkeypatch.setattr(extra_module.movie_repository, "save_movie", fake_save_movie)
+    monkeypatch.setattr(extra_module.requests, "get", fake_get)
 
     result = asyncio.run(service.update_all())
 
