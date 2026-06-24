@@ -3,7 +3,7 @@
     <el-container>
       <el-header>
         <div class="header-content">
-          <h1>电影场次查询系统</h1>
+          <h1>Movie Movie Movie</h1>
         </div>
       </el-header>
       <el-main>

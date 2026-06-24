@@ -1,12 +1,6 @@
 <template>
   <div class="movie-scheduler-page">
     <el-card class="page-card">
-      <template #header>
-        <div class="card-header">
-          <span>电影场次查询系统</span>
-        </div>
-      </template>
-
       <!-- 顶部左右布局：信息更新 + 电影筛选 -->
       <div class="top-section">
         <UpdatePanel
@@ -217,19 +211,8 @@ const filteredSelectedMovies = computed(() => {
   border-color: #e5e7eb;
 }
 
-.page-card :deep(.el-card__header) {
-  padding: 16px 20px;
-  border-bottom-color: #eef2f7;
-}
-
 .page-card :deep(.el-card__body) {
   padding: 20px;
-}
-
-.card-header {
-  font-size: 18px;
-  font-weight: bold;
-  color: #111827;
 }
 
 .top-section {
