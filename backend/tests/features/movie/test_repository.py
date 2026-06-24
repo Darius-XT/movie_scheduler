@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from pytest import MonkeyPatch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -8,7 +11,10 @@ from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import MovieRepository
 
 
-def test_movie_update_status_is_independent_from_show_update_timestamp(monkeypatch, tmp_path) -> None:
+def test_movie_update_status_is_independent_from_show_update_timestamp(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)

@@ -177,15 +177,19 @@ def _build_stonefont_decoder(
 
 
 def _extract_stonefont_url(html_content: str) -> str | None:
-    match = re.search(r"url\([\"']?(//[^)\"']+\.woff)[\"']?\)", html_content)
+    match = re.search(r"url\([\"']?((?:https?:)?//[^)\"']+\.woff2?)[^)\"']*[\"']?\)", html_content)
     if match is None:
         return None
-    return f"https:{match.group(1)}"
+    url = match.group(1)
+    return f"https:{url}" if url.startswith("//") else url
 
 
 def _build_font_headers(headers: dict[str, str] | None) -> dict[str, str]:
     if headers is None:
-        return {"User-Agent": MAOYAN_WEB_HEADERS["User-Agent"], "Referer": MAOYAN_WEB_HEADERS["Referer"]}
+        return {
+            "User-Agent": MAOYAN_WEB_HEADERS["User-Agent"],
+            "Referer": "https://www.maoyan.com/",
+        }
     result: dict[str, str] = {}
     for name in ("User-Agent", "Referer", "Accept-Language"):
         value = headers.get(name)
