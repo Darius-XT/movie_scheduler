@@ -24,7 +24,8 @@ class MovieRepository:
                     for key, value in movie_data.items():
                         if hasattr(existing_movie, key):
                             setattr(existing_movie, key, value)
-                    logger.debug("更新电影: %s (ID: %s)", movie_data.get("title", "Unknown"), movie_data["id"])
+                    display_title = movie_data.get("title") or getattr(existing_movie, "title", None) or "Unknown"
+                    logger.debug("更新电影: %s (ID: %s)", display_title, movie_data["id"])
                 else:
                     session.add(Movie.from_dict(movie_data))
                     logger.debug("添加新电影: %s (ID: %s)", movie_data.get("title", "Unknown"), movie_data["id"])
