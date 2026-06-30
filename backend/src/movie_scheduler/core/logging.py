@@ -45,5 +45,6 @@ def setup_logger(level: str | None = None) -> logging.Logger:
         )
     )
     logger.addHandler(console_handler)
+    logging.getLogger("uvicorn.access").disabled = True
 
     return logger

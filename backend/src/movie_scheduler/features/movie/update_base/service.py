@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 from movie_scheduler.config import config_manager
 from movie_scheduler.core.logging import logger
+from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.shared.maoyan import build_maoyan_web_headers
@@ -208,6 +209,7 @@ class UpdateBaseService:
                 self._warm_up_session(show_type, city_id)
                 self._warmed_up = True
 
+            log_external_http_request("GET", url, purpose="获取电影列表")
             headers = build_maoyan_web_headers(city_id)
             response = self.session.get(
                 url,
@@ -220,17 +222,18 @@ class UpdateBaseService:
                 return response.text
 
             logger.error(
-                "获取电影列表 HTML 请求失败: status=%s, url=%s, response=%s",
-                response.status_code, url, response.text[:1000],
+                "获取电影列表 HTML 请求失败: status=%s, response=%s",
+                response.status_code, response.text[:1000],
             )
             return None
         except Exception as error:
-            logger.error("获取电影列表 HTML 异常: url=%s, error=%s", url, error, exc_info=True)
+            logger.error("获取电影列表 HTML 异常: error=%s", error, exc_info=True)
             return None
 
     def _warm_up_session(self, show_type: int, city_id: int) -> None:
         try:
             warmup_url = f"https://www.maoyan.com/films?showType={show_type}&offset=0"
+            log_external_http_request("GET", warmup_url, purpose="预热电影列表会话")
             self.session.get(
                 warmup_url,
                 headers=build_maoyan_web_headers(city_id),

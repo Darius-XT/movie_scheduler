@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
 from pathlib import Path
 from typing import cast
 
@@ -27,7 +26,6 @@ class ConfigManager:
         self.result_dir = str(self.backend_root / ".runtime/result")
         self.db_path = str(self.backend_root / ".runtime/movies.db")
         self.city_id = 10
-        self.year_threshold = datetime.now().year + 1
         self.allow_redirects = True
         self.timeout = 60
         self.file_max_count = 10
@@ -47,7 +45,6 @@ class ConfigManager:
         self.log_level = self._get_str("MOVIE_SCHEDULER_LOG_LEVEL", self.log_level)
         self.db_path = self._resolve_path("MOVIE_SCHEDULER_DB_PATH", self.db_path)
         self.city_id = self._get_int("MOVIE_SCHEDULER_DEFAULT_CITY_ID", self.city_id)
-        self.year_threshold = self._get_int("MOVIE_SCHEDULER_YEAR_THRESHOLD", self.year_threshold)
         self.timeout = self._get_int("MOVIE_SCHEDULER_TIMEOUT", self.timeout)
         self.city_mapping = self._get_json_dict("MOVIE_SCHEDULER_CITY_MAPPING", self.city_mapping)
         self.host = self._get_str("MOVIE_SCHEDULER_HOST", self.host)

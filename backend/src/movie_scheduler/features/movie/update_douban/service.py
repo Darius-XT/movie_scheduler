@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol, cast
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 
 import requests
 from bs4 import BeautifulSoup
@@ -15,6 +15,7 @@ from bs4.element import Tag
 
 from movie_scheduler.config import config_manager
 from movie_scheduler.core.logging import logger
+from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.movie.update_base.service import UpdateBaseProgressEvent
@@ -223,16 +224,18 @@ class UpdateDoubanService:
         if not normalized_title:
             return []
         url = self.base_url
+        request_url = f"{url}?{urlencode({'query': normalized_title})}"
         for attempt in range(1, _MAX_SEARCH_ATTEMPTS + 1):
             try:
+                log_external_http_request("GET", request_url, purpose="豆瓣移动搜索")
                 response = self.session.get(
                     url, params={"query": normalized_title},
                     headers=_DOUBAN_REQUEST_HEADERS, timeout=self.timeout,
                 )
             except Exception as error:
                 logger.error(
-                    "Douban mobile search request failed: title=%s, url=%s, attempt=%s, error=%s",
-                    normalized_title, url, attempt, error, exc_info=True,
+                    "Douban mobile search request failed: title=%s, attempt=%s, error=%s",
+                    normalized_title, attempt, error, exc_info=True,
                 )
                 continue
             if not response.ok:

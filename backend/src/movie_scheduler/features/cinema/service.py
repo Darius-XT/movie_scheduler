@@ -16,6 +16,7 @@ from bs4.element import Tag
 from movie_scheduler.config import config_manager
 from movie_scheduler.core.exceptions import AppError, RepositoryError
 from movie_scheduler.core.logging import logger
+from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.cinema.models import CinemaWriteData
 from movie_scheduler.features.cinema.repository import cinema_repository
 from movie_scheduler.features.cinema.schemas import CinemaUpdateResult, CinemaUpsertData
@@ -165,7 +166,8 @@ class CinemaService:
         offset = (page - 1) * _CINEMA_PAGE_SIZE
         url = self.session_url if offset == 0 else f"{self.session_url}?offset={offset}"
         try:
-            logger.debug("开始获取影院数据: page=%s, offset=%s, url=%s", page, offset, url)
+            logger.debug("开始获取影院数据: page=%s, offset=%s", page, offset)
+            log_external_http_request("GET", url, purpose="获取影院数据")
             response = requests.get(
                 url,
                 headers=build_maoyan_web_headers(city_id),
@@ -176,12 +178,12 @@ class CinemaService:
             if response.status_code == 200:
                 return response.text
             logger.error(
-                "获取影院数据请求失败: status=%s, url=%s, response=%s",
-                response.status_code, url, response.text[:1000],
+                "获取影院数据请求失败: status=%s, response=%s",
+                response.status_code, response.text[:1000],
             )
             return None
         except Exception as error:
-            logger.error("获取影院数据异常: url=%s, error=%s", url, error, exc_info=True)
+            logger.error("获取影院数据异常: error=%s", error, exc_info=True)
             return None
 
     def _parse_page(self, html_content: str) -> tuple[list[CinemaUpsertData], bool]:

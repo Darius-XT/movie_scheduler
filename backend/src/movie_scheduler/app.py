@@ -11,6 +11,7 @@ from movie_scheduler.config import config_manager
 from movie_scheduler.core.db import database_manager
 from movie_scheduler.core.exceptions import register_exception_handlers
 from movie_scheduler.core.logging import setup_logger
+from movie_scheduler.core.request_logging import RequestLoggingMiddleware
 from movie_scheduler.core.scheduler import auto_update_scheduler
 from movie_scheduler.features.cinema.router import router as cinema_router
 from movie_scheduler.features.city.router import router as city_router
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    fastapi_app.add_middleware(RequestLoggingMiddleware)
     return fastapi_app
 
 

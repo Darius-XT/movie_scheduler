@@ -13,6 +13,7 @@ from typing import Protocol, cast
 import requests
 
 from movie_scheduler.config import config_manager
+from movie_scheduler.core.request_logging import log_external_http_request
 
 
 class _StonefontGlyph(Protocol):
@@ -176,6 +177,7 @@ def _build_stonefont_decoder(
         return None
 
     try:
+        log_external_http_request("GET", font_url, purpose="获取猫眼石头字体")
         response = requests.get(
             font_url,
             headers=_build_font_headers(headers),

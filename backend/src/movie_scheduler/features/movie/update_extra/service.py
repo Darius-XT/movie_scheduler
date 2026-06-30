@@ -14,6 +14,7 @@ import urllib3
 
 from movie_scheduler.config import config_manager
 from movie_scheduler.core.logging import logger
+from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.movie.update_base.service import UpdateBaseProgressEvent
@@ -132,6 +133,7 @@ class UpdateExtraService:
     def _http_get(self, movie_id: int) -> str | None:
         url = f"{_EXTRA_PAGE_BASE}/{movie_id}"
         try:
+            log_external_http_request("GET", url, purpose="获取电影详情页面")
             response = requests.get(
                 url,
                 headers=build_maoyan_mobile_headers(city_id=config_manager.city_id, hot_movie_ids=[movie_id]),
@@ -141,12 +143,12 @@ class UpdateExtraService:
             if response.status_code == 200:
                 return response.text
             logger.error(
-                "获取电影详情页面失败: status=%s, url=%s, response=%s",
-                response.status_code, url, response.text[:1000],
+                "获取电影详情页面失败: status=%s, response=%s",
+                response.status_code, response.text[:1000],
             )
             return None
         except Exception as error:
-            logger.error("获取电影详情页面异常: url=%s, error=%s", url, error, exc_info=True)
+            logger.error("获取电影详情页面异常: error=%s", error, exc_info=True)
             return None
 
     def _parse(self, html_content: str) -> _MovieExtraInfo | None:

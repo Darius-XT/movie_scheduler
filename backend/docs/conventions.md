@@ -114,10 +114,20 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 
 | 级别 | 用途 |
 |------|------|
-| `DEBUG` | 正常流程的细节(请求 URL、响应长度) |
-| `INFO` | 关键节点(开始/完成更新) |
+| `DEBUG` | 正常流程的细节(响应长度、解析分支等) |
+| `INFO` | 关键节点(开始/完成更新、内部接口调用、外部请求 URL) |
 | `WARNING` | 可降级的失败(单条抓取失败,整体流程继续) |
 | `ERROR` | 需要关注的问题(DB 写入失败、未预期异常) |
+
+### 接口与外部 URL 链路日志
+
+- 每一次后端内部 HTTP 接口调用都必须打印开始与完成日志,包含 `request_id`、`method`、`path`、完成状态码与耗时。
+- 每一次内部接口触发的外部 HTTP 请求都必须打印外部 URL,日志必须包含同一个 `request_id` 与 `internal_api`,用于定位"哪个内部接口请求了哪个外部 URL"。
+- 外部请求日志只记录 `method`、`url`、`purpose` 等排障必要信息,禁止打印 headers、Cookie、token 等敏感信息。
+- 新增外部 HTTP 调用时,必须在真正发起请求前调用 `log_external_http_request(...)`;不能只在失败分支打印 URL。
+- 同一个外部 URL 在正常路径中只由 `log_external_http_request(...)` 打印一次;响应、解析、失败日志不得重复打印 URL。
+- 内部接口调用由项目中间件统一记录,不要再依赖或新增重复的 access log。
+- 定时任务或后台任务没有入口 HTTP 请求时,外部请求日志中的 `internal_api` 统一记为 `background`。
 
 ## 环境变量
 
@@ -129,7 +139,6 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 | `MOVIE_SCHEDULER_DB_PATH` | SQLite 数据库路径;相对路径按 `backend/` 解析 |
 | `MOVIE_SCHEDULER_DEFAULT_CITY_ID` | 未显式传入 `city_id` 时使用的默认城市 |
 | `MOVIE_SCHEDULER_CITY_MAPPING` | 可选城市名到城市 ID 的 JSON 对象 |
-| `MOVIE_SCHEDULER_YEAR_THRESHOLD` | 电影年份筛选阈值 |
 | `MOVIE_SCHEDULER_TIMEOUT` | 外部请求超时时间,单位秒 |
 | `MOVIE_SCHEDULER_DOUBAN_API_BASE_URL` | 豆瓣信息补充服务的基础 URL;读取时会移除末尾 `/` |
 | `MOVIE_SCHEDULER_MAOYAN_COOKIE` | 可选猫眼浏览器 Cookie;场次抓取时会自动替换 `hotMovieIds` 与 `old-moviepage-ci` |

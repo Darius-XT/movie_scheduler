@@ -6,9 +6,9 @@ from pytest import MonkeyPatch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import movie_scheduler.features.movie.repository as repository_module
 from movie_scheduler.core.db import Base, database_manager
 from movie_scheduler.features.movie.models import Movie
-import movie_scheduler.features.movie.repository as repository_module
 from movie_scheduler.features.movie.repository import MovieRepository
 
 
@@ -53,10 +53,13 @@ def test_save_movie_logs_existing_title_when_partial_update_has_no_title(
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     messages: list[tuple[str, tuple[object, ...]]] = []
 
+    def record_debug(message: str, *args: object) -> None:
+        messages.append((message, args))
+
     monkeypatch.setattr(database_manager, "engine", engine)
     monkeypatch.setattr(database_manager, "session_factory", session_factory)
     monkeypatch.setattr(database_manager, "_initialized", True)
-    monkeypatch.setattr(repository_module.logger, "debug", lambda message, *args: messages.append((message, args)))
+    monkeypatch.setattr(repository_module.logger, "debug", record_debug)
 
     repository = MovieRepository()
     with database_manager.transaction() as session:

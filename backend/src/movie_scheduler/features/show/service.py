@@ -29,6 +29,7 @@ from movie_scheduler.core.exceptions import (
     RepositoryError,
 )
 from movie_scheduler.core.logging import logger
+from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.show.models import MovieShowWriteData
 from movie_scheduler.features.show.repository import movie_show_repository
@@ -143,7 +144,8 @@ def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = No
     """抓取外部接口文本,失败返回 None。"""
     try:
         effective_headers = headers or _SHOW_REQUEST_HEADERS
-        logger.debug("开始%s: %s", log_label, url)
+        logger.debug("开始%s", log_label)
+        log_external_http_request("GET", url, purpose=log_label)
         response = requests.get(
             url,
             headers=effective_headers,
@@ -154,12 +156,12 @@ def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = No
         if response.status_code == 200:
             return response.text
         logger.error(
-            "%s请求失败: status=%s, url=%s, response=%s",
-            log_label, response.status_code, url, response.text[:1000],
+            "%s请求失败: status=%s, response=%s",
+            log_label, response.status_code, response.text[:1000],
         )
         return None
     except Exception as error:
-        logger.error("%s异常: url=%s, error=%s", log_label, url, error, exc_info=True)
+        logger.error("%s异常: error=%s", log_label, error, exc_info=True)
         return None
 
 
