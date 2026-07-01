@@ -129,6 +129,12 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 - 内部接口调用由项目中间件统一记录,不要再依赖或新增重复的 access log。
 - 定时任务或后台任务没有入口 HTTP 请求时,外部请求日志中的 `internal_api` 统一记为 `background`。
 
+### 猫眼页面请求
+
+- 所有猫眼 HTML 页面请求必须通过 `movie_scheduler.shared.maoyan.maoyan_get_text(...)` 发起,不要在业务模块中直接 `requests.get` 访问猫眼页面。
+- 业务模块不得直接拼接或打印猫眼 Cookie header;Cookie 统一由共享猫眼 Session 根据 `MOVIE_SCHEDULER_MAOYAN_COOKIE` 和运行时 `hotMovieIds` 管理。
+- 当前猫眼 Session 设计基于单用户、单城市、单设备使用场景,不支持多城市并发隔离。
+
 ## 环境变量
 
 所有项目自有变量使用 `MOVIE_SCHEDULER_` 前缀,模板维护在 `backend/.env.example`。
@@ -141,7 +147,7 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 | `MOVIE_SCHEDULER_CITY_MAPPING` | 可选城市名到城市 ID 的 JSON 对象 |
 | `MOVIE_SCHEDULER_TIMEOUT` | 外部请求超时时间,单位秒 |
 | `MOVIE_SCHEDULER_DOUBAN_API_BASE_URL` | 豆瓣信息补充服务的基础 URL;读取时会移除末尾 `/` |
-| `MOVIE_SCHEDULER_MAOYAN_COOKIE` | 可选猫眼浏览器种子 Cookie;基础电影列表抓取会移除旧 `hotMovieIds` 并使用预热后的 Session Cookie;场次抓取会刷新 `hotMovieIds` 与城市字段 |
+| `MOVIE_SCHEDULER_MAOYAN_COOKIE` | 可选猫眼浏览器种子 Cookie;猫眼共享 Session 会移除旧 `hotMovieIds`,预热后复用 Session Cookie,场次抓取会刷新 `hotMovieIds` |
 | `MOVIE_SCHEDULER_HOST` / `MOVIE_SCHEDULER_PORT` | 后端监听地址与端口 |
 | `MOVIE_SCHEDULER_CORS_ORIGINS` | CORS 允许来源 JSON 数组 |
 

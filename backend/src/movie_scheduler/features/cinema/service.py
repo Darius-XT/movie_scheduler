@@ -8,7 +8,6 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass
 from typing import cast
 
-import requests
 import urllib3
 from bs4 import BeautifulSoup
 from bs4.element import Tag
@@ -16,11 +15,10 @@ from bs4.element import Tag
 from movie_scheduler.config import config_manager
 from movie_scheduler.core.exceptions import AppError, RepositoryError
 from movie_scheduler.core.logging import logger
-from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.cinema.models import CinemaWriteData
 from movie_scheduler.features.cinema.repository import cinema_repository
 from movie_scheduler.features.cinema.schemas import CinemaUpdateResult, CinemaUpsertData
-from movie_scheduler.shared.maoyan import build_maoyan_web_headers, decode_maoyan_stonefont_text
+from movie_scheduler.shared.maoyan import decode_maoyan_stonefont_text, maoyan_get_text
 from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -167,21 +165,16 @@ class CinemaService:
         url = self.session_url if offset == 0 else f"{self.session_url}?offset={offset}"
         try:
             logger.debug("开始获取影院数据: page=%s, offset=%s", page, offset)
-            log_external_http_request("GET", url, purpose="获取影院数据")
-            response = requests.get(
+            text = maoyan_get_text(
                 url,
-                headers=build_maoyan_web_headers(city_id),
+                "获取影院数据",
+                city_id,
                 timeout=self.timeout,
                 verify=False,
             )
-            logger.debug("响应状态码: %s, 长度: %s 字符", response.status_code, len(response.text))
-            if response.status_code == 200:
-                return response.text
-            logger.error(
-                "获取影院数据请求失败: status=%s, response=%s",
-                response.status_code, response.text[:1000],
-            )
-            return None
+            if text is not None:
+                logger.debug("影院数据响应长度: %s 字符", len(text))
+            return text
         except Exception as error:
             logger.error("获取影院数据异常: error=%s", error, exc_info=True)
             return None

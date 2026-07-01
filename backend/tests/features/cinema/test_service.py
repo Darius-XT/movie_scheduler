@@ -8,30 +8,26 @@ import movie_scheduler.features.cinema.service as cinema_module
 from movie_scheduler.features.cinema.service import CinemaService
 
 
-class _FakeResponse:
-    def __init__(self, text: str, status_code: int = 200) -> None:
-        self.text = text
-        self.status_code = status_code
-
-
 def test_update_cinemas_parses_maoyan_html_pages(monkeypatch: MonkeyPatch) -> None:
     service = CinemaService()
     requested_urls: list[str] = []
     saved_rows: list[dict[str, object]] = []
 
-    def fake_get(url: str, **_: object) -> _FakeResponse:
+    def fake_maoyan_get_text(url: str, purpose: str, city_id: int, **_: object) -> str | None:
         requested_urls.append(url)
+        assert purpose == "获取影院数据"
+        assert city_id == 10
         if url == "https://www.maoyan.com/cinemas":
-            return _FakeResponse(_CINEMAS_PAGE_1)
+            return _CINEMAS_PAGE_1
         if url == "https://www.maoyan.com/cinemas?offset=12":
-            return _FakeResponse(_CINEMAS_PAGE_2)
-        return _FakeResponse("", status_code=404)
+            return _CINEMAS_PAGE_2
+        return None
 
     def fake_save_batch(rows: list[dict[str, object]]) -> tuple[int, int]:
         saved_rows.extend(rows)
         return len(rows), 0
 
-    monkeypatch.setattr(cinema_module.requests, "get", fake_get)
+    monkeypatch.setattr(cinema_module, "maoyan_get_text", fake_maoyan_get_text)
     monkeypatch.setattr(cinema_module.cinema_repository, "save_cinema_batch", fake_save_batch)
 
     result = asyncio.run(service.update_cinemas(city_id=10))

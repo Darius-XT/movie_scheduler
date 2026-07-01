@@ -23,62 +23,15 @@ class _FakeResponse:
     """
 
 
-class _FakeCookieJar:
-    def __init__(self) -> None:
-        self.values: dict[str, tuple[str, str | None, str | None]] = {}
-
-    def clear(self) -> None:
-        self.values.clear()
-
-    def set(
-        self,
-        name: str,
-        value: str,
-        *,
-        domain: str | None = None,
-        path: str | None = None,
-    ) -> None:
-        self.values[name] = (value, domain, path)
-
-
-class _FakePreparedRequest:
-    def __init__(self, url: str, headers: dict[str, str]) -> None:
-        self.url = url
-        self.headers = headers
-
-
-class _FakeSession:
-    def __init__(self) -> None:
-        self.cookies = _FakeCookieJar()
-        self.requests: list[tuple[str, dict[str, str]]] = []
-
-    def prepare_request(self, request: base_module.requests.Request) -> _FakePreparedRequest:
-        url = request.url or ""
-        headers = dict(request.headers or {})
-        cookie = "; ".join(f"{name}={value}" for name, (value, _domain, _path) in self.cookies.values.items())
-        if cookie and "Cookie" not in headers:
-            headers["Cookie"] = cookie
-        return _FakePreparedRequest(url, headers)
-
-    def send(
-        self,
-        prepared_request: _FakePreparedRequest,
-        **_: object,
-    ) -> _FakeResponse:
-        self.requests.append((prepared_request.url, prepared_request.headers))
-        return _FakeResponse()
-
-
-def test_update_base_seeds_maoyan_cookie_without_stale_hot_movie_ids(monkeypatch: MonkeyPatch) -> None:
+def test_update_base_uses_shared_maoyan_client(monkeypatch: MonkeyPatch) -> None:
     service = UpdateBaseService()
-    fake_session = _FakeSession()
-    service.session = fake_session  # type: ignore[assignment]
+    calls: list[tuple[str, str, int]] = []
 
-    monkeypatch.setattr(
-        base_module.config_manager,
-        "maoyan_cookie",
-        "uuid_n_v=v1; hotMovieIds=1,2; old-moviepage-ci=1; global-guide-isclose=true",
-    )
+    def fake_maoyan_get_text(url: str, purpose: str, city_id: int, **_: object) -> str:
+        calls.append((url, purpose, city_id))
+        return _FakeResponse.text
+
+    monkeypatch.setattr(base_module, "maoyan_get_text", fake_maoyan_get_text)
 
     result = service._fetch_page(show_type=1, page=1, city_id=10)
 
@@ -86,17 +39,7 @@ def test_update_base_seeds_maoyan_cookie_without_stale_hot_movie_ids(monkeypatch
     movies, is_expected_empty = result
     assert is_expected_empty is False
     assert [(movie.id, movie.title) for movie in movies] == [(1522535, "Magic Girl")]
-    assert [url for url, _headers in fake_session.requests] == [
-        "https://www.maoyan.com/films?showType=1",
-        "https://www.maoyan.com/films?showType=1",
-    ]
-    assert "Cookie" in fake_session.requests[-1][1]
-    assert "hotMovieIds=" not in fake_session.requests[-1][1]["Cookie"]
-    assert "old-moviepage-ci=10" in fake_session.requests[-1][1]["Cookie"]
-    assert "ci=10" in fake_session.requests[-1][1]["Cookie"]
-    assert fake_session.cookies.values["old-moviepage-ci"][0] == "10"
-    assert fake_session.cookies.values["ci"][0] == "10"
-    assert "hotMovieIds" not in fake_session.cookies.values
+    assert calls == [("https://www.maoyan.com/films?showType=1", "获取电影列表", 10)]
 
 
 def test_movie_list_url_omits_offset_on_first_page() -> None:

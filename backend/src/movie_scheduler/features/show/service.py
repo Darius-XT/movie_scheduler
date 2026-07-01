@@ -16,7 +16,6 @@ from datetime import datetime
 from time import monotonic
 from typing import TypedDict, cast
 
-import requests
 import urllib3
 from bs4 import BeautifulSoup
 from bs4.element import Tag
@@ -29,13 +28,12 @@ from movie_scheduler.core.exceptions import (
     RepositoryError,
 )
 from movie_scheduler.core.logging import logger
-from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.show.models import MovieShowWriteData
 from movie_scheduler.features.show.repository import movie_show_repository
 from movie_scheduler.shared.maoyan import (
-    build_maoyan_web_headers,
     decode_maoyan_stonefont_text,
+    maoyan_get_text,
 )
 from movie_scheduler.shared.sse import stream_with_progress
 
@@ -121,17 +119,6 @@ _DegradableError = (ExternalDependencyError, DataParsingError)
 # 外部 HTTP 请求公共配置
 # =============================================================================
 
-_SHOW_REQUEST_HEADERS = {
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-    ),
-    "Referer": "https://www.maoyan.com/",
-    "Origin": "https://www.maoyan.com",
-}
-
 _SHOW_API_TIMEOUT = 30
 _MAOYAN_WEB_HOME = "https://www.maoyan.com/"
 _MAOYAN_WEB_CINEMA_BASE = "https://www.maoyan.com/cinema"
@@ -140,29 +127,23 @@ _CINEMA_PAGE_SIZE = 12
 _HOT_MOVIE_IDS_CACHE_TTL_SECONDS = 60 * 60
 
 
-def _http_get_text(url: str, log_label: str, headers: dict[str, str] | None = None) -> str | None:
+def _http_get_text(
+    url: str,
+    log_label: str,
+    city_id: int,
+    *,
+    hot_movie_ids: Sequence[int] | None = None,
+) -> str | None:
     """抓取外部接口文本,失败返回 None。"""
-    try:
-        effective_headers = headers or _SHOW_REQUEST_HEADERS
-        logger.debug("开始%s", log_label)
-        log_external_http_request("GET", url, purpose=log_label)
-        response = requests.get(
-            url,
-            headers=effective_headers,
-            timeout=_SHOW_API_TIMEOUT,
-            verify=False,
-        )
-        logger.debug("%s响应状态码: %s,响应长度: %s 字符", log_label, response.status_code, len(response.text))
-        if response.status_code == 200:
-            return response.text
-        logger.error(
-            "%s请求失败: status=%s, response=%s",
-            log_label, response.status_code, response.text[:1000],
-        )
-        return None
-    except Exception as error:
-        logger.error("%s异常: error=%s", log_label, error, exc_info=True)
-        return None
+    logger.debug("开始%s", log_label)
+    return maoyan_get_text(
+        url,
+        log_label,
+        city_id,
+        hot_movie_ids=hot_movie_ids,
+        timeout=_SHOW_API_TIMEOUT,
+        verify=False,
+    )
 
 
 # =============================================================================
@@ -517,7 +498,8 @@ class ShowService:
 
     def _get_show_dates(self, movie_id: int, city_id: int) -> list[str]:
         url = f"{_MAOYAN_WEB_CINEMAS_BASE}?movieId={movie_id}"
-        text = _http_get_text(url, "抓取放映日期页面", headers=self._build_maoyan_movie_headers(city_id, movie_id))
+        hot_movie_ids = self._build_hot_movie_ids(city_id, movie_id)
+        text = _http_get_text(url, "抓取放映日期页面", city_id, hot_movie_ids=hot_movie_ids)
         if text is None:
             raise ExternalDependencyError(f"获取电影 {movie_id} 在城市 {city_id} 的排片日期失败")
         dates = self._parse_show_dates(text)
@@ -553,7 +535,8 @@ class ShowService:
         if offset > 0:
             params = f"{params}&offset={offset}"
         url = f"{_MAOYAN_WEB_CINEMAS_BASE}?{params}"
-        text = _http_get_text(url, "获取影片影院页面", headers=self._build_maoyan_movie_headers(city_id, movie_id))
+        hot_movie_ids = self._build_hot_movie_ids(city_id, movie_id)
+        text = _http_get_text(url, "获取影片影院页面", city_id, hot_movie_ids=hot_movie_ids)
         if text is None:
             raise ExternalDependencyError(
                 f"获取影院信息失败,movie_id={movie_id}, city_id={city_id}, show_date={show_date}, offset={offset}"
@@ -574,8 +557,8 @@ class ShowService:
         show_date: str | None = None,
     ) -> list[_FetchedShowItem]:
         url = f"{_MAOYAN_WEB_CINEMA_BASE}/{cinema_id}"
-        headers = self._build_maoyan_web_headers(city_id, cinema_id, movie_id)
-        text = _http_get_text(url, "获取影院场次页面", headers=headers)
+        hot_movie_ids = self._build_hot_movie_ids(city_id, movie_id)
+        text = _http_get_text(url, "获取影院场次页面", city_id, hot_movie_ids=hot_movie_ids)
         if text is None:
             raise ExternalDependencyError(f"获取影院 {cinema_id} 在城市 {city_id} 的场次页面失败")
         items = self._parse_cinema_shows(text, movie_id, movie_name, show_date, cinema_id)
@@ -585,13 +568,9 @@ class ShowService:
             )
         return items
 
-    def _build_maoyan_web_headers(self, city_id: int, cinema_id: int, movie_id: int) -> dict[str, str]:
+    def _build_hot_movie_ids(self, city_id: int, movie_id: int) -> list[int]:
         hot_movie_ids = self._get_hot_movie_ids(city_id)
-        return build_maoyan_web_headers(city_id, hot_movie_ids=self._prepend_movie_id(hot_movie_ids, movie_id))
-
-    def _build_maoyan_movie_headers(self, city_id: int, movie_id: int) -> dict[str, str]:
-        hot_movie_ids = self._get_hot_movie_ids(city_id)
-        return build_maoyan_web_headers(city_id, hot_movie_ids=self._prepend_movie_id(hot_movie_ids, movie_id))
+        return self._prepend_movie_id(hot_movie_ids, movie_id)
 
     def _get_hot_movie_ids(self, city_id: int) -> list[int]:
         cached = self._hot_movie_ids_cache.get(city_id)
@@ -601,8 +580,7 @@ class ShowService:
             if now - cached_at < _HOT_MOVIE_IDS_CACHE_TTL_SECONDS:
                 return cached_ids
 
-        headers = build_maoyan_web_headers(city_id)
-        text = _http_get_text(_MAOYAN_WEB_HOME, "获取猫眼首页热映电影数据", headers=headers)
+        text = _http_get_text(_MAOYAN_WEB_HOME, "获取猫眼首页热映电影数据", city_id)
         hot_movie_ids = self._parse_hot_movie_ids(text or "")
         if not hot_movie_ids:
             if cached is not None:

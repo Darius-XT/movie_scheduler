@@ -10,37 +10,43 @@ import movie_scheduler.features.show.service as show_module
 from movie_scheduler.features.show.service import ShowService
 
 
-def test_http_get_text_does_not_log_request_headers(monkeypatch: MonkeyPatch) -> None:
+def test_http_get_text_delegates_to_shared_maoyan_client_without_logging_cookie(monkeypatch: MonkeyPatch) -> None:
     messages: list[str] = []
+    calls: list[tuple[str, str, int, dict[str, object]]] = []
 
     def fake_debug(message: str, *args: object) -> None:
         messages.append(message % args)
 
-    def fake_get(url: str, **kwargs: object) -> SimpleNamespace:
-        assert kwargs["headers"] == {"Cookie": "uuid=secret", "Accept": "text/html"}
-        return SimpleNamespace(status_code=200, text="<html></html>")
+    def fake_maoyan_get_text(url: str, purpose: str, city_id: int, **kwargs: object) -> str:
+        calls.append((url, purpose, city_id, kwargs))
+        return "<html></html>"
 
     monkeypatch.setattr(show_module.logger, "debug", fake_debug)
-    monkeypatch.setattr(show_module.requests, "get", fake_get)
+    monkeypatch.setattr(show_module, "maoyan_get_text", fake_maoyan_get_text)
 
     result = show_module._http_get_text(
         "https://www.maoyan.com/cinema/169",
         "获取影院场次页面",
-        headers={"Cookie": "uuid=secret", "Accept": "text/html"},
+        10,
+        hot_movie_ids=[1490532],
     )
 
     log_text = "\n".join(messages)
     assert result == "<html></html>"
-    assert "请求详情" not in log_text
     assert "Cookie" not in log_text
-    assert "uuid=secret" not in log_text
+    assert calls == [(
+        "https://www.maoyan.com/cinema/169",
+        "获取影院场次页面",
+        10,
+        {"hot_movie_ids": [1490532], "timeout": 30, "verify": False},
+    )]
 
 
 def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch: MonkeyPatch) -> None:
     service = ShowService()
     captured_shows: list[dict[str, object]] = []
-    captured_movie_headers: list[dict[str, str]] = []
-    captured_cinema_headers: list[dict[str, str]] = []
+    captured_movie_hot_ids: list[list[int] | None] = []
+    captured_cinema_hot_ids: list[list[int] | None] = []
     movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True)
 
     def fake_get_movie_by_id(movie_id: int) -> SimpleNamespace | None:
@@ -49,18 +55,21 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch: MonkeyPatch)
     def fake_http_get_text(
         url: str,
         log_label: str,
-        headers: dict[str, str] | None = None,
+        city_id: int,
+        *,
+        hot_movie_ids: list[int] | None = None,
     ) -> str | None:
+        assert city_id == 10
         if url == "https://www.maoyan.com/":
             return '<a href="/cinemas?movieId=1366168" data-val="{movieid:1366168}">ticket</a>'
         if url == "https://www.maoyan.com/cinemas?movieId=1490532":
-            captured_movie_headers.append(headers or {})
+            captured_movie_hot_ids.append(hot_movie_ids)
             return _MAOYAN_MOVIE_CINEMAS_HTML
         if url == "https://www.maoyan.com/cinemas?movieId=1490532&showDate=2026-06-23":
-            captured_movie_headers.append(headers or {})
+            captured_movie_hot_ids.append(hot_movie_ids)
             return _MAOYAN_MOVIE_DATE_CINEMAS_HTML
         if url == "https://www.maoyan.com/cinema/38931":
-            captured_cinema_headers.append(headers or {})
+            captured_cinema_hot_ids.append(hot_movie_ids)
             return _MAOYAN_CINEMA_HTML
         return None
 
@@ -94,11 +103,8 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch: MonkeyPatch)
         "time": "10:00",
         "price": "39.9",
     }]
-    assert "hotMovieIds=1490532,1366168" in captured_movie_headers[0]["Cookie"]
-    assert "hotMovieIds=1490532,1366168" in captured_cinema_headers[0]["Cookie"]
-    assert "old-moviepage-ci=10" in captured_cinema_headers[0]["Cookie"]
-    assert "ci=10" in captured_cinema_headers[0]["Cookie"]
-    assert "ci=1126" not in captured_cinema_headers[0]["Cookie"]
+    assert captured_movie_hot_ids[0] == [1490532, 1366168]
+    assert captured_cinema_hot_ids[0] == [1490532, 1366168]
 
 
 def test_hot_movie_ids_cache_expires_after_one_hour(monkeypatch: MonkeyPatch) -> None:
@@ -112,8 +118,12 @@ def test_hot_movie_ids_cache_expires_after_one_hour(monkeypatch: MonkeyPatch) ->
     def fake_http_get_text(
         url: str,
         log_label: str,
-        headers: dict[str, str] | None = None,
+        city_id: int,
+        *,
+        hot_movie_ids: list[int] | None = None,
     ) -> str | None:
+        assert city_id == 10
+        assert hot_movie_ids is None
         calls.append(url)
         movie_id = 11 if len(calls) == 1 else 22
         return f'<a href="/cinemas?movieId={movie_id}" data-val="{{movieid:{movie_id}}}">ticket</a>'

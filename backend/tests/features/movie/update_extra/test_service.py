@@ -9,9 +9,7 @@ import movie_scheduler.features.movie.update_extra.service as extra_module
 from movie_scheduler.features.movie.update_extra.service import UpdateExtraService
 
 
-class _FakeResponse:
-    status_code = 200
-    text = """
+_MOVIE_DETAIL_HTML = """
     <html>
       <body>
         <script>
@@ -51,12 +49,16 @@ def test_update_extra_updates_changed_existing_movie_details(monkeypatch: Monkey
         saved.append(row)
         return True
 
-    def fake_get(url: str, **kwargs: object) -> _FakeResponse:
-        return _FakeResponse()
+    def fake_maoyan_get_text(url: str, purpose: str, city_id: int, **kwargs: object) -> str:
+        assert url == "https://www.maoyan.com/films/1522535"
+        assert purpose == "获取电影详情页面"
+        assert kwargs["headers_profile"] == "mobile"
+        assert kwargs["hot_movie_ids"] == [1522535]
+        return _MOVIE_DETAIL_HTML
 
     monkeypatch.setattr(extra_module.movie_repository, "get_all_movies", fake_get_all_movies)
     monkeypatch.setattr(extra_module.movie_repository, "save_movie", fake_save_movie)
-    monkeypatch.setattr(extra_module.requests, "get", fake_get)
+    monkeypatch.setattr(extra_module, "maoyan_get_text", fake_maoyan_get_text)
 
     result = asyncio.run(service.update_all())
 
@@ -91,12 +93,12 @@ def test_update_extra_skips_unchanged_movie_details(monkeypatch: MonkeyPatch) ->
         saved.append(row)
         return True
 
-    def fake_get(url: str, **kwargs: object) -> _FakeResponse:
-        return _FakeResponse()
+    def fake_maoyan_get_text(url: str, purpose: str, city_id: int, **kwargs: object) -> str:
+        return _MOVIE_DETAIL_HTML
 
     monkeypatch.setattr(extra_module.movie_repository, "get_all_movies", fake_get_all_movies)
     monkeypatch.setattr(extra_module.movie_repository, "save_movie", fake_save_movie)
-    monkeypatch.setattr(extra_module.requests, "get", fake_get)
+    monkeypatch.setattr(extra_module, "maoyan_get_text", fake_maoyan_get_text)
 
     result = asyncio.run(service.update_all())
 

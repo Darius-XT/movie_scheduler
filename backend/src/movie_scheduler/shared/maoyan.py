@@ -6,13 +6,15 @@ import logging
 import re
 from collections.abc import Callable, Sequence
 from contextlib import redirect_stderr, redirect_stdout
+from http.cookiejar import Cookie, CookieJar
 from importlib import import_module
 from io import BytesIO, StringIO
-from typing import Protocol, cast
+from typing import Literal, Protocol, cast
 
 import requests
 
 from movie_scheduler.config import config_manager
+from movie_scheduler.core.logging import logger
 from movie_scheduler.core.request_logging import log_external_http_request
 
 
@@ -85,6 +87,12 @@ MAOYAN_MOBILE_HEADERS = {
 
 _STONEFONT_GRID_SIZE = 10
 _STONEFONT_MAX_DISTANCE = 20.0
+_MAOYAN_WARMUP_URL = "https://www.maoyan.com/films?showType=1"
+_MAOYAN_STALE_COOKIE_NAMES = {"hotMovieIds"}
+_maoyan_session = requests.Session()
+_maoyan_session_initialized = False
+_maoyan_session_warmed_up = False
+_maoyan_session_city_id: int | None = None
 _STONEFONT_TEMPLATES: dict[str, tuple[int, float, int]] = {
     "0": (0x2A35AC1A01002050030541078, 0.6881, 31),
     "1": (0xC00C03500C000000000000280, 0.5109, 13),
@@ -121,11 +129,12 @@ def build_maoyan_mobile_headers(
     *,
     referer: str | None = None,
     hot_movie_ids: Sequence[int] | None = None,
+    include_cookie: bool = True,
 ) -> dict[str, str]:
     headers = dict(MAOYAN_MOBILE_HEADERS)
     if referer is not None:
         headers["Referer"] = referer
-    cookie = build_maoyan_cookie(city_id, hot_movie_ids=hot_movie_ids)
+    cookie = build_maoyan_cookie(city_id, hot_movie_ids=hot_movie_ids) if include_cookie else ""
     if cookie:
         headers["Cookie"] = cookie
     return headers
@@ -158,9 +167,138 @@ def seed_maoyan_session_cookies(
     for name, value in _parse_cookie_pairs(cookie):
         if not name:
             continue
-        session.cookies.set(name, value, domain=".maoyan.com", path="/")
+        _set_cookie(session.cookies, name, value)
         count += 1
     return count
+
+
+def maoyan_get_text(
+    url: str,
+    purpose: str,
+    city_id: int,
+    *,
+    headers_profile: Literal["web", "mobile"] = "web",
+    hot_movie_ids: Sequence[int] | None = None,
+    timeout: int | None = None,
+    verify: bool = False,
+) -> str | None:
+    """使用共享猫眼 Session 抓取 HTML 文本。"""
+    try:
+        effective_timeout = timeout or config_manager.timeout or 60
+        _ensure_maoyan_session(city_id, timeout=effective_timeout, verify=verify)
+        _set_session_hot_movie_ids(hot_movie_ids)
+        headers = _build_maoyan_session_headers(city_id, headers_profile)
+        response = _send_maoyan_session_request(
+            url,
+            purpose,
+            headers=headers,
+            timeout=effective_timeout,
+            verify=verify,
+        )
+        logger.debug("%s响应状态码: %s,响应长度: %s 字符", purpose, response.status_code, len(response.text))
+        if response.status_code == 200:
+            return response.text
+        logger.error("%s请求失败: status=%s, response=%s", purpose, response.status_code, response.text[:1000])
+        return None
+    except Exception as error:
+        logger.error("%s异常: error=%s", purpose, error, exc_info=True)
+        return None
+
+
+def _ensure_maoyan_session(city_id: int, *, timeout: int, verify: bool) -> None:
+    global _maoyan_session_city_id, _maoyan_session_initialized, _maoyan_session_warmed_up
+    if not _maoyan_session_initialized or _maoyan_session_city_id != city_id:
+        _maoyan_session.cookies.clear()
+        seed_count = seed_maoyan_session_cookies(
+            _maoyan_session,
+            city_id,
+            exclude_names=_MAOYAN_STALE_COOKIE_NAMES,
+        )
+        _maoyan_session_city_id = city_id
+        _maoyan_session_initialized = True
+        _maoyan_session_warmed_up = False
+        logger.debug("猫眼共享会话 Cookie 已初始化: city_id=%s, seed_cookie_count=%s", city_id, seed_count)
+    if _maoyan_session_warmed_up:
+        return
+    _set_session_hot_movie_ids(None)
+    try:
+        _send_maoyan_session_request(
+            _MAOYAN_WARMUP_URL,
+            "预热猫眼会话",
+            headers=build_maoyan_web_headers(city_id, include_cookie=False),
+            timeout=timeout,
+            verify=verify,
+        )
+    except Exception as error:
+        logger.debug("猫眼共享会话预热失败,已忽略: %s", error)
+    _maoyan_session_warmed_up = True
+
+
+def _set_session_hot_movie_ids(hot_movie_ids: Sequence[int] | None) -> None:
+    _clear_session_cookie("hotMovieIds")
+    if not hot_movie_ids:
+        return
+    value = ",".join(str(movie_id) for movie_id in hot_movie_ids)
+    _set_cookie(_maoyan_session.cookies, "hotMovieIds", value)
+
+
+def _clear_session_cookie(name: str) -> None:
+    cookie_jar: CookieJar = _maoyan_session.cookies
+    try:
+        cookie_jar.clear(domain=".maoyan.com", path="/", name=name)
+    except KeyError:
+        return
+
+
+def _set_cookie(cookie_jar: CookieJar, name: str, value: str) -> None:
+    cookie_jar.set_cookie(_build_cookie(name, value))
+
+
+def _build_cookie(name: str, value: str) -> Cookie:
+    return Cookie(
+        version=0,
+        name=name,
+        value=value,
+        port=None,
+        port_specified=False,
+        domain=".maoyan.com",
+        domain_specified=True,
+        domain_initial_dot=True,
+        path="/",
+        path_specified=True,
+        secure=False,
+        expires=None,
+        discard=True,
+        comment=None,
+        comment_url=None,
+        rest={},
+        rfc2109=False,
+    )
+
+
+def _build_maoyan_session_headers(
+    city_id: int,
+    headers_profile: Literal["web", "mobile"],
+) -> dict[str, str]:
+    if headers_profile == "web":
+        return build_maoyan_web_headers(city_id, include_cookie=False)
+    if headers_profile == "mobile":
+        return build_maoyan_mobile_headers(city_id, include_cookie=False)
+    raise ValueError(f"未知猫眼请求 header profile: {headers_profile}")
+
+
+def _send_maoyan_session_request(
+    url: str,
+    purpose: str,
+    *,
+    headers: dict[str, str],
+    timeout: int,
+    verify: bool,
+) -> requests.Response:
+    request = requests.Request("GET", url, headers=headers)
+    prepared = _maoyan_session.prepare_request(request)
+    log_external_http_request("GET", url, purpose=purpose)
+    return _maoyan_session.send(prepared, timeout=timeout, verify=verify)
 
 
 def decode_maoyan_stonefont_text(

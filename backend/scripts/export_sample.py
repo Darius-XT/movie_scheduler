@@ -108,7 +108,7 @@ def _fetch_sample(sample_name: SampleName) -> str:
         from movie_scheduler.features.show.service import _MAOYAN_WEB_CINEMA_BASE, _http_get_text
 
         url = f"{_MAOYAN_WEB_CINEMA_BASE}/{DEMO_CINEMA_ID}?ci={DEMO_CITY_ID}"
-        return _http_get_text(url, "获取影院场次信息") or ""
+        return _http_get_text(url, "获取影院场次信息", DEMO_CITY_ID) or ""
 
     if sample_name == "movie_base_info":
         result = update_base_service._fetch_page(1, DEMO_PAGE, DEMO_CITY_ID)
