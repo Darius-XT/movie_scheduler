@@ -159,6 +159,7 @@ class UpdateBaseService:
     ) -> tuple[list[_ScrapedMovieBaseInfo], bool]:
         logger.debug("开始抓取 %s 电影", show_type_name)
         type_movies: list[_ScrapedMovieBaseInfo] = []
+        movie_positions: list[tuple[_ScrapedMovieBaseInfo, int, int]] = []
         page = 1
         succeeded = True
         while True:
@@ -180,10 +181,48 @@ class UpdateBaseService:
                 logger.error("第 %s 页未解析到电影数据, 结束抓取", page)
                 succeeded = False
                 break
+            for index, movie in enumerate(movies_data, start=1):
+                movie_positions.append((movie, page, index))
             type_movies.extend(movies_data)
             page += 1
-        logger.info("%s 列表抓取完成, 共抓取 %s 部电影", show_type_name, len(type_movies))
+        self._log_type_scrape_result(show_type_name, movie_positions)
         return type_movies, succeeded
+
+    def _log_type_scrape_result(
+        self,
+        show_type_name: str,
+        movie_positions: list[tuple[_ScrapedMovieBaseInfo, int, int]],
+    ) -> None:
+        first_seen: dict[int, tuple[_ScrapedMovieBaseInfo, int, int]] = {}
+        duplicate_positions: list[
+            tuple[_ScrapedMovieBaseInfo, int, int, _ScrapedMovieBaseInfo, int, int]
+        ] = []
+        for movie, page, index in movie_positions:
+            existing = first_seen.get(movie.id)
+            if existing is None:
+                first_seen[movie.id] = (movie, page, index)
+                continue
+            first_movie, first_page, first_index = existing
+            duplicate_positions.append((movie, page, index, first_movie, first_page, first_index))
+
+        logger.info(
+            "%s 列表抓取完成, 共抓取 %s 部电影, 重复 %s 部, 有效 %s 部",
+            show_type_name,
+            len(movie_positions),
+            len(duplicate_positions),
+            len(first_seen),
+        )
+        for movie, page, index, first_movie, first_page, first_index in duplicate_positions:
+            logger.debug(
+                "%s 重复详情: 第 %s 页第 %s 个电影与第 %s 页第 %s 个电影重复, 电影名=%s, 电影ID=%s",
+                show_type_name,
+                page,
+                index,
+                first_page,
+                first_index,
+                movie.title or first_movie.title or "未知电影",
+                movie.id,
+            )
 
     def _fetch_page(
         self,

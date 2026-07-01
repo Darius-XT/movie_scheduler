@@ -4,7 +4,7 @@ from __future__ import annotations
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.movie.update_base.service as base_module
-from movie_scheduler.features.movie.update_base.service import UpdateBaseService
+from movie_scheduler.features.movie.update_base.service import UpdateBaseService, _ScrapedMovieBaseInfo
 
 
 class _FakeResponse:
@@ -83,3 +83,45 @@ def test_update_base_skips_stale_deletes_when_scrape_is_incomplete(monkeypatch: 
     assert result.removed == 0
     assert result.total == 2
     assert deleted_ids == []
+
+
+def test_scrape_one_type_logs_duplicate_details(monkeypatch: MonkeyPatch) -> None:
+    service = UpdateBaseService()
+    info_messages: list[str] = []
+    debug_messages: list[str] = []
+
+    def fake_fetch_page(
+        show_type: int,
+        page: int,
+        city_id: int,
+    ) -> tuple[list[_ScrapedMovieBaseInfo], bool]:
+        if page == 1:
+            return [
+                _ScrapedMovieBaseInfo(id=1, title="Movie A", genres="", actors=""),
+                _ScrapedMovieBaseInfo(id=2, title="Movie B", genres="", actors=""),
+            ], False
+        if page == 2:
+            return [
+                _ScrapedMovieBaseInfo(id=1, title="Movie A", genres="", actors=""),
+                _ScrapedMovieBaseInfo(id=3, title="Movie C", genres="", actors=""),
+                _ScrapedMovieBaseInfo(id=1, title="Movie A", genres="", actors=""),
+            ], False
+        return [], True
+
+    def record_info(message: str, *args: object) -> None:
+        info_messages.append(message % args)
+
+    def record_debug(message: str, *args: object) -> None:
+        debug_messages.append(message % args)
+
+    monkeypatch.setattr(service, "_fetch_page", fake_fetch_page)
+    monkeypatch.setattr(base_module.logger, "info", record_info)
+    monkeypatch.setattr(base_module.logger, "debug", record_debug)
+
+    movies, succeeded = service._scrape_one_type(1, "正在热映", 10, None)
+
+    assert succeeded is True
+    assert [movie.id for movie in movies] == [1, 2, 1, 3, 1]
+    assert info_messages[-1] == "正在热映 列表抓取完成, 共抓取 5 部电影, 重复 2 部, 有效 3 部"
+    assert "第 2 页第 1 个电影与第 1 页第 1 个电影重复, 电影名=Movie A, 电影ID=1" in debug_messages
+    assert "第 2 页第 3 个电影与第 1 页第 1 个电影重复, 电影名=Movie A, 电影ID=1" in debug_messages
