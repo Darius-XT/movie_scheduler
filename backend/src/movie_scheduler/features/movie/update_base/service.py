@@ -16,9 +16,11 @@ from movie_scheduler.core.logging import logger
 from movie_scheduler.core.request_logging import log_external_http_request
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
-from movie_scheduler.shared.maoyan import build_maoyan_web_headers
+from movie_scheduler.shared.maoyan import build_maoyan_web_headers, seed_maoyan_session_cookies
 
 _BEIJING_TZ = timezone(timedelta(hours=8))
+_MAOYAN_MOVIE_LIST_PAGE_SIZE = 18
+_MAOYAN_MOVIE_LIST_STALE_COOKIES = {"hotMovieIds"}
 
 
 def _now_beijing_datetime() -> datetime:
@@ -236,25 +238,20 @@ class UpdateBaseService:
         return self._parse_html(html_content)
 
     def _http_get(self, show_type: int, page: int, city_id: int) -> str | None:
-        offset = (page - 1) * 18
-        url = f"https://www.maoyan.com/films?showType={show_type}&offset={offset}"
+        url = self._movie_list_url(show_type, page)
         try:
             if self._current_city_id != city_id:
-                self.session.cookies.clear()
-                self._current_city_id = city_id
-                self._warmed_up = False
+                self._reset_session_for_city(city_id)
 
             if not self._warmed_up:
                 self._warm_up_session(show_type, city_id)
                 self._warmed_up = True
 
-            log_external_http_request("GET", url, purpose="获取电影列表")
-            headers = build_maoyan_web_headers(city_id)
-            response = self.session.get(
+            headers = build_maoyan_web_headers(city_id, include_cookie=False)
+            response = self._send_movie_list_request(
                 url,
                 headers=headers,
-                allow_redirects=config_manager.allow_redirects or True,
-                timeout=config_manager.timeout or 60,
+                purpose="获取电影列表",
             )
 
             if response.status_code == 200:
@@ -269,18 +266,49 @@ class UpdateBaseService:
             logger.error("获取电影列表 HTML 异常: error=%s", error, exc_info=True)
             return None
 
+    def _reset_session_for_city(self, city_id: int) -> None:
+        self.session.cookies.clear()
+        seed_count = seed_maoyan_session_cookies(
+            self.session,
+            city_id,
+            exclude_names=_MAOYAN_MOVIE_LIST_STALE_COOKIES,
+        )
+        self._current_city_id = city_id
+        self._warmed_up = False
+        logger.debug("猫眼电影列表会话 Cookie 已初始化: city_id=%s, seed_cookie_count=%s", city_id, seed_count)
+
     def _warm_up_session(self, show_type: int, city_id: int) -> None:
         try:
-            warmup_url = f"https://www.maoyan.com/films?showType={show_type}&offset=0"
-            log_external_http_request("GET", warmup_url, purpose="预热电影列表会话")
-            self.session.get(
+            warmup_url = self._movie_list_url(show_type, 1)
+            self._send_movie_list_request(
                 warmup_url,
-                headers=build_maoyan_web_headers(city_id),
-                allow_redirects=config_manager.allow_redirects or True,
-                timeout=config_manager.timeout or 60,
+                headers=build_maoyan_web_headers(city_id, include_cookie=False),
+                purpose="预热电影列表会话",
             )
         except Exception as error:
             logger.debug("预热请求失败, 已忽略: %s", error)
+
+    def _send_movie_list_request(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        purpose: str,
+    ) -> requests.Response:
+        request = requests.Request("GET", url, headers=headers)
+        prepared = self.session.prepare_request(request)
+        log_external_http_request("GET", url, purpose=purpose)
+        return self.session.send(
+            prepared,
+            allow_redirects=config_manager.allow_redirects or True,
+            timeout=config_manager.timeout or 60,
+        )
+
+    def _movie_list_url(self, show_type: int, page: int) -> str:
+        if page <= 1:
+            return f"https://www.maoyan.com/films?showType={show_type}"
+        offset = (page - 1) * _MAOYAN_MOVIE_LIST_PAGE_SIZE
+        return f"https://www.maoyan.com/films?showType={show_type}&offset={offset}"
 
     # ---------- 内部: 解析 ----------
 

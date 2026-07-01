@@ -105,11 +105,12 @@ def build_maoyan_web_headers(
     *,
     referer: str | None = None,
     hot_movie_ids: Sequence[int] | None = None,
+    include_cookie: bool = True,
 ) -> dict[str, str]:
     headers = dict(MAOYAN_WEB_HEADERS)
     if referer is not None:
         headers["Referer"] = referer
-    cookie = build_maoyan_cookie(city_id, hot_movie_ids=hot_movie_ids)
+    cookie = build_maoyan_cookie(city_id, hot_movie_ids=hot_movie_ids) if include_cookie else ""
     if cookie:
         headers["Cookie"] = cookie
     return headers
@@ -130,13 +131,36 @@ def build_maoyan_mobile_headers(
     return headers
 
 
-def build_maoyan_cookie(city_id: int, *, hot_movie_ids: Sequence[int] | None = None) -> str:
+def build_maoyan_cookie(
+    city_id: int,
+    *,
+    hot_movie_ids: Sequence[int] | None = None,
+    exclude_names: set[str] | None = None,
+) -> str:
     pairs = _parse_cookie_pairs(config_manager.maoyan_cookie)
     if hot_movie_ids:
         pairs = _replace_cookie_value(pairs, "hotMovieIds", ",".join(str(mid) for mid in hot_movie_ids))
     pairs = _replace_cookie_value(pairs, "old-moviepage-ci", str(city_id))
     pairs = _replace_cookie_value(pairs, "ci", str(city_id))
+    if exclude_names:
+        pairs = [(name, value) for name, value in pairs if name not in exclude_names]
     return _format_cookie_pairs(pairs)
+
+
+def seed_maoyan_session_cookies(
+    session: requests.Session,
+    city_id: int,
+    *,
+    exclude_names: set[str] | None = None,
+) -> int:
+    cookie = build_maoyan_cookie(city_id, exclude_names=exclude_names)
+    count = 0
+    for name, value in _parse_cookie_pairs(cookie):
+        if not name:
+            continue
+        session.cookies.set(name, value, domain=".maoyan.com", path="/")
+        count += 1
+    return count
 
 
 def decode_maoyan_stonefont_text(
