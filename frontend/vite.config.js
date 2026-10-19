@@ -12,7 +12,8 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173,
+    port: 5188,
+    strictPort: true,
     proxy: {
       '/api': {
         // 本地开发默认转发到宿主机后端，Docker 开发环境则通过环境变量改为 backend 服务。

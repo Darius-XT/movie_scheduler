@@ -43,7 +43,7 @@ docker compose up -d --build
 
 访问地址：
 
-- 前端：http://localhost:5173
+- 前端：http://localhost:5188
 - 后端：http://localhost:8000
 - API 文档：http://localhost:8000/docs
 
@@ -138,7 +138,7 @@ npm install
 npm run dev
 ```
 
-前端开发服务器默认会把 `/api` 代理到 `http://localhost:8000`。Docker Compose 中会通过 `VITE_API_PROXY_TARGET=http://backend:8000` 改为容器内服务地址。
+前端开发服务器固定使用 `5188` 端口，避开其他项目常用的 `5173`～`5180`；端口被占用时会直接报错，不会自动切换。`/api` 默认代理到 `http://localhost:8000`。Docker Compose 中会通过 `VITE_API_PROXY_TARGET=http://backend:8000` 改为容器内服务地址。
 
 ## 测试
 
