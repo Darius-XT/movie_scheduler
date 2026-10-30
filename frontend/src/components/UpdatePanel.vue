@@ -300,11 +300,14 @@ const handleUpdateShows = async () => {
       if (data.type === 'progress') {
         showsUpdateProgress.value = data.message || '正在更新场次信息'
       } else if (data.type === 'complete') {
-        const { added, removed, last_fetched_at } = data.data || {}
+        const { added, removed, last_fetched_at, failed_movies = 0 } = data.data || {}
         store.recordShowUpdate({ added, removed }, Date.now() - startedAt, last_fetched_at)
-        showsUpdateProgress.value = '场次信息更新完成'
+        showsUpdateProgress.value = failed_movies > 0
+          ? `更新完成，${failed_movies} 部电影抓取失败，已保留原有场次`
+          : '场次信息更新完成'
         succeeded = true
-        ElMessage.success('场次信息更新成功')
+        if (failed_movies > 0) ElMessage.warning(showsUpdateProgress.value)
+        else ElMessage.success('场次信息更新成功')
       } else if (data.type === 'error') {
         showsUpdateProgress.value = ''
         ElMessage.error('更新失败: ' + data.error)

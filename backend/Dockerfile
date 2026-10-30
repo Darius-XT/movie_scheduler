@@ -14,10 +14,16 @@ RUN pip install --no-cache-dir \
     "fastapi>=0.121.3" \
     "fonttools>=4.63.0" \
     "pydantic>=2.0.0" \
+    "playwright>=1.58.0,<2" \
     "requests>=2.31.0" \
     "sqlalchemy>=2.0.0" \
     "urllib3>=2.0.0" \
     "uvicorn>=0.38.0"
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ARG DEBIAN_MIRROR=https://mirrors.aliyun.com
+RUN sed -i "s|http://deb.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources \
+    && python -m playwright install --with-deps --no-shell chromium
 
 COPY backend /app
 

@@ -132,8 +132,10 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 ### 猫眼页面请求
 
 - 所有猫眼 HTML 页面请求必须通过 `movie_scheduler.shared.maoyan.maoyan_get_text(...)` 发起,不要在业务模块中直接 `requests.get` 访问猫眼页面。
-- 业务模块不得直接拼接或打印猫眼 Cookie header;Cookie 统一由共享猫眼 Session 根据 `MOVIE_SCHEDULER_MAOYAN_COOKIE` 和运行时 `hotMovieIds` 管理。
-- 当前猫眼 Session 设计基于单用户、单城市、单设备使用场景,不支持多城市并发隔离。
+- HTML 由 Playwright 无头 Chromium 获取，桌面页面保留浏览器原生请求头，电影详情保留原有移动端 UA；旧 HTTP header 覆盖项不作用于浏览器页面。
+- 业务模块不得直接拼接或打印猫眼 Cookie header；浏览器上下文首次注入 `MOVIE_SCHEDULER_MAOYAN_COOKIE`，后续保留站点刷新的 Cookie，仅更新城市与 `hotMovieIds`。
+- 浏览器在专用线程串行执行，复用进程与会话；切换城市或页面 profile 时重建上下文，服务退出时释放资源。Cookie 不落盘。
+- 验证页、HTTP 错误、超时返回抓取失败；一部电影的日期或影院页面抓取不完整时不覆盖其旧场次及更新时间。
 
 ## 环境变量
 
@@ -147,7 +149,9 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 | `MOVIE_SCHEDULER_CITY_MAPPING` | 可选城市名到城市 ID 的 JSON 对象 |
 | `MOVIE_SCHEDULER_TIMEOUT` | 外部请求超时时间,单位秒 |
 | `MOVIE_SCHEDULER_DOUBAN_API_BASE_URL` | 豆瓣信息补充服务的基础 URL;读取时会移除末尾 `/` |
-| `MOVIE_SCHEDULER_MAOYAN_COOKIE` | 可选猫眼浏览器种子 Cookie;猫眼共享 Session 会移除旧 `hotMovieIds`,预热后复用 Session Cookie,场次抓取会刷新 `hotMovieIds` |
+| `MOVIE_SCHEDULER_MAOYAN_COOKIE` | 可选猫眼浏览器种子 Cookie，仅注入新浏览器上下文 |
+| `MOVIE_SCHEDULER_MAOYAN_BROWSER_CHANNEL` | 默认 `chromium`；本机可以设为 `chrome` 使用已安装的 Google Chrome |
+| `MOVIE_SCHEDULER_MAOYAN_BROWSER_CDP_URL` | 可选本机独立 Chrome 调试入口；设置后连接该浏览器，应用退出仅关闭自己的上下文并断开连接 |
 | `MOVIE_SCHEDULER_HOST` / `MOVIE_SCHEDULER_PORT` | 后端监听地址与端口 |
 | `MOVIE_SCHEDULER_CORS_ORIGINS` | CORS 允许来源 JSON 数组 |
 

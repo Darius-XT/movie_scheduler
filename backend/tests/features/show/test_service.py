@@ -4,10 +4,66 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import pytest
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.show.service as show_module
 from movie_scheduler.features.show.service import ShowService
+
+
+@pytest.mark.parametrize("failed_stage", ["dates", "cinemas", "shows", "empty_cinemas"])
+def test_failed_fetch_preserves_shows_and_timestamp(monkeypatch: MonkeyPatch, failed_stage: str) -> None:
+    service = ShowService()
+    movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True)
+    writes: list[str] = []
+    def get_movie(movie_id: int) -> SimpleNamespace:
+        return movie
+
+    def write(*args: object) -> None:
+        writes.append("write")
+
+    monkeypatch.setattr(show_module.movie_repository, "list_wished_movies", lambda: [movie])
+    monkeypatch.setattr(show_module.movie_repository, "get_movie_by_id", get_movie)
+    monkeypatch.setattr(show_module.movie_show_repository, "replace_for_movie", write)
+    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", write)
+
+    def fetch(url: str, label: str, city_id: int, **kwargs: object) -> str | None:
+        if url == "https://www.maoyan.com/":
+            return "<html></html>"
+        if "/cinema/" in url:
+            return None if failed_stage == "shows" else _MAOYAN_CINEMA_HTML
+        if "showDate=" in url:
+            if failed_stage == "empty_cinemas":
+                return "<html><body>页面暂不可用</body></html>"
+            return None if failed_stage == "cinemas" else _MAOYAN_MOVIE_DATE_CINEMAS_HTML
+        return None if failed_stage == "dates" else _MAOYAN_MOVIE_CINEMAS_HTML
+
+    monkeypatch.setattr(show_module, "_http_get_text", fetch)
+    with pytest.raises(show_module.ExternalDependencyError, match="已保留原有场次"):
+        asyncio.run(service.refresh_wished_movie_shows(10))
+    assert writes == []
+
+
+def test_partial_failure_does_not_replace_failed_movie(monkeypatch: MonkeyPatch) -> None:
+    service = ShowService()
+    touched: list[int] = []
+    replaced: list[int] = []
+    async def wished(movie_id: int) -> bool:
+        return True
+
+    def replace(movie_id: int, shows: list[object]) -> None:
+        replaced.append(movie_id)
+
+    def existing(movie_ids: list[int]) -> list[object]:
+        return []
+
+    monkeypatch.setattr(service, "_is_movie_wished", wished)
+    monkeypatch.setattr(show_module.movie_show_repository, "list_for_movies", existing)
+    monkeypatch.setattr(show_module.movie_show_repository, "replace_for_movie", replace)
+    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", touched.append)
+    result = asyncio.run(service._persist_results([1, 2], [show_module._FinalMovieShowData(1, [])]))
+    assert result.failed_movies == 1
+    assert touched == replaced == [1]
 
 
 def test_manual_movies_do_not_trigger_show_fetching(monkeypatch: MonkeyPatch) -> None:

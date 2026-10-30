@@ -7,6 +7,20 @@
 docker compose up -d
 ```
 
+猫眼 HTML 抓取使用无头浏览器。首次接入或升级 Playwright 后运行 `docker compose up -d --build backend`，镜像会安装 Chromium 及系统依赖。
+本机运行时先执行 `uv run --project backend playwright install chromium`；也可以设置 `MOVIE_SCHEDULER_MAOYAN_BROWSER_CHANNEL=chrome` 使用已安装的 Chrome。
+浏览器会话只保留在进程内，种子 Cookie 从被 Git 和 Docker 构建上下文忽略的 `backend/.env` 读取。
+
+如果 Linux Chromium 进入验证页而本机 Chrome 正常，先在宿主机运行：
+
+```bash
+uv run --project backend python backend/scripts/run_maoyan_browser.py
+```
+
+然后在 `backend/.env` 设置 `MOVIE_SCHEDULER_MAOYAN_BROWSER_CDP_URL=http://host.docker.internal:9223`，执行 `docker compose up -d backend` 让新配置生效。
+该脚本启动独立的无头 Chrome，调试端口仅监听本机；不使用日常 Chrome 的配置目录。后端通过 Docker Desktop 的宿主机地址连接，退出后端不会关闭宿主机 Chrome。
+宿主机重启后需重新运行脚本；删除 CDP 配置即可改回容器内 Chromium。
+
 ## 测试
 
 ```bash

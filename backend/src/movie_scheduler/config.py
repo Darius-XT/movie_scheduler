@@ -35,6 +35,9 @@ class ConfigManager:
         self.cors_origins = ["*"]
         self.douban_api_base_url = "http://localhost:8085"
         self.maoyan_cookie = ""
+        self.maoyan_browser_channel = "chromium"
+        self.maoyan_browser_cdp_url = ""
+        self.maoyan_web_headers: dict[str, str] = {}
         self.database_url = f"sqlite:///{self.db_path}"
 
     def reload_from_env(self) -> None:
@@ -52,6 +55,19 @@ class ConfigManager:
         self.cors_origins = self._get_json_list("MOVIE_SCHEDULER_CORS_ORIGINS", self.cors_origins)
         self.douban_api_base_url = self._get_url("MOVIE_SCHEDULER_DOUBAN_API_BASE_URL", self.douban_api_base_url)
         self.maoyan_cookie = self._get_str("MOVIE_SCHEDULER_MAOYAN_COOKIE", self.maoyan_cookie)
+        self.maoyan_browser_channel = self._get_str("MOVIE_SCHEDULER_MAOYAN_BROWSER_CHANNEL", self.maoyan_browser_channel)
+        self.maoyan_browser_cdp_url = self._get_url("MOVIE_SCHEDULER_MAOYAN_BROWSER_CDP_URL", "")
+        for header, suffix in {
+            "User-Agent": "USER_AGENT",
+            "Sec-CH-UA": "SEC_CH_UA",
+            "Sec-CH-UA-Mobile": "SEC_CH_UA_MOBILE",
+            "Sec-CH-UA-Platform": "SEC_CH_UA_PLATFORM",
+            "Accept": "ACCEPT",
+            "Priority": "PRIORITY",
+        }.items():
+            value = self._get_str(f"MOVIE_SCHEDULER_MAOYAN_{suffix}", "")
+            if value:
+                self.maoyan_web_headers[header] = value
         self.database_url = f"sqlite:///{self.db_path}"
 
     def ensure_runtime_dirs(self) -> None:

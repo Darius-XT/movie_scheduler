@@ -62,6 +62,7 @@ class ShowUpdateStats:
     added: int
     removed: int
     movies_with_shows: int
+    failed_movies: int = 0
 
 
 @dataclass(slots=True)
@@ -247,8 +248,8 @@ class ShowService:
                 ))
             stats = await self._persist_results(movie_ids, results)
             logger.info(
-                "场次定时抓取完成: %s/%s 部电影有场次, 新增 %s 场, 删除 %s 场",
-                stats.movies_with_shows, len(movie_ids), stats.added, stats.removed,
+                "场次定时抓取完成: %s/%s 部电影有场次, 新增 %s 场, 删除 %s 场, 失败保留 %s 部",
+                stats.movies_with_shows, len(movie_ids), stats.added, stats.removed, stats.failed_movies,
             )
             return stats
         except Exception as error:
@@ -278,6 +279,7 @@ class ShowService:
                 "added": stats.added,
                 "removed": stats.removed,
                 "movies_with_shows": stats.movies_with_shows,
+                "failed_movies": stats.failed_movies,
                 "last_fetched_at": self._serialize_datetime(last_fetched_at),
             }
 
@@ -355,6 +357,8 @@ class ShowService:
         movie_results = await asyncio.gather(*tasks, return_exceptions=True)
 
         result = self._collect_valid_movie_results(movie_results)
+        if movie_ids and not result:
+            raise ExternalDependencyError("所有电影场次抓取失败，已保留原有场次，请检查猫眼会话或浏览器日志")
         total_shows = sum(len(c.shows) for m in result for c in m.cinemas)
         logger.info("总共找到 %s 部电影, %s 个场次信息", len(result), total_shows)
         return result
@@ -400,9 +404,6 @@ class ShowService:
         seen_cinema_ids: set[int] = set()
         for date_result in date_results:
             if isinstance(date_result, BaseException):
-                if isinstance(date_result, _DegradableError):
-                    logger.warning("获取日期影院列表时发生可降级错误,跳过当前日期: %s", date_result)
-                    continue
                 raise date_result
             for cinema_id in date_result:
                 if cinema_id in seen_cinema_ids:
@@ -429,9 +430,6 @@ class ShowService:
         valid: list[list[_FetchedShowItem]] = []
         for cinema_result in cinema_results:
             if isinstance(cinema_result, BaseException):
-                if isinstance(cinema_result, _DegradableError):
-                    logger.warning("获取影院场次时发生可降级错误,跳过当前影院: %s", cinema_result)
-                    continue
                 raise cinema_result
             valid.append(cinema_result)
 
@@ -546,7 +544,7 @@ class ShowService:
                 f"获取影院信息失败,movie_id={movie_id}, city_id={city_id}, show_date={show_date}, offset={offset}"
             )
         cinema_ids, is_last_page = self._parse_cinema_list(text)
-        if not cinema_ids and not is_last_page:
+        if not cinema_ids:
             raise DataParsingError(
                 f"影院分页解析结果为空,movie_id={movie_id}, city_id={city_id}, show_date={show_date}, offset={offset}"
             )
@@ -1068,7 +1066,7 @@ class ShowService:
             "电影 %s (ID: %s) 共找到 %s 个场次,分布在 %s 个影院",
             movie_data.movie_name, result.movie_id, total_shows, len(result.cinemas),
         )
-        return result if result.cinemas else None
+        return result
 
     def _collect_valid_movie_results(
         self,
@@ -1090,7 +1088,7 @@ class ShowService:
                     exc_info=(type(movie_result), movie_result, movie_result.__traceback__),
                 )
                 raise movie_result
-            if isinstance(movie_result, _FinalMovieShowData) and movie_result.cinemas:
+            if isinstance(movie_result, _FinalMovieShowData):
                 result.append(movie_result)
         return result
 
@@ -1106,6 +1104,9 @@ class ShowService:
         removed_total = 0
         movies_with_shows = 0
         for movie_id in movie_ids:
+            if movie_id not in results_by_movie:
+                logger.warning("电影 %s 抓取不完整，保留已有场次及更新时间", movie_id)
+                continue
             async with self._get_movie_persist_lock(movie_id):
                 existing_keys = await asyncio.to_thread(self._collect_existing_show_keys, movie_id)
                 if not await self._is_movie_wished(movie_id):
@@ -1135,6 +1136,7 @@ class ShowService:
                     movies_with_shows += 1
         return ShowUpdateStats(
             added=added_total, removed=removed_total, movies_with_shows=movies_with_shows,
+            failed_movies=len(set(movie_ids) - results_by_movie.keys()),
         )
 
     def _get_movie_persist_lock(self, movie_id: int) -> asyncio.Lock:
@@ -1221,6 +1223,8 @@ class ShowService:
             return error.message
         if isinstance(error, RepositoryError):
             return "数据库访问失败,请稍后重试"
+        if isinstance(error, ExternalDependencyError):
+            return "猫眼场次抓取失败，已保留原有场次，请检查会话或浏览器日志"
         return "更新失败,请稍后重试"
 
 

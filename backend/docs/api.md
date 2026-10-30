@@ -64,4 +64,7 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 | `GET` | `/api/shows` | 无 | `{"success": true, "data": {"movies": [{"movie_id": 1, "shows": [{...}]}], "last_fetched_at": "..."}}` |
 | `GET` | `/api/shows` | query: `movie_id=1` | `{"success": true, "data": {"movies": [{"movie_id": 1, "shows": [...]}], "last_fetched_at": "..."}}` |
 
+场次更新 SSE 的 `complete.data` 包含 `added`、`removed`、`movies_with_shows`、`failed_movies` 和 `last_fetched_at`。
+`failed_movies` 表示抓取不完整且保留旧数据的电影数量；全部抓取失败时返回 `error` 事件，不更新原有场次或抓取时间。
+
 排片数据由后端每个整点(分钟 0)自动刷新一次,服务启动时也会立即刷一次。加入想看时后端会后台刷新该电影场次,前端可用 `movie_id` 参数轮询单部电影。

@@ -1,5 +1,7 @@
 services:
   backend:
+    init: true
+    shm_size: '512mb'
     build:
       context: .
       dockerfile: backend/Dockerfile

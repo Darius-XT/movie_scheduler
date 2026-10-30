@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
@@ -18,6 +19,7 @@ from movie_scheduler.features.city.router import router as city_router
 from movie_scheduler.features.movie.router import router as movie_router
 from movie_scheduler.features.plan.router import router as plan_router
 from movie_scheduler.features.show.router import router as show_router
+from movie_scheduler.shared.maoyan_browser import maoyan_browser
 from movie_scheduler.shared.utils import file_saver
 
 
@@ -38,6 +40,7 @@ async def lifespan(_: FastAPI):
         yield
     finally:
         auto_update_scheduler.shutdown()
+        await asyncio.to_thread(maoyan_browser.close)
 
 
 def create_app() -> FastAPI:

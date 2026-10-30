@@ -24,6 +24,7 @@ backend/.pytest_cache/
 backend/.runtime/*.db
 backend/.runtime/*.db-shm
 backend/.runtime/*.db-wal
+backend/.runtime/maoyan-browser.log
 
 # Frontend dependencies
 frontend/node_modules/
