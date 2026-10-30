@@ -31,9 +31,11 @@ import { computed, ref } from 'vue'
 import { Switch } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useMovieSelectionStore } from '@/stores/movieSelectionStore'
+import { useShowCacheStore } from '@/stores/showCacheStore'
 
 const props = defineProps({ movie: { type: Object, required: true } })
 const store = useMovieSelectionStore()
+const showCacheStore = useShowCacheStore()
 const saving = ref(false)
 const switchLabel = computed(() => props.movie.viewing_location === 'home' ? '切换到影院看' : '切换到家里看')
 const options = [
@@ -46,6 +48,9 @@ const save = async (location) => {
   saving.value = true
   try {
     await store.updateMovieViewingLocation(props.movie.id, location)
+    if (location === 'cinema' && props.movie.is_wished && props.movie.id > 0) {
+      void showCacheStore.pollMovieShowsUntilUpdated(props.movie.id)
+    }
   } catch (error) {
     ElMessage.error(error?.response?.data?.error || '保存分类失败，请重试')
   } finally {

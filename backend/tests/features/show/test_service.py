@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from pytest import MonkeyPatch
@@ -11,10 +12,39 @@ import movie_scheduler.features.show.service as show_module
 from movie_scheduler.features.show.service import ShowService
 
 
+def test_batch_fetch_only_selects_cinema_movies(monkeypatch: MonkeyPatch) -> None:
+    movies = [SimpleNamespace(id=mid, viewing_location=location) for mid, location in [
+        (1, "cinema"), (2, "home"), (3, None), (-4, "cinema"),
+    ]]
+    monkeypatch.setattr(show_module.movie_repository, "list_wished_movies", Mock(return_value=movies))
+    service = ShowService()
+    fetch = AsyncMock(return_value=[])
+    persist = AsyncMock(return_value=show_module.ShowUpdateStats(0, 0, 0))
+    monkeypatch.setattr(service, "_fetch_shows_for_selected_movies", fetch)
+    monkeypatch.setattr(service, "_persist_results", persist)
+    asyncio.run(service.refresh_wished_movie_shows(10))
+    fetch.assert_awaited_once_with([1], city_id=10)
+    persist.assert_awaited_once_with([1], [])
+
+
+@pytest.mark.parametrize("location", ["home", None])
+def test_single_fetch_skips_non_cinema_movies(monkeypatch: MonkeyPatch, location: str | None) -> None:
+    movie = SimpleNamespace(id=1, is_wished=True, viewing_location=location)
+    monkeypatch.setattr(show_module.movie_repository, "get_movie_by_id", Mock(return_value=movie))
+    service = ShowService()
+    fetch = AsyncMock()
+    delete = Mock()
+    monkeypatch.setattr(service, "_fetch_shows_for_selected_movies", fetch)
+    monkeypatch.setattr(show_module.movie_show_repository, "delete_for_movie", delete)
+    assert asyncio.run(service.refresh_movie_shows(1, 10)) == 0
+    fetch.assert_not_called()
+    delete.assert_not_called()
+
+
 @pytest.mark.parametrize("failed_stage", ["dates", "cinemas", "shows", "empty_cinemas"])
 def test_failed_fetch_preserves_shows_and_timestamp(monkeypatch: MonkeyPatch, failed_stage: str) -> None:
     service = ShowService()
-    movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True)
+    movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True, viewing_location="cinema")
     writes: list[str] = []
     def get_movie(movie_id: int) -> SimpleNamespace:
         return movie
@@ -113,7 +143,7 @@ def test_refresh_movie_shows_parses_maoyan_cinema_html(monkeypatch: MonkeyPatch)
     captured_shows: list[dict[str, object]] = []
     captured_movie_hot_ids: list[list[int] | None] = []
     captured_cinema_hot_ids: list[list[int] | None] = []
-    movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True)
+    movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True, viewing_location="cinema")
 
     def fake_get_movie_by_id(movie_id: int) -> SimpleNamespace | None:
         return movie if movie_id == 1490532 else None

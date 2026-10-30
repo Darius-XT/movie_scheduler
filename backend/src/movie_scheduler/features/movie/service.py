@@ -69,6 +69,8 @@ class MovieService:
         })
         if movie is None:
             raise AppError(f"电影不存在: {movie_id}", status_code=404)
+        if movie_id > 0 and bool(movie.is_wished) and getattr(movie, "viewing_location", None) == "cinema":
+            asyncio.create_task(show_service.refresh_movie_shows(movie_id))
         return self._build_movie_item(movie)
 
     async def set_movie_label(self, movie_id: int, request: SetMovieLabelRequest) -> dict[str, object]:
@@ -79,15 +81,15 @@ class MovieService:
         })
         if not ok:
             raise AppError(f"电影不存在: {movie_id}", status_code=404)
-        if is_wished:
-            asyncio.create_task(show_service.refresh_movie_shows(movie_id))
-        else:
-            # 移出想看: 同步清场次, 避免孤儿
-            from movie_scheduler.features.show.repository import movie_show_repository
-            await asyncio.to_thread(movie_show_repository.delete_for_movie, movie_id)
         movie = await asyncio.to_thread(movie_repository.get_movie_by_id, movie_id)
         if movie is None:
             raise AppError(f"电影不存在: {movie_id}", status_code=404)
+        if is_wished and movie_id > 0 and getattr(movie, "viewing_location", None) == "cinema":
+            asyncio.create_task(show_service.refresh_movie_shows(movie_id))
+        elif not is_wished:
+            # 移出想看: 同步清场次, 避免孤儿
+            from movie_scheduler.features.show.repository import movie_show_repository
+            await asyncio.to_thread(movie_show_repository.delete_for_movie, movie_id)
         return self._build_movie_item(movie)
 
     # ---------- 对外: 更新编排 ----------

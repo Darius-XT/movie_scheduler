@@ -20,10 +20,13 @@ def test_set_viewing_location(monkeypatch: MonkeyPatch, location: str | None) ->
     movie = Movie.from_dict({"id": 1, "title": "电影", "viewing_location": location, "is_wished": True})
     write = Mock(return_value=movie)
     monkeypatch.setattr(movie_repository, "set_movie_viewing_location", write)
+    refresh = AsyncMock()
+    monkeypatch.setattr(show_service, "refresh_movie_shows", refresh)
     request = SetMovieViewingLocationRequest.model_validate({"viewing_location": location})
     result = asyncio.run(MovieService().set_movie_viewing_location(1, request))
     write.assert_called_once_with({"id": 1, "viewing_location": location})
     assert result["viewing_location"] == location
+    assert refresh.call_count == int(location == "cinema")
     assert result["is_wished"] is True
     write.return_value = None
     with pytest.raises(AppError) as error:
@@ -47,12 +50,13 @@ def test_set_movie_channels_and_handles_missing_movie(monkeypatch: MonkeyPatch) 
 
 
 @pytest.mark.parametrize("label", ["wished", "skipped", "watched", None])
-def test_set_label_updates_wishes_and_show_cache(monkeypatch: MonkeyPatch, label: str | None) -> None:
+@pytest.mark.parametrize("location", ["cinema", "home", None])
+def test_set_label_updates_wishes_and_show_cache(monkeypatch: MonkeyPatch, label: str | None, location: str | None) -> None:
     request = SetMovieLabelRequest.model_validate({"label": label})
     write = Mock(return_value=True)
     refresh = AsyncMock()
     delete = Mock()
-    movie = Movie.from_dict({"id": 123, "title": "电影", "is_wished": label == "wished", "is_skipped": label == "skipped", "is_watched": label == "watched"})
+    movie = Movie.from_dict({"id": 123, "title": "电影", "viewing_location": location, "is_wished": label == "wished", "is_skipped": label == "skipped", "is_watched": label == "watched"})
     monkeypatch.setattr(movie_repository, "set_movie_label", write)
     monkeypatch.setattr(movie_repository, "get_movie_by_id", Mock(return_value=movie))
     monkeypatch.setattr(show_service, "refresh_movie_shows", refresh)
@@ -61,7 +65,7 @@ def test_set_label_updates_wishes_and_show_cache(monkeypatch: MonkeyPatch, label
     assert result["is_wished"] == (label == "wished")
     assert result["is_skipped"] == (label == "skipped")
     assert result["is_watched"] == (label == "watched")
-    assert refresh.call_count == int(label == "wished")
+    assert refresh.call_count == int(label == "wished" and location == "cinema")
     assert delete.call_count == int(label != "wished")
 
 

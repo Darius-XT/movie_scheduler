@@ -174,7 +174,7 @@ const handleMovieLabel = async (movie, label) => {
     await store.updateMovieLabel(movie, label)
     store.removeMovieShows(movie.id)
     if (label === 'wished') {
-      if (movie.id > 0) void store.pollMovieShowsUntilUpdated(movie.id)
+      if (movie.id > 0 && movie.viewing_location === 'cinema') void store.pollMovieShowsUntilUpdated(movie.id)
       ElMessage.success(`已将《${movie.title}》加入想看`)
     } else {
       const labelName = { skipped: '不看', watched: '看过' }[label]

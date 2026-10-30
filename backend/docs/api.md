@@ -59,6 +59,8 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 
 ## Show
 
+手动更新、定时更新和单片自动更新只抓取想看列表中 `viewing_location=cinema` 且具有猫眼编号的电影。移入“影院看”会触发单片更新；“家里看”和“未分类”不抓取场次。
+
 | 方法 | 路径 | 参数 | 返回 |
 |------|------|------|------|
 | `GET` | `/api/shows` | 无 | `{"success": true, "data": {"movies": [{"movie_id": 1, "shows": [{...}]}], "last_fetched_at": "..."}}` |
