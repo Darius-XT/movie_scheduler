@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from movie_scheduler.shared.types import SuccessEnvelope
 
-MovieChannel = Literal["bilibili", "tegou", "dytt", "tencent", "iqiyi", "youku"]
+MovieChannel = Literal["bilibili", "tegou", "dytt", "tencent", "iqiyi", "youku", "youtube"]
 
 
 class SetMovieChannelsRequest(BaseModel):

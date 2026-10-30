@@ -43,7 +43,7 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 | `GET` | `/api/movies/wished` | 无 | `{"success": true, "data": {"movies": [...]}}` |
 | `PATCH` | `/api/movies/{movie_id}/wished` | path: `movie_id`; body: `{"is_wished": true \| false}` | `{"success": true, "data": {"movie": {...}}}` |
 | `PATCH` | `/api/movies/{movie_id}/label` | body: `{"label": "wished" \| "skipped" \| "watched" \| null}` | `{"success": true, "data": {"movie": {...}}}` |
-| `PATCH` | `/api/movies/{movie_id}/channels` | body: `{"channels": ["bilibili"]}`，最多一个，可选 bilibili/tegou/dytt/tencent/iqiyi/youku | `{"success": true, "data": {"movie": {...}}}` |
+| `PATCH` | `/api/movies/{movie_id}/channels` | body: `{"channels": ["bilibili"]}`，最多一个，可选 bilibili/tegou/dytt/tencent/iqiyi/youku/youtube | `{"success": true, "data": {"movie": {...}}}` |
 | `PATCH` | `/api/movies/{movie_id}/viewing-location` | body: `{"viewing_location": "home" \| "cinema" \| null}` | `{"success": true, "data": {"movie": {...}}}` |
 | `GET` | `/api/movies/update-status` | 无 | `{"success": true, "data": {"last_updated_at": "..." \| null}}` |
 | `POST` | `/api/movies/{movie_id}/update-douban` | path: `movie_id` | `{"success": true, "data": {"score": "...", "douban_url": "..."}}` |

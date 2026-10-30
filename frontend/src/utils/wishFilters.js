@@ -5,6 +5,7 @@ export const MOVIE_CHANNELS = [
   { value: 'tencent', label: '腾讯' },
   { value: 'iqiyi', label: '爱奇艺' },
   { value: 'youku', label: '优酷' },
+  { value: 'youtube', label: 'YouTube' },
 ]
 
 export const getMovieYear = (movie) => {
