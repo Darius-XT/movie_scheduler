@@ -17,6 +17,8 @@ export const selectMovies = (selectionMode = 'all') =>
 
 export const getWishedMovies = () => api.get('/movies/wished')
 
+export const createManualMovie = (title) => api.post('/movies/manual', { title })
+
 export const setMovieWished = (movieId, isWished) =>
   api.patch(`/movies/${movieId}/wished`, { is_wished: isWished })
 

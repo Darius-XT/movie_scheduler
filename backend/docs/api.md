@@ -10,6 +10,7 @@
 | cinema | `GET` | `/api/cinemas/update-stream` | SSE | 流式更新影院数据(手动触发,增量) |
 | movie | `POST` | `/api/movies/select` | JSON | 按上映状态筛选电影 |
 | movie | `GET` | `/api/movies/wished` | JSON | 读取全部想看电影 |
+| movie | `POST` | `/api/movies/manual` | JSON | 手动添加电影并加入想看 |
 | movie | `PATCH` | `/api/movies/{movie_id}/wished` | JSON | 更新单部电影的想看状态 |
 | movie | `GET` | `/api/movies/update-status` | JSON | 读取电影信息上次自动更新时间 |
 | movie | `POST` | `/api/movies/{movie_id}/update-douban` | JSON | 为单部电影抓取豆瓣评分与详情链接 |

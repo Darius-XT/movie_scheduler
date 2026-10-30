@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 
 from movie_scheduler.shared.types import SuccessEnvelope
 
@@ -53,6 +53,10 @@ class WishedMoviesResponse(SuccessEnvelope):
 
 class SetMovieWishedRequest(BaseModel):
     is_wished: bool
+
+
+class CreateManualMovieRequest(BaseModel):
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
 
 class MovieDetailData(BaseModel):

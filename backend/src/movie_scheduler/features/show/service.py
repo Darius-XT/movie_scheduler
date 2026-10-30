@@ -218,6 +218,8 @@ class ShowService:
         wished_movies = await asyncio.to_thread(movie_repository.list_wished_movies)
         movie_ids = [int(mid) for m in wished_movies if (mid := cast(int | None, getattr(m, "id", None))) is not None]
 
+        movie_ids = [movie_id for movie_id in movie_ids if movie_id > 0]
+
         if not movie_ids:
             logger.info("场次定时抓取:想看列表为空,跳过")
             if progress_callback is not None:
@@ -284,6 +286,8 @@ class ShowService:
 
     async def refresh_movie_shows(self, movie_id: int, city_id: int | None = None) -> int:
         """抓取单部想看电影的场次并写入数据库。"""
+        if movie_id < 0:
+            return 0
         normalized_city_id = self._normalize_city_id(city_id)
         movie = await asyncio.to_thread(movie_repository.get_movie_by_id, movie_id)
         if movie is None:

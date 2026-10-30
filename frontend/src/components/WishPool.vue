@@ -13,6 +13,7 @@
             <el-button text size="small" @click="expandAllWishGroups">全部展开</el-button>
             <el-button text size="small" @click="collapseAllWishGroups">全部收起</el-button>
           </div>
+          <ManualMovieDialog />
         </div>
       </div>
       <el-tabs
@@ -162,7 +163,7 @@
           </div>
           <template v-if="!group.hasShows">
             <div class="wish-pool-group-empty">
-              {{ group.isLoading ? '正在抓取场次...' : '暂无场次,等待下一次自动抓取' }}
+              {{ group.movieId < 0 ? '手动添加的电影，暂不支持自动获取场次' : group.isLoading ? '正在抓取场次...' : '暂无场次,等待下一次自动抓取' }}
             </div>
           </template>
           <template v-else>
@@ -222,6 +223,7 @@
 <script setup>
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref, watch } from 'vue'
+import ManualMovieDialog from '@/components/ManualMovieDialog.vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import {
   formatDateAsWeekdayWithMonthDay,
@@ -771,6 +773,7 @@ const handleRemoveWishMovie = async (movie) => {
 .planning-header-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   flex: 1;
   min-width: 0;
@@ -781,7 +784,6 @@ const handleRemoveWishMovie = async (movie) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -974,7 +976,7 @@ const handleRemoveWishMovie = async (movie) => {
 
   .planning-header-actions {
     width: 100%;
-    justify-content: flex-start;
+    justify-content: flex-end;
     flex-wrap: wrap;
   }
 }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from typing import Literal, cast
@@ -12,6 +13,7 @@ from movie_scheduler.core.exceptions import AppError, RepositoryError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import movie_repository
+from movie_scheduler.features.movie.schemas import CreateManualMovieRequest
 from movie_scheduler.features.movie.update_base.service import (
     BaseInfoUpdateStats,
     UpdateBaseProgressEvent,
@@ -40,6 +42,15 @@ class MovieService:
 
     async def list_wished_movies(self) -> list[dict[str, object]]:
         return await asyncio.to_thread(self._list_wished_sync)
+
+    async def create_manual_movie(self, request: CreateManualMovieRequest) -> dict[str, object]:
+        # 负数 ID 与猫眼编号隔离,并保持在 JavaScript 安全整数范围内。
+        movie = await asyncio.to_thread(movie_repository.create_manual_movie, {
+            "id": -(secrets.randbelow(2**52) + 1),
+            "title": request.title,
+            "is_wished": True,
+        })
+        return self._build_movie_item(movie)
 
     async def set_movie_wished(self, movie_id: int, is_wished: bool) -> dict[str, object]:
         """更新单部电影的想看状态。"""

@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from movie_scheduler.features.movie.schemas import (
+    CreateManualMovieRequest,
     MovieDetailData,
     MovieDetailResponse,
     MovieSelectionData,
@@ -23,6 +24,12 @@ from movie_scheduler.features.movie.schemas import (
 from movie_scheduler.features.movie.service import movie_service
 
 router = APIRouter()
+
+
+@router.post("/movies/manual", response_model=MovieDetailResponse)
+async def create_manual_movie(request: CreateManualMovieRequest) -> MovieDetailResponse:
+    movie = await movie_service.create_manual_movie(request)
+    return MovieDetailResponse(data=MovieDetailData(movie=MovieSelectionItem.model_validate(movie)))
 
 
 @router.post("/movies/select", response_model=MovieSelectionResponse)

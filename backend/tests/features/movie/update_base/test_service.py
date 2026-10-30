@@ -1,10 +1,21 @@
 # pyright: reportPrivateUsage=false
 from __future__ import annotations
 
+from unittest.mock import Mock
+
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.movie.update_base.service as base_module
 from movie_scheduler.features.movie.update_base.service import UpdateBaseService, _ScrapedMovieBaseInfo
+
+
+def test_list_refresh_preserves_manual_movies(monkeypatch: MonkeyPatch) -> None:
+    delete = Mock()
+    monkeypatch.setattr(base_module.movie_repository, "delete_movie", delete)
+    monkeypatch.setattr(base_module.movie_repository, "get_movies_count", lambda: 1)
+    result = UpdateBaseService()._perform_incremental_update({-123}, [])
+    assert result.removed == 0
+    delete.assert_not_called()
 
 
 class _FakeResponse:

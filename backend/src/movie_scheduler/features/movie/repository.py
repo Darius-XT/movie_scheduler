@@ -16,6 +16,15 @@ from movie_scheduler.features.movie.models import Movie, MovieWriteData
 class MovieRepository:
     """封装电影表的数据访问操作。"""
 
+    def create_manual_movie(self, movie_data: MovieWriteData) -> Movie:
+        try:
+            with database_manager.transaction() as session:
+                movie = Movie.from_dict(movie_data)
+                session.add(movie)
+            return movie
+        except SQLAlchemyError as error:
+            raise RepositoryError("手动添加电影失败") from error
+
     def save_movie(self, movie_data: MovieWriteData) -> bool:
         try:
             with database_manager.transaction() as session:

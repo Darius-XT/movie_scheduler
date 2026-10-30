@@ -74,6 +74,8 @@ class UpdateExtraService:
         progress_callback: Callable[[UpdateBaseProgressEvent], None] | None,
     ) -> bool:
         movie_id = cast(int, getattr(movie, "id"))
+        if movie_id < 0:
+            return False
         movie_title = cast(str | None, getattr(movie, "title", None))
         if progress_callback is not None:
             progress_callback(UpdateBaseProgressEvent(

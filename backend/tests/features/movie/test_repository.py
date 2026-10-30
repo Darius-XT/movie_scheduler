@@ -12,6 +12,20 @@ from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import MovieRepository
 
 
+def test_manual_movie_persists_and_can_be_removed_from_wishes(monkeypatch: MonkeyPatch) -> None:
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(database_manager, "session_factory", sessionmaker(bind=engine, expire_on_commit=False))
+    monkeypatch.setattr(database_manager, "_initialized", True)
+    repository = MovieRepository()
+    movie = repository.create_manual_movie({"id": -123, "title": "手动电影", "is_wished": True})
+    assert getattr(movie, "title") == "手动电影"
+    assert [item.id for item in repository.list_wished_movies()] == [-123]
+    assert repository.set_movie_wished(-123, False)
+    assert repository.list_wished_movies() == []
+    assert repository.get_movie_by_id(-123) is not None
+
+
 def test_movie_update_status_is_independent_from_show_update_timestamp(
     monkeypatch: MonkeyPatch,
     tmp_path: Path,

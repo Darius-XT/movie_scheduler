@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.movie.update_extra.service as extra_module
 from movie_scheduler.features.movie.update_extra.service import UpdateExtraService
+
+
+def test_details_refresh_skips_manual_movies(monkeypatch: MonkeyPatch) -> None:
+    fetch = Mock(side_effect=AssertionError("手动电影不应发起猫眼请求"))
+    monkeypatch.setattr(extra_module.movie_repository, "get_all_movies", lambda: [
+        SimpleNamespace(id=-123, title="手动电影"),
+    ])
+    monkeypatch.setattr(extra_module, "maoyan_get_text", fetch)
+    assert asyncio.run(UpdateExtraService().update_all()) == 0
+    fetch.assert_not_called()
 
 
 _MOVIE_DETAIL_HTML = """

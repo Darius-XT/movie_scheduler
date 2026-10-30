@@ -158,7 +158,7 @@ const handleToggleWishMovie = async (movie) => {
     } else {
       await store.addToWishMovies(movie)
       store.removeMovieShows(movie.id)
-      void store.pollMovieShowsUntilUpdated(movie.id)
+      if (movie.id > 0) void store.pollMovieShowsUntilUpdated(movie.id)
       ElMessage.success(`已将《${movie.title}》加入想看`)
     }
   } catch {

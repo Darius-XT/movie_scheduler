@@ -10,6 +10,16 @@ import movie_scheduler.features.show.service as show_module
 from movie_scheduler.features.show.service import ShowService
 
 
+def test_manual_movies_do_not_trigger_show_fetching(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(show_module.movie_repository, "list_wished_movies", lambda: [
+        SimpleNamespace(id=-123, is_wished=True),
+    ])
+    service = ShowService()
+    assert asyncio.run(service.refresh_movie_shows(-123)) == 0
+    stats = asyncio.run(service.refresh_wished_movie_shows(city_id=10))
+    assert stats.movies_with_shows == 0
+
+
 def test_http_get_text_delegates_to_shared_maoyan_client_without_logging_cookie(monkeypatch: MonkeyPatch) -> None:
     messages: list[str] = []
     calls: list[tuple[str, str, int, dict[str, object]]] = []

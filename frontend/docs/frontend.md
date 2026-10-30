@@ -35,6 +35,10 @@ export const streamCinemaUpdate = (cityId) =>
 
 ## 想看与行程
 
+- 想看标题旁的“手动添加”支持输入片名，通过 `POST /api/movies/manual` 保存并加入想看。
+  请求为 `{ "title": "电影名称" }`（去除首尾空白后 1–200 字），响应为 `success/data.movie`。
+  手动条目不自动获取场次；保存失败时保留输入，可重试。
+
 - **想看(电影维度)**:`movieSelectionStore.wishMovies` 来源于 `GET /api/movies/wished`,
   状态字段为 `movies.is_wished`。加入/移出通过 `PATCH /api/movies/{id}/wished` 持久化,
   store 内部做乐观更新 + 失败回滚。

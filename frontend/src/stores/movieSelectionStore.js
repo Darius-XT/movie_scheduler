@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { getWishedMovies, setMovieWished } from '@/api'
+import { createManualMovie, getWishedMovies, setMovieWished } from '@/api'
 import { loadFromStorage, removeFromStorage, saveToStorage } from './storage'
 
 const SELECTED_MOVIES_KEY = 'selectedMovies'
@@ -93,6 +93,14 @@ export const useMovieSelectionStore = defineStore('movieSelection', () => {
     }
   }
 
+  const addManualMovie = async (title) => {
+    const response = await createManualMovie(title)
+    const movie = response.data.data.movie
+    wishMovies.value = [movie, ...wishMovies.value]
+    wishSyncError.value = ''
+    return movie
+  }
+
   const initializeWishSync = async () => {
     try {
       const response = await getWishedMovies()
@@ -117,6 +125,7 @@ export const useMovieSelectionStore = defineStore('movieSelection', () => {
     setSelectedMovies,
     updateMovieScore,
     addToWishMovies,
+    addManualMovie,
     removeFromWishMovies,
     initializeWishSync,
   }

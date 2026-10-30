@@ -399,6 +399,8 @@ class UpdateBaseService:
     def _remove_stale_movies(self, removed_ids: set[int]) -> int:
         count = 0
         for movie_id in removed_ids:
+            if movie_id < 0:
+                continue
             movie = movie_repository.get_movie_by_id(movie_id)
             if movie is not None and movie_repository.delete_movie(movie_id):
                 count += 1
