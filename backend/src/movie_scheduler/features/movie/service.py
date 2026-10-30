@@ -13,7 +13,7 @@ from movie_scheduler.core.exceptions import AppError, RepositoryError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import movie_repository
-from movie_scheduler.features.movie.schemas import CreateManualMovieRequest, SetMovieLabelRequest
+from movie_scheduler.features.movie.schemas import CreateManualMovieRequest, SetMovieChannelsRequest, SetMovieLabelRequest, SetMovieViewingLocationRequest
 from movie_scheduler.features.movie.update_base.service import (
     BaseInfoUpdateStats,
     UpdateBaseProgressEvent,
@@ -55,6 +55,21 @@ class MovieService:
     async def set_movie_wished(self, movie_id: int, is_wished: bool) -> dict[str, object]:
         """更新单部电影的想看状态。"""
         return await self.set_movie_label(movie_id, SetMovieLabelRequest(label="wished" if is_wished else None))
+
+    async def set_movie_channels(self, movie_id: int, request: SetMovieChannelsRequest) -> dict[str, object]:
+        channels: list[str] = list(request.channels)
+        movie = await asyncio.to_thread(movie_repository.set_movie_channels, {"id": movie_id, "channels": channels})
+        if movie is None:
+            raise AppError(f"电影不存在: {movie_id}", status_code=404)
+        return self._build_movie_item(movie)
+
+    async def set_movie_viewing_location(self, movie_id: int, request: SetMovieViewingLocationRequest) -> dict[str, object]:
+        movie = await asyncio.to_thread(movie_repository.set_movie_viewing_location, {
+            "id": movie_id, "viewing_location": request.viewing_location,
+        })
+        if movie is None:
+            raise AppError(f"电影不存在: {movie_id}", status_code=404)
+        return self._build_movie_item(movie)
 
     async def set_movie_label(self, movie_id: int, request: SetMovieLabelRequest) -> dict[str, object]:
         is_wished = request.label == "wished"
@@ -192,6 +207,8 @@ class MovieService:
             "is_wished": bool(movie.is_wished),
             "is_skipped": bool(movie.is_skipped),
             "is_watched": bool(movie.is_watched),
+            "channels": cast(list[str] | None, getattr(movie, "channels", None)) or [],
+            "viewing_location": movie.viewing_location,
             "director": movie.director,
             "country": movie.country,
             "language": movie.language,

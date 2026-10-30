@@ -9,7 +9,7 @@
           <span>想看</span>
         </div>
         <div class="planning-header-actions">
-          <div v-if="store.wishMovies.length > 0" class="planning-header-secondary-actions">
+          <div v-if="activeViewingFilter === 'cinema' && store.wishMovies.length > 0" class="planning-header-secondary-actions">
             <el-button text size="small" @click="expandAllWishGroups">全部展开</el-button>
             <el-button text size="small" @click="collapseAllWishGroups">全部收起</el-button>
           </div>
@@ -18,17 +18,25 @@
       </div>
       <el-tabs
         v-if="store.wishMovies.length > 0"
-        v-model="activeWeekFilter"
+        v-model="activeViewingFilter"
         class="planning-header-tabs"
       >
         <el-tab-pane
-          v-for="filter in weekFilterOptions"
+          v-for="filter in viewingFilterOptions"
           :key="filter.value"
           :name="filter.value"
           :label="`${filter.label} (${filter.count})`"
         />
       </el-tabs>
-      <div v-if="store.wishMovies.length > 0" class="wish-global-filter">
+      <el-tabs v-if="activeViewingFilter === 'home'" v-model="activeChannelFilter">
+        <el-tab-pane
+          v-for="channel in channelFilterOptions"
+          :key="channel.value"
+          :name="channel.value"
+          :label="`${channel.label} (${channel.count})`"
+        />
+      </el-tabs>
+      <div v-if="activeViewingFilter === 'cinema' && store.wishMovies.length > 0" class="wish-global-filter">
         <div class="wish-global-filter-field">
           <span class="wish-global-filter-label">影院</span>
           <el-select
@@ -68,6 +76,7 @@
             />
           </el-select>
         </div>
+        <el-checkbox v-model="currentWeekOnly">仅看本周</el-checkbox>
         <div class="wish-global-filter-field wish-weekend-filter-field">
           <el-checkbox
             :model-value="globalWishFilter.weekendOnly"
@@ -102,15 +111,17 @@
             </span>
           </div>
           <div class="wish-pool-group-actions">
+            <MovieViewingLocationButtons :movie="group.movie" />
+            <MovieChannelSelect v-if="activeViewingFilter === 'home'" :movie="group.movie" />
             <el-button text size="small" @click="handleRemoveWishMovie(group.movie)">
               移出想看
             </el-button>
-            <el-button text size="small" @click="toggleWishGroup(group.movieId)">
+            <el-button v-if="activeViewingFilter === 'cinema'" text size="small" @click="toggleWishGroup(group.movieId)">
               {{ isWishGroupCollapsed(group.movieId) ? '展开' : '收起' }}
             </el-button>
           </div>
         </div>
-        <div v-if="!isWishGroupCollapsed(group.movieId)" class="wish-pool-group-body">
+        <div v-if="activeViewingFilter === 'cinema' && !isWishGroupCollapsed(group.movieId)" class="wish-pool-group-body">
           <div class="wish-pool-group-filter">
             <el-select
               :model-value="getWishGroupFilter(group.movieId).cinemaId"
@@ -224,6 +235,9 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import ManualMovieDialog from '@/components/ManualMovieDialog.vue'
+import MovieChannelSelect from '@/components/MovieChannelSelect.vue'
+import MovieViewingLocationButtons from '@/components/MovieViewingLocationButtons.vue'
+import { MOVIE_CHANNELS, getMovieViewingGroup, getMovieYear, matchesMovieChannel } from '@/utils/wishFilters'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import {
   formatDateAsWeekdayWithMonthDay,
@@ -238,10 +252,10 @@ const store = useScheduleStore()
 const WISH_GROUP_DEFAULT_COLLAPSED = true
 const SHOWS_PAGE_SIZE = 8
 
-const WEEK_FILTER_DEFINITIONS = [
-  { value: 'all', label: '全部', offset: null },
-  { value: 'current', label: '本周', offset: 0 },
-  { value: 'next', label: '下周', offset: 1 },
+const VIEWING_FILTER_DEFINITIONS = [
+  { value: 'home', label: '家里看' },
+  { value: 'cinema', label: '影院看' },
+  { value: 'unclassified', label: '未分类' },
 ]
 
 const EMPTY_WISH_GROUP_FILTER = Object.freeze({
@@ -255,7 +269,24 @@ const EMPTY_WISH_GROUP_FILTER = Object.freeze({
 const wishGroupCollapseOverrides = ref(new Map())
 const wishGroupFilters = ref(new Map())
 const wishGroupPages = ref(new Map())
-const activeWeekFilter = ref('all')
+const activeViewingFilter = ref('unclassified')
+const activeChannelFilter = ref('all')
+const currentWeekOnly = ref(false)
+const viewingFilterOptions = computed(() => VIEWING_FILTER_DEFINITIONS.map((filter) => ({
+  ...filter,
+  count: store.wishMovies.filter((movie) => getMovieViewingGroup(movie) === filter.value).length,
+})))
+const cinemaMovies = computed(() => store.wishMovies.filter((movie) => getMovieViewingGroup(movie) === 'cinema'))
+const homeMovies = computed(() => store.wishMovies.filter((movie) => getMovieViewingGroup(movie) === 'home'))
+const channelFilterOptions = computed(() => [
+  { value: 'all', label: '全部' }, ...MOVIE_CHANNELS, { value: 'none', label: '暂无' },
+].map((channel) => ({
+  ...channel, count: homeMovies.value.filter((movie) => matchesMovieChannel(movie, channel.value)).length,
+})))
+const visibleMovies = computed(() => store.wishMovies.filter((movie) =>
+  getMovieViewingGroup(movie) === activeViewingFilter.value
+  && (activeViewingFilter.value !== 'home' || matchesMovieChannel(movie, activeChannelFilter.value))
+))
 const globalWishFilter = ref({
   cinemaId: '',
   date: '',
@@ -293,19 +324,12 @@ const buildShowEntries = (movie) => {
   )
 }
 
-const getItemWeekFilterValue = (item) => {
-  const offset = getWeekOffsetFromToday(item.date)
-  const definition = WEEK_FILTER_DEFINITIONS.find((entry) => entry.offset === offset)
-  return definition ? definition.value : null
-}
-
 const matchesActiveWeekFilter = (item) => {
-  if (activeWeekFilter.value === 'all') return true
-  return getItemWeekFilterValue(item) === activeWeekFilter.value
+  return !currentWeekOnly.value || getWeekOffsetFromToday(item.date) === 0
 }
 
 const formatWishDateFilterLabel = (date) => {
-  if (activeWeekFilter.value === 'all') return formatDateWithRelativeWeek(date)
+  if (!currentWeekOnly.value) return formatDateWithRelativeWeek(date)
   return formatDateAsWeekdayWithMonthDay(date)
 }
 
@@ -328,13 +352,8 @@ const buildDateOptions = (items, { weekendOnly = false } = {}) => {
   return uniqueDates.map((date) => ({ value: date, label: formatWishDateFilterLabel(date) }))
 }
 
-const activeWeekFilterLabel = computed(() => {
-  const definition = WEEK_FILTER_DEFINITIONS.find((entry) => entry.value === activeWeekFilter.value)
-  return definition?.label || '全部'
-})
-
 const activeWeekShowEntries = computed(() => {
-  return store.wishMovies.flatMap((movie) => buildShowEntries(movie)).filter(matchesActiveWeekFilter)
+  return cinemaMovies.value.flatMap((movie) => buildShowEntries(movie)).filter(matchesActiveWeekFilter)
 })
 
 const globalCinemaOptions = computed(() => buildCinemaOptions(activeWeekShowEntries.value))
@@ -344,8 +363,7 @@ const globalDateOptions = computed(() =>
 )
 
 const globalDatePlaceholder = computed(() => {
-  if (activeWeekFilter.value === 'all') return '全部日期'
-  return `${activeWeekFilterLabel.value}日期`
+  return currentWeekOnly.value ? '本周日期' : '全部日期'
 })
 
 const formatShowPrice = (price) => {
@@ -409,8 +427,8 @@ const isMovieShowsLoading = (movieId) => {
 }
 
 const groupedWishMovies = computed(() => {
-  return store.wishMovies.map((movie) => {
-    const allEntries = buildShowEntries(movie)
+  return visibleMovies.value.map((movie) => {
+    const allEntries = activeViewingFilter.value === 'cinema' ? buildShowEntries(movie) : []
     const filteredByWeek = allEntries.filter(matchesActiveWeekFilter)
     return {
       movieId: movie.id,
@@ -425,30 +443,9 @@ const groupedWishMovies = computed(() => {
       }),
     }
   }).filter((group) => {
-    if (activeWeekFilter.value === 'all') return true
-    return group.items.length > 0 || !group.hasShows
+    if (activeViewingFilter.value !== 'cinema' || !currentWeekOnly.value) return true
+    return group.items.length > 0
   })
-})
-
-const weekFilterOptions = computed(() => {
-  const movieIdsByFilter = new Map(
-    WEEK_FILTER_DEFINITIONS.map((definition) => [definition.value, new Set()])
-  )
-  store.wishMovies.forEach((movie) => {
-    movieIdsByFilter.get('all').add(movie.id)
-    const entries = buildShowEntries(movie)
-    entries.forEach((item) => {
-      const value = getItemWeekFilterValue(item)
-      if (value && movieIdsByFilter.has(value)) {
-        movieIdsByFilter.get(value).add(movie.id)
-      }
-    })
-  })
-  return WEEK_FILTER_DEFINITIONS.map((definition) => ({
-    value: definition.value,
-    label: definition.label,
-    count: movieIdsByFilter.get(definition.value).size,
-  }))
 })
 
 const normalizeWishGroupFilter = (filter = EMPTY_WISH_GROUP_FILTER) => {
@@ -556,9 +553,13 @@ const pruneInvalidGlobalWishFilter = () => {
   applyGlobalFilterPatchToGroups(patch)
 }
 
-watch(activeWeekFilter, () => {
+watch(currentWeekOnly, () => {
   wishGroupPages.value = new Map()
   pruneInvalidGlobalWishFilter()
+})
+
+watch(viewingFilterOptions, (options) => {
+  if (!options.some((option) => option.value === activeViewingFilter.value)) activeViewingFilter.value = 'cinema'
 })
 
 watch([globalCinemaOptions, globalDateOptions], () => {
@@ -573,12 +574,6 @@ watch(
     }
   }
 )
-
-const getMovieYear = (movie) => {
-  const releaseDate = String(movie?.release_date || '').trim()
-  const match = releaseDate.match(/^(\d{4})/)
-  return match ? match[1] : ''
-}
 
 const getWishGroupMovieScoreMeta = (movie) => {
   const score = String(movie?.score || '').trim()

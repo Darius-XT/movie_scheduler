@@ -7,11 +7,43 @@ from pytest import MonkeyPatch
 
 from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import movie_repository
-from movie_scheduler.features.movie.schemas import CreateManualMovieRequest, SetMovieLabelRequest
+from movie_scheduler.features.movie.schemas import CreateManualMovieRequest, SetMovieChannelsRequest, SetMovieLabelRequest
 from movie_scheduler.features.movie.service import MovieService
 from movie_scheduler.core.exceptions import AppError
 from movie_scheduler.features.show.repository import movie_show_repository
 from movie_scheduler.features.show.service import show_service
+from movie_scheduler.features.movie.schemas import SetMovieViewingLocationRequest
+
+
+@pytest.mark.parametrize("location", ["home", "cinema", None])
+def test_set_viewing_location(monkeypatch: MonkeyPatch, location: str | None) -> None:
+    movie = Movie.from_dict({"id": 1, "title": "电影", "viewing_location": location, "is_wished": True})
+    write = Mock(return_value=movie)
+    monkeypatch.setattr(movie_repository, "set_movie_viewing_location", write)
+    request = SetMovieViewingLocationRequest.model_validate({"viewing_location": location})
+    result = asyncio.run(MovieService().set_movie_viewing_location(1, request))
+    write.assert_called_once_with({"id": 1, "viewing_location": location})
+    assert result["viewing_location"] == location
+    assert result["is_wished"] is True
+    write.return_value = None
+    with pytest.raises(AppError) as error:
+        asyncio.run(MovieService().set_movie_viewing_location(999, request))
+    assert error.value.status_code == 404
+
+
+def test_set_movie_channels_and_handles_missing_movie(monkeypatch: MonkeyPatch) -> None:
+    movie = Movie.from_dict({"id": 1, "title": "老片", "channels": ["bilibili"], "is_wished": True})
+    write = Mock(return_value=movie)
+    monkeypatch.setattr(movie_repository, "set_movie_channels", write)
+    request = SetMovieChannelsRequest(channels=["bilibili"])
+    result = asyncio.run(MovieService().set_movie_channels(1, request))
+    write.assert_called_once_with({"id": 1, "channels": ["bilibili"]})
+    assert result["channels"] == ["bilibili"]
+    assert result["is_wished"] is True
+    write.return_value = None
+    with pytest.raises(AppError) as error:
+        asyncio.run(MovieService().set_movie_channels(999, request))
+    assert error.value.status_code == 404
 
 
 @pytest.mark.parametrize("label", ["wished", "skipped", "watched", None])

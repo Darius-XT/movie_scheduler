@@ -42,6 +42,8 @@
 | `is_wished` | `Boolean` | 非空,默认 false | 是否加入想看(电影维度) |
 | `is_skipped` | `Boolean` | 非空,默认 false | 是否标记不看,与 is_wished 通过 CHECK 约束互斥 |
 | `is_watched` | `Boolean` | 非空,默认 false | 是否标记看过,与 is_wished、is_skipped 通过 CHECK 约束互斥 |
+| `channels` | `JSON` | 非空,默认 [] | 观看渠道列表（最多一个），空列表表示暂无；独立于电影标签 |
+| `viewing_location` | `String(20)` | 可空,默认 NULL | home 家里看、cinema 影院看；NULL 未分类；独立于年份、渠道和想看标签 |
 | `director` | `Text` | 可空 | 导演 |
 | `country` | `String(100)` | 可空 | 制片国家 |
 | `language` | `String(100)` | 可空 | 语言 |

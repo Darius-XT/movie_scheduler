@@ -17,6 +17,8 @@ from movie_scheduler.features.movie.schemas import (
     SelectMovieRequest,
     SetMovieWishedRequest,
     SetMovieLabelRequest,
+    SetMovieChannelsRequest,
+    SetMovieViewingLocationRequest,
     UpdateMovieDoubanData,
     UpdateMovieDoubanResponse,
     WishedMoviesData,
@@ -59,6 +61,18 @@ async def set_movie_wished(movie_id: int, request: SetMovieWishedRequest) -> Mov
 @router.patch("/movies/{movie_id}/label", response_model=MovieDetailResponse)
 async def set_movie_label(movie_id: int, request: SetMovieLabelRequest) -> MovieDetailResponse:
     movie = await movie_service.set_movie_label(movie_id, request)
+    return MovieDetailResponse(data=MovieDetailData(movie=MovieSelectionItem.model_validate(movie)))
+
+
+@router.patch("/movies/{movie_id}/channels", response_model=MovieDetailResponse)
+async def set_movie_channels(movie_id: int, request: SetMovieChannelsRequest) -> MovieDetailResponse:
+    movie = await movie_service.set_movie_channels(movie_id, request)
+    return MovieDetailResponse(data=MovieDetailData(movie=MovieSelectionItem.model_validate(movie)))
+
+
+@router.patch("/movies/{movie_id}/viewing-location", response_model=MovieDetailResponse)
+async def set_movie_viewing_location(movie_id: int, request: SetMovieViewingLocationRequest) -> MovieDetailResponse:
+    movie = await movie_service.set_movie_viewing_location(movie_id, request)
     return MovieDetailResponse(data=MovieDetailData(movie=MovieSelectionItem.model_validate(movie)))
 
 

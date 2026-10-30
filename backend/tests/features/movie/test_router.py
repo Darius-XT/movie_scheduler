@@ -9,6 +9,35 @@ from movie_scheduler.features.movie.router import router
 from movie_scheduler.features.movie.service import movie_service
 
 
+@pytest.mark.parametrize("location", ["home", "cinema", None])
+def test_set_viewing_location(monkeypatch: MonkeyPatch, location: str | None) -> None:
+    update = AsyncMock(return_value={"id": 1, "viewing_location": location})
+    monkeypatch.setattr(movie_service, "set_movie_viewing_location", update)
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    client = TestClient(app)
+    response = client.patch("/api/movies/1/viewing-location", json={"viewing_location": location})
+    assert response.status_code == 200
+    assert response.json()["data"]["movie"]["viewing_location"] == location
+    assert update.call_args.args[1].viewing_location == location
+    assert client.patch("/api/movies/1/viewing-location", json={"viewing_location": "other"}).status_code == 422
+
+
+def test_set_movie_channels(monkeypatch: MonkeyPatch) -> None:
+    update = AsyncMock(return_value={"id": 1, "channels": ["bilibili"]})
+    monkeypatch.setattr(movie_service, "set_movie_channels", update)
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+    client = TestClient(app)
+    response = client.patch("/api/movies/1/channels", json={"channels": ["bilibili"]})
+    assert response.status_code == 200
+    assert response.json()["data"]["movie"]["channels"] == ["bilibili"]
+    assert update.call_args.args[1].channels == ["bilibili"]
+    assert client.patch("/api/movies/1/channels", json={"channels": ["unknown"]}).status_code == 422
+    assert client.patch("/api/movies/1/channels", json={}).status_code == 422
+    assert client.patch("/api/movies/1/channels", json={"channels": ["bilibili", "iqiyi"]}).status_code == 422
+
+
 @pytest.mark.parametrize("label", ["wished", "skipped", "watched", None])
 def test_set_movie_label(monkeypatch: MonkeyPatch, label: str | None) -> None:
     update = AsyncMock(return_value={"id": 123, "is_wished": label == "wished", "is_skipped": label == "skipped", "is_watched": label == "watched"})

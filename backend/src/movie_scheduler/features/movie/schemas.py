@@ -4,9 +4,19 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 
 from movie_scheduler.shared.types import SuccessEnvelope
+
+MovieChannel = Literal["bilibili", "tegou", "dytt", "tencent", "iqiyi", "youku"]
+
+
+class SetMovieChannelsRequest(BaseModel):
+    channels: list[MovieChannel] = Field(max_length=1)
+
+
+class SetMovieViewingLocationRequest(BaseModel):
+    viewing_location: Literal["home", "cinema"] | None
 
 
 class SelectMovieRequest(BaseModel):
@@ -29,6 +39,8 @@ class MovieSelectionItem(BaseModel):
     is_wished: bool = False
     is_skipped: bool = False
     is_watched: bool = False
+    channels: list[MovieChannel] = Field(default_factory=list[MovieChannel])
+    viewing_location: Literal["home", "cinema"] | None = None
     director: str | None = None
     country: str | None = None
     language: str | None = None

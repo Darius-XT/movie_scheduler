@@ -10,7 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from movie_scheduler.core.db import database_manager
 from movie_scheduler.core.exceptions import RepositoryError
 from movie_scheduler.core.logging import logger
-from movie_scheduler.features.movie.models import Movie, MovieWriteData
+from movie_scheduler.features.movie.models import Movie, MovieChannelsWriteData, MovieViewingLocationWriteData, MovieWriteData
 
 
 class MovieRepository:
@@ -77,6 +77,28 @@ class MovieRepository:
 
     def set_movie_wished(self, movie_id: int, is_wished: bool) -> bool:
         return self.set_movie_label({"id": movie_id, "is_wished": is_wished, "is_skipped": False})
+
+    def set_movie_channels(self, data: MovieChannelsWriteData) -> Movie | None:
+        try:
+            with database_manager.transaction() as session:
+                movie = session.query(Movie).filter(Movie.id == data["id"]).first()
+                if movie is None:
+                    return None
+                setattr(movie, "channels", data["channels"])
+            return movie
+        except SQLAlchemyError as error:
+            raise RepositoryError("保存电影渠道失败") from error
+
+    def set_movie_viewing_location(self, data: MovieViewingLocationWriteData) -> Movie | None:
+        try:
+            with database_manager.transaction() as session:
+                movie = session.query(Movie).filter(Movie.id == data["id"]).first()
+                if movie is None:
+                    return None
+                setattr(movie, "viewing_location", data["viewing_location"])
+            return movie
+        except SQLAlchemyError as error:
+            raise RepositoryError("保存观看地点失败") from error
 
     def set_movie_label(self, data: MovieWriteData) -> bool:
         try:

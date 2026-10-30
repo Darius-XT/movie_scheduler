@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { createManualMovie, getWishedMovies, setMovieLabel } from '@/api'
+import { createManualMovie, getWishedMovies, setMovieChannels, setMovieLabel, setMovieViewingLocation } from '@/api'
 import { loadFromStorage, removeFromStorage, saveToStorage } from './storage'
 
 const SELECTED_MOVIES_KEY = 'selectedMovies'
@@ -88,6 +88,29 @@ export const useMovieSelectionStore = defineStore('movieSelection', () => {
     return movie
   }
 
+  const updateMovieChannels = async (movieId, channels) => {
+    const response = await setMovieChannels(movieId, channels)
+    const savedChannels = response.data.data.movie.channels
+    // 只合并渠道字段,避免覆盖同时发生的标签或评分更新。
+    selectedMovies.value = selectedMovies.value.map((movie) =>
+      movie.id === movieId ? { ...movie, channels: savedChannels } : movie
+    )
+    wishMovies.value = wishMovies.value.map((movie) =>
+      movie.id === movieId ? { ...movie, channels: savedChannels } : movie
+    )
+  }
+
+  const updateMovieViewingLocation = async (movieId, viewingLocation) => {
+    const response = await setMovieViewingLocation(movieId, viewingLocation)
+    const saved = response.data.data.movie.viewing_location
+    selectedMovies.value = selectedMovies.value.map((movie) =>
+      movie.id === movieId ? { ...movie, viewing_location: saved } : movie
+    )
+    wishMovies.value = wishMovies.value.map((movie) =>
+      movie.id === movieId ? { ...movie, viewing_location: saved } : movie
+    )
+  }
+
   const initializeWishSync = async () => {
     try {
       const response = await getWishedMovies()
@@ -113,6 +136,8 @@ export const useMovieSelectionStore = defineStore('movieSelection', () => {
     updateMovieScore,
     addToWishMovies,
     updateMovieLabel,
+    updateMovieChannels,
+    updateMovieViewingLocation,
     addManualMovie,
     removeFromWishMovies,
     initializeWishSync,

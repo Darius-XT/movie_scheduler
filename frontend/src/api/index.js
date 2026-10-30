@@ -25,6 +25,12 @@ export const setMovieWished = (movieId, isWished) =>
 export const setMovieLabel = (movieId, label) =>
   api.patch(`/movies/${movieId}/label`, { label })
 
+export const setMovieChannels = (movieId, channels) =>
+  api.patch(`/movies/${movieId}/channels`, { channels })
+
+export const setMovieViewingLocation = (movieId, viewingLocation) =>
+  api.patch(`/movies/${movieId}/viewing-location`, { viewing_location: viewingLocation })
+
 export const fetchMovieDouban = (movieId) =>
   api.post(`/movies/${movieId}/update-douban`)
 

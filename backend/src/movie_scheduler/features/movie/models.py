@@ -5,8 +5,18 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import NotRequired, Required, TypedDict
 
-from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime, Integer, String, Text
 from movie_scheduler.core.db import Base
+
+
+class MovieChannelsWriteData(TypedDict):
+    id: int
+    channels: list[str]
+
+
+class MovieViewingLocationWriteData(TypedDict):
+    id: int
+    viewing_location: str | None
 
 
 class MovieWriteData(TypedDict, total=False):
@@ -29,6 +39,8 @@ class MovieWriteData(TypedDict, total=False):
     is_wished: NotRequired[bool]
     is_skipped: NotRequired[bool]
     is_watched: NotRequired[bool]
+    channels: NotRequired[list[str]]
+    viewing_location: NotRequired[str | None]
     shows_updated_at: NotRequired[datetime | None]
 
 
@@ -51,6 +63,8 @@ class Movie(Base):
     is_wished = Column(Boolean, nullable=False, server_default="0", comment="是否加入想看")
     is_skipped = Column(Boolean, nullable=False, server_default="0", comment="是否标记不看")
     is_watched = Column(Boolean, nullable=False, server_default="0", comment="是否标记看过")
+    channels = Column(JSON, nullable=False, server_default="[]", comment="观看渠道,空列表表示暂无")
+    viewing_location = Column(String(20), nullable=True, comment="观看地点: home/cinema,空为未分类")
 
     director = Column(Text, nullable=True, comment="导演")
     country = Column(String(100), nullable=True, comment="制片国家")
@@ -97,5 +111,7 @@ class Movie(Base):
             is_wished=bool(data.get("is_wished", False)),
             is_skipped=bool(data.get("is_skipped", False)),
             is_watched=bool(data.get("is_watched", False)),
+            channels=data.get("channels", []),
+            viewing_location=data.get("viewing_location"),
             shows_updated_at=data.get("shows_updated_at"),
         )

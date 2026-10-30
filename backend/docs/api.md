@@ -13,6 +13,8 @@
 | movie | `POST` | `/api/movies/manual` | JSON | 手动添加电影并加入想看 |
 | movie | `PATCH` | `/api/movies/{movie_id}/wished` | JSON | 更新单部电影的想看状态 |
 | movie | `PATCH` | `/api/movies/{movie_id}/label` | JSON | 设置或取消电影标签 |
+| movie | `PATCH` | `/api/movies/{movie_id}/channels` | JSON | 保存单个观看渠道，空列表表示暂无 |
+| movie | `PATCH` | `/api/movies/{movie_id}/viewing-location` | JSON | 保存或取消观看地点分类 |
 | movie | `GET` | `/api/movies/update-status` | JSON | 读取电影信息上次自动更新时间 |
 | movie | `POST` | `/api/movies/{movie_id}/update-douban` | JSON | 为单部电影抓取豆瓣评分与详情链接 |
 | plan | `GET` | `/api/plan` | JSON | 读取单用户行程列表 |
@@ -41,6 +43,8 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 | `GET` | `/api/movies/wished` | 无 | `{"success": true, "data": {"movies": [...]}}` |
 | `PATCH` | `/api/movies/{movie_id}/wished` | path: `movie_id`; body: `{"is_wished": true \| false}` | `{"success": true, "data": {"movie": {...}}}` |
 | `PATCH` | `/api/movies/{movie_id}/label` | body: `{"label": "wished" \| "skipped" \| "watched" \| null}` | `{"success": true, "data": {"movie": {...}}}` |
+| `PATCH` | `/api/movies/{movie_id}/channels` | body: `{"channels": ["bilibili"]}`，最多一个，可选 bilibili/tegou/dytt/tencent/iqiyi/youku | `{"success": true, "data": {"movie": {...}}}` |
+| `PATCH` | `/api/movies/{movie_id}/viewing-location` | body: `{"viewing_location": "home" \| "cinema" \| null}` | `{"success": true, "data": {"movie": {...}}}` |
 | `GET` | `/api/movies/update-status` | 无 | `{"success": true, "data": {"last_updated_at": "..." \| null}}` |
 | `POST` | `/api/movies/{movie_id}/update-douban` | path: `movie_id` | `{"success": true, "data": {"score": "...", "douban_url": "..."}}` |
 

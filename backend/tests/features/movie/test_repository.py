@@ -13,6 +13,41 @@ from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import MovieRepository
 
 
+def test_viewing_location_persists_independently(monkeypatch: MonkeyPatch) -> None:
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(database_manager, "session_factory", sessionmaker(bind=engine, expire_on_commit=False))
+    monkeypatch.setattr(database_manager, "_initialized", True)
+    repository = MovieRepository()
+    repository.save_movie({"id": 1, "title": "电影", "is_wished": True, "channels": ["bilibili"]})
+    for location in ["home", "cinema", None]:
+        saved = repository.set_movie_viewing_location({"id": 1, "viewing_location": location})
+        assert saved is not None and bool(saved.is_wished)
+        assert getattr(saved, "channels") == ["bilibili"]
+        repository.save_movie({"id": 1, "title": "更新电影信息"})
+        loaded = repository.get_movie_by_id(1)
+        assert loaded is not None and getattr(loaded, "viewing_location") == location
+    assert repository.set_movie_viewing_location({"id": 999, "viewing_location": "home"}) is None
+
+
+def test_movie_channels_persist_without_changing_labels(monkeypatch: MonkeyPatch) -> None:
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(database_manager, "session_factory", sessionmaker(bind=engine, expire_on_commit=False))
+    monkeypatch.setattr(database_manager, "_initialized", True)
+    repository = MovieRepository()
+    repository.save_movie({"id": 1, "title": "老片", "is_wished": True})
+    saved = repository.set_movie_channels({"id": 1, "channels": ["bilibili"]})
+    assert saved is not None and bool(saved.is_wished)
+    repository.save_movie({"id": 1, "title": "更新信息"})
+    loaded = repository.get_movie_by_id(1)
+    assert loaded is not None
+    assert getattr(loaded, "channels") == ["bilibili"]
+    cleared = repository.set_movie_channels({"id": 1, "channels": []})
+    assert cleared is not None and getattr(cleared, "channels") == []
+    assert repository.set_movie_channels({"id": 999, "channels": []}) is None
+
+
 @pytest.mark.parametrize("initial", ["none", "wished", "skipped", "watched"])
 @pytest.mark.parametrize("target", ["none", "wished", "skipped", "watched"])
 def test_label_transitions_are_persisted_and_exclusive(

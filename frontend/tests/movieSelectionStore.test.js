@@ -21,6 +21,27 @@ after(async () => {
 
 beforeEach(() => setActivePinia(createPinia()))
 
+test('观看地点可分类、切换、取消，失败时保留原值和渠道标签', async () => {
+  const store = useMovieSelectionStore()
+  const wished = { id: 123, title: '电影', is_wished: true, channels: ['bilibili'], viewing_location: null }
+  store.wishMovies = [wished]
+  store.setSelectedMovies([wished])
+  api.defaults.adapter = async (config) => ({
+    data: { success: true, data: { movie: { viewing_location: JSON.parse(config.data).viewing_location } } },
+    status: 200, statusText: 'OK', headers: {}, config,
+  })
+  for (const location of ['home', 'cinema', null]) {
+    await store.updateMovieViewingLocation(123, location)
+    assert.equal(store.wishMovies[0].viewing_location, location)
+    assert.equal(store.selectedMovies[0].viewing_location, location)
+    assert.equal(store.wishMovies[0].is_wished, true)
+    assert.deepEqual(store.wishMovies[0].channels, ['bilibili'])
+  }
+  api.defaults.adapter = async () => { throw new Error('保存失败') }
+  await assert.rejects(store.updateMovieViewingLocation(123, 'home'), /保存失败/)
+  assert.equal(store.wishMovies[0].viewing_location, null)
+})
+
 const movie = { id: 123, title: '电影', is_wished: false, is_skipped: false, is_watched: false }
 
 test('标签切换同步电影条目和想看列表，取消后恢复无标签', async () => {
@@ -63,4 +84,22 @@ test('标签保存失败时恢复原标签和想看列表', async () => {
   assert.equal(store.selectedMovies[0].is_watched, false)
   assert.equal(store.selectedMovies[0].is_skipped, false)
   assert.equal(store.wishMovies.length, 1)
+})
+
+test('渠道成功保存后同步条目，失败保留原渠道且不改标签', async () => {
+  const store = useMovieSelectionStore()
+  const wished = { ...movie, is_wished: true, channels: [] }
+  store.wishMovies = [wished]
+  store.setSelectedMovies([wished])
+  api.defaults.adapter = async (config) => ({
+    data: { success: true, data: { movie: { ...movie, channels: JSON.parse(config.data).channels } } },
+    status: 200, statusText: 'OK', headers: {}, config,
+  })
+  await store.updateMovieChannels(movie.id, ['bilibili'])
+  assert.deepEqual(store.wishMovies[0].channels, ['bilibili'])
+  assert.deepEqual(store.selectedMovies[0].channels, ['bilibili'])
+  assert.equal(store.selectedMovies[0].is_wished, true)
+  api.defaults.adapter = async () => { throw new Error('保存失败') }
+  await assert.rejects(store.updateMovieChannels(movie.id, []), /保存失败/)
+  assert.deepEqual(store.wishMovies[0].channels, ['bilibili'])
 })
