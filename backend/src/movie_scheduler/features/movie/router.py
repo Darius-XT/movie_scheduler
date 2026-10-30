@@ -16,6 +16,7 @@ from movie_scheduler.features.movie.schemas import (
     MovieUpdateStatusResponse,
     SelectMovieRequest,
     SetMovieWishedRequest,
+    SetMovieLabelRequest,
     UpdateMovieDoubanData,
     UpdateMovieDoubanResponse,
     WishedMoviesData,
@@ -53,6 +54,12 @@ async def set_movie_wished(movie_id: int, request: SetMovieWishedRequest) -> Mov
     """更新单部电影的想看状态。"""
     movie = await movie_service.set_movie_wished(movie_id, request.is_wished)
     return MovieDetailResponse(data=MovieDetailData(movie=MovieSelectionItem(**movie)))  # type: ignore[arg-type]
+
+
+@router.patch("/movies/{movie_id}/label", response_model=MovieDetailResponse)
+async def set_movie_label(movie_id: int, request: SetMovieLabelRequest) -> MovieDetailResponse:
+    movie = await movie_service.set_movie_label(movie_id, request)
+    return MovieDetailResponse(data=MovieDetailData(movie=MovieSelectionItem.model_validate(movie)))
 
 
 @router.get("/movies/update-status", response_model=MovieUpdateStatusResponse)

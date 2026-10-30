@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { createManualMovie, getWishedMovies, setMovieWished } from '@/api'
+import { createManualMovie, getWishedMovies, setMovieLabel } from '@/api'
 import { loadFromStorage, removeFromStorage, saveToStorage } from './storage'
 
 const SELECTED_MOVIES_KEY = 'selectedMovies'
@@ -47,50 +47,37 @@ export const useMovieSelectionStore = defineStore('movieSelection', () => {
 
   const isInWishMovies = (movieId) => wishedMovieIds.value.has(movieId)
 
-  const setSelectedWishFlag = (movieId, isWished) => {
+  const applyMovie = (updated) => {
     selectedMovies.value = selectedMovies.value.map((movie) =>
-      movie.id === movieId ? { ...movie, is_wished: isWished } : movie
+      movie.id === updated.id ? { ...movie, ...updated } : movie
     )
+    const others = wishMovies.value.filter((movie) => movie.id !== updated.id)
+    wishMovies.value = updated.is_wished ? [updated, ...others] : others
+  }
+
+  const updateMovieLabel = async (movie, label) => {
+    const previous = { ...movie }
+    applyMovie({ ...movie, is_wished: label === 'wished', is_skipped: label === 'skipped', is_watched: label === 'watched' })
+    try {
+      const response = await setMovieLabel(movie.id, label)
+      applyMovie(response.data.data.movie)
+      wishSyncError.value = ''
+    } catch (error) {
+      applyMovie(previous)
+      wishSyncError.value = error?.response?.data?.error || error?.message || '更新电影标签失败'
+      throw error
+    }
   }
 
   const addToWishMovies = async (movie) => {
     if (!movie?.id || isInWishMovies(movie.id)) return
-    const optimistic = { ...movie, is_wished: true }
-    wishMovies.value = [optimistic, ...wishMovies.value]
-    setSelectedWishFlag(movie.id, true)
-    try {
-      const response = await setMovieWished(movie.id, true)
-      const updated = response?.data?.data?.movie
-      if (updated) {
-        wishMovies.value = wishMovies.value.map((m) => (m.id === movie.id ? updated : m))
-      }
-      wishSyncError.value = ''
-    } catch (error) {
-      // rollback
-      wishMovies.value = wishMovies.value.filter((m) => m.id !== movie.id)
-      setSelectedWishFlag(movie.id, false)
-      wishSyncError.value = error?.response?.data?.error || error?.message || '加入想看失败'
-      console.error('加入想看失败:', error)
-      throw error
-    }
+    await updateMovieLabel(movie, 'wished')
   }
 
   const removeFromWishMovies = async (movieId) => {
     const previous = wishMovies.value.find((m) => m.id === movieId)
     if (!previous) return
-    wishMovies.value = wishMovies.value.filter((m) => m.id !== movieId)
-    setSelectedWishFlag(movieId, false)
-    try {
-      await setMovieWished(movieId, false)
-      wishSyncError.value = ''
-    } catch (error) {
-      // rollback
-      wishMovies.value = [previous, ...wishMovies.value]
-      setSelectedWishFlag(movieId, true)
-      wishSyncError.value = error?.response?.data?.error || error?.message || '移出想看失败'
-      console.error('移出想看失败:', error)
-      throw error
-    }
+    await updateMovieLabel(previous, null)
   }
 
   const addManualMovie = async (title) => {
@@ -125,6 +112,7 @@ export const useMovieSelectionStore = defineStore('movieSelection', () => {
     setSelectedMovies,
     updateMovieScore,
     addToWishMovies,
+    updateMovieLabel,
     addManualMovie,
     removeFromWishMovies,
     initializeWishSync,

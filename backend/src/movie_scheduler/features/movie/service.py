@@ -13,7 +13,7 @@ from movie_scheduler.core.exceptions import AppError, RepositoryError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import movie_repository
-from movie_scheduler.features.movie.schemas import CreateManualMovieRequest
+from movie_scheduler.features.movie.schemas import CreateManualMovieRequest, SetMovieLabelRequest
 from movie_scheduler.features.movie.update_base.service import (
     BaseInfoUpdateStats,
     UpdateBaseProgressEvent,
@@ -54,7 +54,14 @@ class MovieService:
 
     async def set_movie_wished(self, movie_id: int, is_wished: bool) -> dict[str, object]:
         """更新单部电影的想看状态。"""
-        ok = await asyncio.to_thread(movie_repository.set_movie_wished, movie_id, is_wished)
+        return await self.set_movie_label(movie_id, SetMovieLabelRequest(label="wished" if is_wished else None))
+
+    async def set_movie_label(self, movie_id: int, request: SetMovieLabelRequest) -> dict[str, object]:
+        is_wished = request.label == "wished"
+        ok = await asyncio.to_thread(movie_repository.set_movie_label, {
+            "id": movie_id, "is_wished": is_wished, "is_skipped": request.label == "skipped",
+            "is_watched": request.label == "watched",
+        })
         if not ok:
             raise AppError(f"电影不存在: {movie_id}", status_code=404)
         if is_wished:
@@ -183,6 +190,8 @@ class MovieService:
             "release_date": movie.release_date,
             "is_showing": bool(movie.is_showing),
             "is_wished": bool(movie.is_wished),
+            "is_skipped": bool(movie.is_skipped),
+            "is_watched": bool(movie.is_watched),
             "director": movie.director,
             "country": movie.country,
             "language": movie.language,

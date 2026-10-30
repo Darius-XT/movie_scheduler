@@ -7,6 +7,26 @@ from pytest import MonkeyPatch
 
 import movie_scheduler.features.movie.update_base.service as base_module
 from movie_scheduler.features.movie.update_base.service import UpdateBaseService, _ScrapedMovieBaseInfo
+from movie_scheduler.features.movie.models import Movie
+
+
+def test_refresh_preserves_labeled_movies(monkeypatch: MonkeyPatch) -> None:
+    movies = {
+        1: Movie(id=1, title="想看", is_wished=True, is_skipped=False),
+        2: Movie(id=2, title="不看", is_wished=False, is_skipped=True),
+        3: Movie(id=3, title="无标签", is_wished=False, is_skipped=False),
+        4: Movie(id=4, title="看过", is_watched=True),
+    }
+    delete = Mock(return_value=True)
+    save = Mock(return_value=True)
+    monkeypatch.setattr(base_module.movie_repository, "get_movie_by_id", movies.get)
+    monkeypatch.setattr(base_module.movie_repository, "delete_movie", delete)
+    monkeypatch.setattr(base_module.movie_repository, "save_movie", save)
+    monkeypatch.setattr(base_module.movie_repository, "get_movies_count", lambda: 3)
+    result = UpdateBaseService()._perform_incremental_update(set(movies), [])
+    assert result.removed == 1
+    delete.assert_called_once_with(3)
+    assert save.call_count == 3
 
 
 def test_list_refresh_preserves_manual_movies(monkeypatch: MonkeyPatch) -> None:

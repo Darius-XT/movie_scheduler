@@ -22,6 +22,9 @@ export const createManualMovie = (title) => api.post('/movies/manual', { title }
 export const setMovieWished = (movieId, isWished) =>
   api.patch(`/movies/${movieId}/wished`, { is_wished: isWished })
 
+export const setMovieLabel = (movieId, label) =>
+  api.patch(`/movies/${movieId}/label`, { label })
+
 export const fetchMovieDouban = (movieId) =>
   api.post(`/movies/${movieId}/update-douban`)
 

@@ -35,12 +35,18 @@ export const streamCinemaUpdate = (cityId) =>
 
 ## 想看与行程
 
+- 电影标签为“想看 / 不看 / 看过 / 无标签”，分别由 `is_wished`、`is_skipped`、`is_watched`、三者皆 false 表示。
+  右侧三个按钮互斥，再点已选标签可取消；“仅看无标签”与搜索、排序组合生效。
+  `PATCH /api/movies/{id}/label` 请求 `{ "label": "wished" }`、`"skipped"`、`"watched"` 或 `null`，
+  响应为 `success/data.movie`。切换标签同步想看列表，失败回滚；移出想看恢复无标签。
+  已有行程的电影需先移除行程才能取消想看、标记不看或看过。定时更新保留标签，已标记的下架电影不删除。
+
 - 想看标题旁的“手动添加”支持输入片名，通过 `POST /api/movies/manual` 保存并加入想看。
   请求为 `{ "title": "电影名称" }`（去除首尾空白后 1–200 字），响应为 `success/data.movie`。
   手动条目不自动获取场次；保存失败时保留输入，可重试。
 
 - **想看(电影维度)**:`movieSelectionStore.wishMovies` 来源于 `GET /api/movies/wished`,
-  状态字段为 `movies.is_wished`。加入/移出通过 `PATCH /api/movies/{id}/wished` 持久化,
+  状态字段为 `movies.is_wished`。加入/移出通过 `PATCH /api/movies/{id}/label` 持久化,
   store 内部做乐观更新 + 失败回滚。
 - **行程(场次维度)**:`planningStore.scheduleItems` 通过 `GET /api/planning` 加载、
   `PUT /api/planning/schedule-items` 全量替换。本地 `localStorage` 仍保留作离线回退缓存。

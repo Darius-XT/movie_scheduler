@@ -5,6 +5,9 @@
         <div class="movie-title-row">
           <span class="movie-index">{{ index + 1 }}.</span>
           <span class="movie-title">{{ movie.title }}</span>
+          <el-tag v-if="isInWishMovies" type="success" size="small">想看</el-tag>
+          <el-tag v-else-if="movie.is_skipped" type="info" size="small">不看</el-tag>
+          <el-tag v-else-if="movie.is_watched" type="warning" size="small">看过</el-tag>
           <template v-if="movie.douban_url">
             <el-tag type="warning" size="small" class="movie-score">
               <a
@@ -53,12 +56,34 @@
         </el-button>
         <el-button
           size="small"
-          :type="isInWishMovies ? 'success' : 'primary'"
-          :plain="isInWishMovies"
+          class="movie-label-button"
+          type="success"
+          :plain="!isInWishMovies"
           :loading="isWishToggling"
+          :disabled="isWishToggling"
           @click="$emit('toggle-wish-movie', movie)"
         >
-          {{ isInWishMovies ? '已加入想看' : '加入想看' }}
+          想看
+        </el-button>
+        <el-button
+          size="small"
+          class="movie-label-button"
+          type="info"
+          :plain="!movie.is_skipped"
+          :disabled="isWishToggling"
+          @click="$emit('toggle-skip-movie', movie)"
+        >
+          不看
+        </el-button>
+        <el-button
+          size="small"
+          type="warning"
+          class="movie-label-button"
+          :plain="!movie.is_watched"
+          :disabled="isWishToggling"
+          @click="$emit('toggle-watched-movie', movie)"
+        >
+          看过
         </el-button>
       </div>
     </div>
@@ -101,6 +126,8 @@ const props = defineProps({
 defineEmits([
   'fetch-douban',
   'toggle-wish-movie',
+  'toggle-skip-movie',
+  'toggle-watched-movie',
 ])
 
 const store = useScheduleStore()
@@ -219,6 +246,18 @@ const toggleDescription = () => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.movie-label-button.is-plain {
+  background-color: transparent;
+  border-color: var(--el-button-text-color);
+}
+
+.movie-label-button.is-plain:hover,
+.movie-label-button.is-plain:focus {
+  color: var(--el-button-text-color);
+  background-color: transparent;
+  border-color: var(--el-button-text-color);
 }
 
 .movie-description {

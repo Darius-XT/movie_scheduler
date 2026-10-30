@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import NotRequired, Required, TypedDict
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String, Text
 from movie_scheduler.core.db import Base
 
 
@@ -27,6 +27,8 @@ class MovieWriteData(TypedDict, total=False):
     description: NotRequired[str | None]
     first_showing_at: NotRequired[date | datetime | None]
     is_wished: NotRequired[bool]
+    is_skipped: NotRequired[bool]
+    is_watched: NotRequired[bool]
     shows_updated_at: NotRequired[datetime | None]
 
 
@@ -34,6 +36,7 @@ class Movie(Base):
     """电影数据模型。"""
 
     __tablename__ = "movies"
+    __table_args__ = (CheckConstraint("is_wished + is_skipped + is_watched <= 1", name="ck_movies_exclusive_label"),)
 
     id = Column(Integer, primary_key=True, comment="电影ID")
     title = Column(String(200), nullable=False, comment="电影标题")
@@ -46,6 +49,8 @@ class Movie(Base):
     release_date = Column(String(20), nullable=True, comment="上映日期")
     is_showing = Column(Boolean, nullable=False, server_default="0", comment="是否正在热映")
     is_wished = Column(Boolean, nullable=False, server_default="0", comment="是否加入想看")
+    is_skipped = Column(Boolean, nullable=False, server_default="0", comment="是否标记不看")
+    is_watched = Column(Boolean, nullable=False, server_default="0", comment="是否标记看过")
 
     director = Column(Text, nullable=True, comment="导演")
     country = Column(String(100), nullable=True, comment="制片国家")
@@ -90,5 +95,7 @@ class Movie(Base):
             description=data.get("description"),
             first_showing_at=data.get("first_showing_at"),
             is_wished=bool(data.get("is_wished", False)),
+            is_skipped=bool(data.get("is_skipped", False)),
+            is_watched=bool(data.get("is_watched", False)),
             shows_updated_at=data.get("shows_updated_at"),
         )

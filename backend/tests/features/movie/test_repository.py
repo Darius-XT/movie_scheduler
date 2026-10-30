@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import pytest
 
 from pytest import MonkeyPatch
 from sqlalchemy import create_engine
@@ -10,6 +11,36 @@ import movie_scheduler.features.movie.repository as repository_module
 from movie_scheduler.core.db import Base, database_manager
 from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import MovieRepository
+
+
+@pytest.mark.parametrize("initial", ["none", "wished", "skipped", "watched"])
+@pytest.mark.parametrize("target", ["none", "wished", "skipped", "watched"])
+def test_label_transitions_are_persisted_and_exclusive(
+    monkeypatch: MonkeyPatch, initial: str, target: str,
+) -> None:
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    monkeypatch.setattr(database_manager, "session_factory", sessionmaker(bind=engine, expire_on_commit=False))
+    monkeypatch.setattr(database_manager, "_initialized", True)
+    repository = MovieRepository()
+    repository.save_movie({"id": 123, "title": "电影", "is_wished": initial == "wished", "is_skipped": initial == "skipped", "is_watched": initial == "watched"})
+    assert repository.set_movie_label({"id": 123, "is_wished": target == "wished", "is_skipped": target == "skipped", "is_watched": target == "watched"})
+    movie = repository.get_movie_by_id(123)
+    assert movie is not None
+    assert bool(movie.is_wished) == (target == "wished")
+    assert bool(movie.is_skipped) == (target == "skipped")
+    assert bool(movie.is_watched) == (target == "watched")
+    assert len(repository.list_wished_movies()) == int(target == "wished")
+    repository.save_movie({"id": 123, "title": "更新片名"})
+    updated = repository.get_movie_by_id(123)
+    assert updated is not None
+    assert bool(updated.is_skipped) == (target == "skipped")
+    assert bool(updated.is_watched) == (target == "watched")
+    assert repository.set_movie_label({"id": 999, "is_skipped": True}) is False
+    assert repository.set_movie_wished(123, True)
+    restored = repository.get_movie_by_id(123)
+    assert restored is not None and bool(restored.is_wished) and not bool(restored.is_skipped)
+    assert not bool(restored.is_watched)
 
 
 def test_manual_movie_persists_and_can_be_removed_from_wishes(monkeypatch: MonkeyPatch) -> None:

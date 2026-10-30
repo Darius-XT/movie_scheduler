@@ -25,6 +25,7 @@
         <div class="section-header">
           <h3>已筛选电影（{{ filteredSelectedMovies.length }} / {{ store.selectedMovies.length }} 部）</h3>
           <div class="section-header-controls">
+            <el-checkbox v-model="onlyUnlabeled">仅看无标签</el-checkbox>
             <el-radio-group v-model="movieSortOrder" size="small">
               <el-radio-button label="newest">最新</el-radio-button>
               <el-radio-button label="name">名称</el-radio-button>
@@ -49,6 +50,8 @@
             :is-wish-toggling="wishTogglingIds.has(movie.id)"
             @fetch-douban="handleFetchDouban"
             @toggle-wish-movie="handleToggleWishMovie"
+            @toggle-skip-movie="handleToggleSkipMovie"
+            @toggle-watched-movie="handleToggleWatchedMovie"
           />
         </div>
       </div>
@@ -76,6 +79,7 @@ const updateForm = ref({ cityId: null })
 // ===== 电影列表状态 =====
 const movieSearchKeyword = ref('')
 const movieSortOrder = ref('newest')
+const onlyUnlabeled = ref(false)
 const doubanFetchingIds = ref(new Set())
 const wishTogglingIds = ref(new Set())
 
@@ -148,18 +152,33 @@ const handleFetchDouban = async (movie) => {
 
 // ===== 想看交互(电影维度) =====
 const handleToggleWishMovie = async (movie) => {
-  if (!movie?.id) return
+  await handleMovieLabel(movie, store.isInWishMovies(movie.id) ? null : 'wished')
+}
+
+const handleToggleSkipMovie = async (movie) => {
+  await handleMovieLabel(movie, movie.is_skipped ? null : 'skipped')
+}
+
+const handleToggleWatchedMovie = async (movie) => {
+  await handleMovieLabel(movie, movie.is_watched ? null : 'watched')
+}
+
+const handleMovieLabel = async (movie, label) => {
+  if (!movie?.id || wishTogglingIds.value.has(movie.id)) return
+  if (label !== 'wished' && store.hasScheduleForMovie(movie.id)) {
+    ElMessage.warning(`《${movie.title}》还有场次在行程中，请先从行程移除`)
+    return
+  }
   wishTogglingIds.value = new Set([...wishTogglingIds.value, movie.id])
   try {
-    if (store.isInWishMovies(movie.id)) {
-      await store.removeFromWishMovies(movie.id)
-      store.removeMovieShows(movie.id)
-      ElMessage.info(`已将《${movie.title}》移出想看`)
-    } else {
-      await store.addToWishMovies(movie)
-      store.removeMovieShows(movie.id)
+    await store.updateMovieLabel(movie, label)
+    store.removeMovieShows(movie.id)
+    if (label === 'wished') {
       if (movie.id > 0) void store.pollMovieShowsUntilUpdated(movie.id)
       ElMessage.success(`已将《${movie.title}》加入想看`)
+    } else {
+      const labelName = { skipped: '不看', watched: '看过' }[label]
+      ElMessage.success(labelName ? `已将《${movie.title}》标记为${labelName}` : `已取消《${movie.title}》的标签`)
     }
   } catch {
     // store 已 rollback,并设置过 wishSyncError(由 watch 弹出 warning)
@@ -173,14 +192,17 @@ const handleToggleWishMovie = async (movie) => {
 // ===== 计算属性 =====
 const filteredSelectedMovies = computed(() => {
   const keyword = String(movieSearchKeyword.value || '').trim().toLowerCase()
+  const candidates = store.selectedMovies.filter((movie) =>
+    !onlyUnlabeled.value || (!movie.is_wished && !movie.is_skipped && !movie.is_watched)
+  )
   const movies = keyword
-    ? store.selectedMovies.filter((movie) => {
+    ? candidates.filter((movie) => {
         const haystacks = [movie.title, movie.director, movie.actors, movie.genres, movie.country, movie.language]
           .map((item) => String(item || '').toLowerCase())
           .filter(Boolean)
         return haystacks.some((text) => text.includes(keyword))
       })
-    : [...store.selectedMovies]
+    : candidates
 
   if (movieSortOrder.value === 'name') {
     movies.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'zh'))
@@ -246,6 +268,7 @@ const filteredSelectedMovies = computed(() => {
 
 .section-header-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;

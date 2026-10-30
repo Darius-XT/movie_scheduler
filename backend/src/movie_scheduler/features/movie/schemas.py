@@ -27,6 +27,8 @@ class MovieSelectionItem(BaseModel):
     release_date: str | None = None
     is_showing: bool = False
     is_wished: bool = False
+    is_skipped: bool = False
+    is_watched: bool = False
     director: str | None = None
     country: str | None = None
     language: str | None = None
@@ -53,6 +55,10 @@ class WishedMoviesResponse(SuccessEnvelope):
 
 class SetMovieWishedRequest(BaseModel):
     is_wished: bool
+
+
+class SetMovieLabelRequest(BaseModel):
+    label: Literal["wished", "skipped", "watched"] | None
 
 
 class CreateManualMovieRequest(BaseModel):

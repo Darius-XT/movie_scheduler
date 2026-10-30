@@ -402,6 +402,10 @@ class UpdateBaseService:
             if movie_id < 0:
                 continue
             movie = movie_repository.get_movie_by_id(movie_id)
+            if movie is not None and (bool(movie.is_wished) or bool(movie.is_skipped) or bool(movie.is_watched)):
+                # 列表下架不能抹掉用户标签,保留记录供后续重新上映时复用。
+                movie_repository.save_movie({"id": movie_id, "is_showing": False})
+                continue
             if movie is not None and movie_repository.delete_movie(movie_id):
                 count += 1
                 logger.info("删除下架电影: %s (ID: %s)", movie.title, movie_id)

@@ -76,19 +76,22 @@ class MovieRepository:
             raise RepositoryError("读取想看电影列表失败") from error
 
     def set_movie_wished(self, movie_id: int, is_wished: bool) -> bool:
+        return self.set_movie_label({"id": movie_id, "is_wished": is_wished, "is_skipped": False})
+
+    def set_movie_label(self, data: MovieWriteData) -> bool:
         try:
             with database_manager.transaction() as session:
-                movie = session.query(Movie).filter(Movie.id == movie_id).first()
+                movie = session.query(Movie).filter(Movie.id == data["id"]).first()
                 if movie is None:
-                    logger.warning("设置想看状态失败,电影不存在: ID %s", movie_id)
                     return False
-                setattr(movie, "is_wished", bool(is_wished))
-                if is_wished:
-                    setattr(movie, "shows_updated_at", None)
+                setattr(movie, "is_wished", bool(data.get("is_wished", False)))
+                setattr(movie, "is_skipped", bool(data.get("is_skipped", False)))
+                setattr(movie, "is_watched", bool(data.get("is_watched", False)))
+                setattr(movie, "shows_updated_at", None)
             return True
         except SQLAlchemyError as error:
-            logger.error("设置电影想看状态失败: %s", error)
-            raise RepositoryError("设置电影想看状态失败") from error
+            logger.error("设置电影标签失败: %s", error)
+            raise RepositoryError("设置电影标签失败") from error
 
     def touch_shows_updated_at(self, movie_id: int) -> bool:
         try:
