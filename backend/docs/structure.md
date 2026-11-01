@@ -27,10 +27,12 @@ features/movie/
 
 `core/scheduler.py` 用 APScheduler 在每天北京时间 0 点串行触发:
 
+每月 1 日先执行 `cinema_service.update_cinemas(city_id=None)` 更新默认城市影院,随后执行以下每日任务;遇猫眼验证停止本轮。
+
 1. `movie_service.refresh_all_movies()` — 跑 `update_base` + `update_extra`(豆瓣不走定时,只走单片接口)
 2. `show_service.refresh_wished_movie_shows()` — 抓所有想看电影的场次
 
-服务启动时立即跑一次,不等下个整点。
+服务启动时只注册任务,不立即更新,等待下一个北京时间 0 点。
 
 ## 维护约定
 

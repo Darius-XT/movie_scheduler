@@ -75,4 +75,6 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 场次更新 SSE 的 `complete.data` 包含 `added`、`removed`、`movies_with_shows`、`failed_movies` 和 `last_fetched_at`。
 `failed_movies` 表示抓取不完整且保留旧数据的电影数量；全部抓取失败时返回 `error` 事件，不更新原有场次或抓取时间。
 
+影院数据每月 1 日北京时间 0 点自动更新默认城市,也支持手动更新。月初按影院、电影信息、场次的顺序串行执行。
+
 排片数据由后端每天北京时间 0 点启动的自动更新任务刷新,在电影信息更新之后执行;服务启动时不立即刷新。加入想看时后端会后台刷新该电影场次,前端可用 `movie_id` 参数轮询单部电影。
