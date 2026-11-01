@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from threading import get_ident
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from pytest import MonkeyPatch
@@ -25,6 +26,56 @@ class _Clock:
     def sleep(self, seconds: float) -> None:
         self.sleeps.append(seconds)
         self.now += seconds
+
+
+@pytest.mark.parametrize("verify", [False, True])
+def test_hot_ids_are_preserved_across_temporary_overrides(monkeypatch: MonkeyPatch, verify: bool) -> None:
+    jar: list[dict[str, object]] = []
+    observed: list[list[str]] = []
+    hot_cookie: dict[str, object] = {
+        "name": "hotMovieIds", "value": "1,2,3", "domain": "www.maoyan.com", "path": "/",
+        "expires": -1, "httpOnly": False, "secure": False, "sameSite": "Lax",
+    }
+
+    def add_cookies(values: list[dict[str, object]]) -> None:
+        jar.extend(values)
+
+    def clear_cookies(*, name: str) -> None:
+        jar[:] = [cookie for cookie in jar if cookie["name"] != name]
+
+    def goto(*args: object, **kwargs: object) -> SimpleNamespace:
+        observed.append([str(c["value"]) for c in jar if c["name"] == "hotMovieIds"])
+        if len(observed) == 1:
+            jar.append(hot_cookie.copy())  # 模拟第一页生成分页 Cookie。
+        return SimpleNamespace(ok=True)
+
+    page = Mock(url="https://www.maoyan.com/films", goto=goto)
+    page.title.side_effect = ["猫眼", "验证中心" if verify else "猫眼", "猫眼"]
+    page.content.return_value = "<html>电影</html>"
+    context = Mock(new_page=Mock(return_value=page), add_cookies=add_cookies,
+                   clear_cookies=clear_cookies, cookies=lambda: jar.copy())
+    runtime = Mock()
+    runtime.chromium.launch.return_value.new_context.return_value = context
+    monkeypatch.setattr(browser_module, "sync_playwright", lambda: SimpleNamespace(start=lambda: runtime))
+    monkeypatch.setattr(browser_module.config_manager, "maoyan_browser_cdp_url", "")
+    monkeypatch.setattr(browser_module.config_manager, "maoyan_cookie", "uuid=seed; hotMovieIds=stale")
+    browser = MaoyanBrowser()
+    try:
+        assert browser.get_text("https://www.maoyan.com/films", "列表", 10, cookie="ci=10", timeout=5, verify=False)
+        def temporary() -> str | None:
+            return browser.get_text("https://www.maoyan.com/cinemas", "场次", 10,
+                                    cookie="ci=10; hotMovieIds=9", timeout=5, verify=False)
+        if verify:
+            with pytest.raises(MaoyanVerificationError):
+                temporary()
+        else:
+            assert temporary()
+        assert browser.get_text("https://www.maoyan.com/films?offset=18", "列表", 10,
+                                cookie="ci=10", timeout=5, verify=False)
+        assert observed == [[], ["9"], ["1,2,3"]]
+        assert [c for c in jar if c["name"] == "hotMovieIds"] == [hot_cookie]
+    finally:
+        browser.close()
 
 
 @pytest.fixture(autouse=True)

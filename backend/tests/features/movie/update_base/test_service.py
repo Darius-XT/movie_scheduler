@@ -7,8 +7,8 @@ import pytest
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.movie.update_base.service as base_module
-from movie_scheduler.core.exceptions import MaoyanVerificationError
-from movie_scheduler.features.movie.update_base.service import UpdateBaseService, _ScrapedMovieBaseInfo
+from movie_scheduler.core.exceptions import ExternalDependencyError, MaoyanVerificationError
+from movie_scheduler.features.movie.update_base.service import UpdateBaseService, _MovieListPage, _ScrapedMovieBaseInfo
 from movie_scheduler.features.movie.models import Movie
 
 
@@ -87,9 +87,8 @@ def test_update_base_uses_shared_maoyan_client(monkeypatch: MonkeyPatch) -> None
     result = service._fetch_page(show_type=1, page=1, city_id=10)
 
     assert result is not None
-    movies, is_expected_empty = result
-    assert is_expected_empty is False
-    assert [(movie.id, movie.title) for movie in movies] == [(1522535, "Magic Girl")]
+    assert result.is_expected_empty is False
+    assert [(movie.id, movie.title) for movie in result.movies] == [(1522535, "Magic Girl")]
     assert calls == [("https://www.maoyan.com/films?showType=1", "获取电影列表", 10)]
 
 
@@ -130,19 +129,19 @@ def test_scrape_one_type_logs_duplicate_details(monkeypatch: MonkeyPatch) -> Non
         show_type: int,
         page: int,
         city_id: int,
-    ) -> tuple[list[_ScrapedMovieBaseInfo], bool]:
+    ) -> _MovieListPage:
         if page == 1:
-            return [
+            return _MovieListPage([
                 _ScrapedMovieBaseInfo(id=1, title="Movie A", genres="", actors=""),
                 _ScrapedMovieBaseInfo(id=2, title="Movie B", genres="", actors=""),
-            ], False
+            ], False)
         if page == 2:
-            return [
+            return _MovieListPage([
                 _ScrapedMovieBaseInfo(id=1, title="Movie A", genres="", actors=""),
                 _ScrapedMovieBaseInfo(id=3, title="Movie C", genres="", actors=""),
                 _ScrapedMovieBaseInfo(id=1, title="Movie A", genres="", actors=""),
-            ], False
-        return [], True
+            ], False)
+        return _MovieListPage([], True)
 
     def record_info(message: str, *args: object) -> None:
         info_messages.append(message % args)
@@ -167,3 +166,48 @@ def test_scrape_one_type_logs_duplicate_details(monkeypatch: MonkeyPatch) -> Non
         "第 2 页第 3 个电影与第 1 页第 1 个电影重复, 电影名=Movie A, 电影ID=1" in message
         for message in debug_messages
     )
+
+
+@pytest.mark.parametrize("second_page", [
+    '<div class="no-movies">抱歉，当前城市暂未找到相关结果</div>',
+    "<html>异常页面</html>",
+    None,
+    _FakeResponse.text,
+])
+def test_incomplete_list_never_changes_existing_movies(monkeypatch: MonkeyPatch, second_page: str | None) -> None:
+    first_page = _FakeResponse.text + '<ul class="list-pager"><a href="?showType=1&amp;offset=90">6</a></ul>'
+    fetch = Mock(side_effect=[first_page, second_page])
+    save = Mock()
+    delete = Mock()
+    monkeypatch.setattr(base_module, "maoyan_get_text", fetch)
+    monkeypatch.setattr(base_module.movie_repository, "get_all_movies", lambda: [Movie(id=1, is_showing=True)])
+    monkeypatch.setattr(base_module.movie_repository, "save_movie", save)
+    monkeypatch.setattr(base_module.movie_repository, "delete_movie", delete)
+
+    with pytest.raises(ExternalDependencyError, match="列表不完整"):
+        UpdateBaseService().update_all(10)
+
+    assert fetch.call_count == 2
+    save.assert_not_called()
+    delete.assert_not_called()
+
+
+def test_complete_pagination_updates_showing_status(monkeypatch: MonkeyPatch) -> None:
+    pager = '<ul class="list-pager"><a href="?showType=1&amp;offset=18">2</a></ul>'
+    second = _FakeResponse.text.replace("1522535", "1522536")
+    empty = '<div class="no-movies">抱歉，当前城市暂未找到相关结果</div>'
+    # 热映两页、空尾页；即将上映一页、空尾页。
+    fetch = Mock(side_effect=[_FakeResponse.text + pager, second, empty,
+                              _FakeResponse.text.replace("1522535", "1522537"), empty])
+    save = Mock(return_value=True)
+    monkeypatch.setattr(base_module, "maoyan_get_text", fetch)
+    movies: list[Movie] = []
+    monkeypatch.setattr(base_module.movie_repository, "get_all_movies", lambda: movies)
+    monkeypatch.setattr(base_module.movie_repository, "save_movie", save)
+    monkeypatch.setattr(base_module.movie_repository, "get_movies_count", lambda: 3)
+    stats = UpdateBaseService().update_all(10)
+    assert stats.input_stats.showing == 2
+    assert stats.result_stats.added == 3
+    assert {call.args[0]["id"]: call.args[0]["is_showing"] for call in save.call_args_list} == {
+        1522535: True, 1522536: True, 1522537: False,
+    }

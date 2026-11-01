@@ -70,6 +70,6 @@ def test_maoyan_get_text_uses_browser_without_overwriting_session_cookie(monkeyp
     assert maoyan_get_text("https://www.maoyan.com/cinemas", "影院", 10, hot_movie_ids=[9, 8])
     assert maoyan_get_text("https://www.maoyan.com/films/9", "详情", 10, headers_profile="mobile")
     assert calls[0]["cookie"] == "old-moviepage-ci=10; ci=10; hotMovieIds=9,8"
-    assert calls[1]["cookie"] == "old-moviepage-ci=10; ci=10; hotMovieIds="
+    assert calls[1]["cookie"] == "old-moviepage-ci=10; ci=10"
     assert calls[0]["mobile"] is False
     assert calls[1]["mobile"] is True

@@ -7,9 +7,11 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
+from urllib.parse import parse_qs, urlsplit
 
 from bs4 import BeautifulSoup
 
+from movie_scheduler.core.exceptions import ExternalDependencyError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
@@ -48,6 +50,13 @@ class _ScrapedMovieBaseInfo:
     actors: str
     release_date: str | None = None
     is_showing: bool = False
+
+
+@dataclass(slots=True)
+class _MovieListPage:
+    movies: list[_ScrapedMovieBaseInfo]
+    is_expected_empty: bool
+    last_page: int = 1
 
 
 @dataclass(slots=True)
@@ -97,6 +106,8 @@ class UpdateBaseService:
         logger.debug("数据库当前有 %s 部电影", len(existing_movie_ids))
 
         all_scraped, showing_ids, scrape_succeeded = self._scrape_all_movies(city_id, progress_callback)
+        if not scrape_succeeded:
+            raise ExternalDependencyError("猫眼电影列表不完整，已取消本轮基础信息更新，保留原有电影及上映状态")
         for movie in all_scraped:
             movie.is_showing = movie.id in showing_ids
 
@@ -137,6 +148,8 @@ class UpdateBaseService:
             show_type_name = "正在热映" if show_type == 1 else "即将上映"
             type_movies, type_succeeded = self._scrape_one_type(show_type, show_type_name, city_id, progress_callback)
             scrape_succeeded = scrape_succeeded and type_succeeded
+            if not type_succeeded:
+                break
             if show_type == 1:
                 showing_ids = {m.id for m in type_movies}
             all_scraped.extend(type_movies)
@@ -155,6 +168,8 @@ class UpdateBaseService:
         movie_positions: list[tuple[_ScrapedMovieBaseInfo, int, int]] = []
         page = 1
         succeeded = True
+        expected_last_page = 1
+        seen_ids: set[int] = set()
         while True:
             if progress_callback is not None:
                 progress_callback(UpdateBaseProgressEvent(
@@ -166,14 +181,27 @@ class UpdateBaseService:
                 logger.warning("获取页面失败, 跳过 page=%s", page)
                 succeeded = False
                 break
-            movies_data, is_expected_empty = result
-            if is_expected_empty:
+            expected_last_page = max(expected_last_page, result.last_page)
+            movies_data = result.movies
+            logger.info("电影列表分页: 类型=%s, 页码=%s, 电影数=%s, 已知末页=%s, 空结果=%s",
+                        show_type_name, page, len(movies_data), expected_last_page, result.is_expected_empty)
+            if result.is_expected_empty:
+                if page <= expected_last_page:
+                    logger.error("%s 第 %s 页提前返回空结果,分页声明至少有 %s 页", show_type_name, page, expected_last_page)
+                    succeeded = False
+                    break
                 logger.debug("%s 抓取完成, 共 %s 页", show_type_name, page - 1)
                 break
             if not movies_data:
                 logger.error("第 %s 页未解析到电影数据, 结束抓取", page)
                 succeeded = False
                 break
+            new_ids = {movie.id for movie in movies_data} - seen_ids
+            if not new_ids:
+                logger.error("%s 第 %s 页没有新增电影,疑似重复返回上一页", show_type_name, page)
+                succeeded = False
+                break
+            seen_ids.update(new_ids)
             for index, movie in enumerate(movies_data, start=1):
                 movie_positions.append((movie, page, index))
             type_movies.extend(movies_data)
@@ -222,7 +250,7 @@ class UpdateBaseService:
         show_type: int,
         page: int,
         city_id: int,
-    ) -> tuple[list[_ScrapedMovieBaseInfo], bool] | None:
+    ) -> _MovieListPage | None:
         html_content = self._http_get(show_type, page, city_id)
         if html_content is None:
             return None
@@ -240,24 +268,31 @@ class UpdateBaseService:
 
     # ---------- 内部: 解析 ----------
 
-    def _parse_html(self, html_content: str) -> tuple[list[_ScrapedMovieBaseInfo], bool]:
+    def _parse_html(self, html_content: str) -> _MovieListPage:
         try:
             soup = BeautifulSoup(html_content, "html.parser")
+            last_page = 1
+            for link in soup.select(".list-pager a[href]"):
+                href = link.get("href")
+                if isinstance(href, str):
+                    for offset in parse_qs(urlsplit(href).query).get("offset", []):
+                        if offset.isdigit():
+                            last_page = max(last_page, int(offset) // _MAOYAN_MOVIE_LIST_PAGE_SIZE + 1)
             no_movies_div = soup.find("div", class_="no-movies")
             if no_movies_div:
                 no_movies_text = no_movies_div.get_text().strip()
                 if "抱歉,当前城市暂未找到相关结果" in no_movies_text or "抱歉，当前城市暂未找到相关结果" in no_movies_text:
-                    return [], True
+                    return _MovieListPage([], True, last_page)
 
             movies: list[_ScrapedMovieBaseInfo] = []
-            for item in soup.find_all("dd"):
+            for item in soup.select("dl.movie-list > dd"):
                 movie_info = self._extract_movie_info(item)
                 if movie_info is not None:
                     movies.append(movie_info)
-            return movies, False
+            return _MovieListPage(movies, False, last_page)
         except Exception as error:
             logger.error("解析电影列表 HTML 失败: %s", error)
-            return [], False
+            return _MovieListPage([], False)
 
     def _extract_movie_info(self, item: Any) -> _ScrapedMovieBaseInfo | None:
         try:

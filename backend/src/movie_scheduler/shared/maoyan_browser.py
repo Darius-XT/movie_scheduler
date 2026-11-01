@@ -98,25 +98,39 @@ class MaoyanBrowser:
             raise MaoyanVerificationError()
         try:
             context = self._ensure_context(request)
-            self._update_cookies(context, request.cookie)
-            page = context.new_page()
+            overrides_hot_ids = any(item.strip().partition("=")[0] == "hotMovieIds" for item in request.cookie.split(";"))
+            saved_hot_ids: list[SetCookieParam] = []
+            if overrides_hot_ids:
+                for cookie in context.cookies():
+                    if cookie.get("name") == "hotMovieIds":
+                        saved_hot_ids.append({**cookie})
+                context.clear_cookies(name="hotMovieIds")
             try:
-                self._wait_for_request_slot()
-                log_external_http_request("GET", request.url, purpose=request.purpose)
-                self._last_request_at = monotonic()
-                response = page.goto(request.url, wait_until="domcontentloaded", timeout=request.timeout * 1000)
-                text = page.content()
-                if self._is_verification(page.url, page.title(), text):
-                    if stopped is not None:
-                        stopped.set()
-                    logger.warning("%s失败: 猫眼要求身份验证，已停止本轮剩余抓取", request.purpose)
-                    raise MaoyanVerificationError()
-                if response is None or not response.ok:
-                    logger.warning("%s失败: 浏览器 HTTP 状态=%s", request.purpose, response.status if response else None)
-                    return None
-                return text
+                self._update_cookies(context, request.cookie)
+                page = context.new_page()
+                try:
+                    self._wait_for_request_slot()
+                    log_external_http_request("GET", request.url, purpose=request.purpose)
+                    self._last_request_at = monotonic()
+                    response = page.goto(request.url, wait_until="domcontentloaded", timeout=request.timeout * 1000)
+                    text = page.content()
+                    if self._is_verification(page.url, page.title(), text):
+                        if stopped is not None:
+                            stopped.set()
+                        logger.warning("%s失败: 猫眼要求身份验证，已停止本轮剩余抓取", request.purpose)
+                        raise MaoyanVerificationError()
+                    if response is None or not response.ok:
+                        logger.warning("%s失败: 浏览器 HTTP 状态=%s", request.purpose, response.status if response else None)
+                        return None
+                    return text
+                finally:
+                    page.close()
             finally:
-                page.close()
+                # 场次/详情的临时 ID 不能污染列表分页,并清除跨域同名 Cookie。
+                if overrides_hot_ids:
+                    context.clear_cookies(name="hotMovieIds")
+                    if saved_hot_ids:
+                        context.add_cookies(saved_hot_ids)
         except MaoyanVerificationError:
             raise
         except Exception as error:
@@ -156,7 +170,11 @@ class MaoyanBrowser:
                 user_agent=request.user_agent,
             )
             self._context_key = key
-            self._update_cookies(self._context, config_manager.maoyan_cookie)
+            seed_cookie = ";".join(
+                item for item in config_manager.maoyan_cookie.split(";")
+                if item.strip().partition("=")[0] != "hotMovieIds"
+            )
+            self._update_cookies(self._context, seed_cookie)
         return self._context
 
     def _cdp_endpoint(self, endpoint: str) -> str:

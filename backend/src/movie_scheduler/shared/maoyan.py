@@ -180,7 +180,8 @@ def maoyan_get_text(
     """通过共享无头浏览器抓取 HTML，保持调用方同步接口。"""
     # 只更新城市和热映列表；不能每次用种子 Cookie 覆盖浏览器刷新的会话。
     pairs = [("old-moviepage-ci", str(city_id)), ("ci", str(city_id))]
-    pairs.append(("hotMovieIds", ",".join(str(mid) for mid in hot_movie_ids or [])))
+    if hot_movie_ids:
+        pairs.append(("hotMovieIds", ",".join(str(mid) for mid in hot_movie_ids)))
     return maoyan_browser.get_text(
         url, purpose, city_id, cookie="; ".join(f"{name}={value}" for name, value in pairs),
         timeout=timeout or config_manager.timeout or 60,

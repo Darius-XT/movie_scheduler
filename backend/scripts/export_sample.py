@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from typing import Literal
 
 from movie_scheduler.config import config_manager
@@ -114,8 +115,7 @@ def _fetch_sample(sample_name: SampleName) -> str:
         result = update_base_service._fetch_page(1, DEMO_PAGE, DEMO_CITY_ID)
         if result is None:
             return ""
-        movies, _ = result
-        return json.dumps([m.__dict__ for m in movies], ensure_ascii=False, indent=2, default=str)
+        return json.dumps([asdict(m) for m in result.movies], ensure_ascii=False, indent=2, default=str)
 
     if sample_name == "movie_extra_info":
         info = update_extra_service._fetch_details(DEMO_MOVIE_ID)
