@@ -605,6 +605,10 @@ class ShowService:
             raise ExternalDependencyError(f"获取影院 {cinema_id} 在城市 {city_id} 的场次页面失败")
         items = self._parse_cinema_shows(text, movie_id, movie_name, show_date, cinema_id)
         if not items:
+            if self._has_finished_show_notice(BeautifulSoup(text, "html.parser"), movie_id, movie_name):
+                logger.info("影院场次忽略: movie_id=%s cinema_id=%s city_id=%s show_date=%s reason=当日场次已放映完",
+                            movie_id, cinema_id, city_id, show_date)
+                return []
             log_page_diagnostics("cinema_shows_empty", text, movie_id=movie_id, city_id=city_id, cinema_id=cinema_id, show_date=show_date)
             raise DataParsingError(
                 f"影院 {cinema_id} 在城市 {city_id} 的场次页面解析结果为空, movie_id={movie_id}, show_date={show_date}"
@@ -878,11 +882,23 @@ class ShowService:
                     else:
                         reason = "time_missing"
                     rejected[reason] = rejected.get(reason, 0) + 1
+        if not result and self._has_finished_show_notice(soup, movie_id, movie_name):
+            return []
         if not result or rejected:
             log = logger.warning if not result else logger.debug
             log("场次行解析诊断: movie_id=%s cinema_id=%s target_date=%s sections=%s accepted=%s rejected=%s",
                 movie_id, fallback_cinema_id, target_show_date, len(sections), len(result), rejected)
         return result
+
+    def _has_finished_show_notice(self, soup: BeautifulSoup, movie_id: int, movie_name: str) -> bool:
+        sections = [section for section in soup.select(".show-list, .show-list-container")
+                    if self._html_section_matches_movie(section, movie_id, movie_name)]
+        # 只认可目标电影的明确空状态;其他电影的提示或损坏的场次表不能掩盖解析错误。
+        return bool(sections) and all(
+            "当日场次已放映完" in section.get_text("", strip=True)
+            and not section.select("table.plist td")
+            for section in sections
+        )
 
     def _find_html_movie_sections(self, soup: BeautifulSoup, movie_id: int, movie_name: str) -> list[Tag]:
         sections = list(soup.select(".show-list, .show-list-container"))

@@ -119,6 +119,37 @@ def test_failed_fetch_preserves_shows_and_timestamp(monkeypatch: MonkeyPatch, fa
     assert writes == []
 
 
+@pytest.mark.parametrize("empty_kind", ["finished", "other_movie", "broken_table"])
+def test_finished_notice_does_not_discard_other_cinema_results(monkeypatch: MonkeyPatch, empty_kind: str) -> None:
+    service = ShowService()
+    movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True, viewing_location="cinema")
+    monkeypatch.setattr(show_module.movie_repository, "list_wished_movies", lambda: [movie])
+    monkeypatch.setattr(show_module.movie_repository, "get_movie_by_id", Mock(return_value=movie))
+    monkeypatch.setattr(service, "_get_show_dates", Mock(return_value=["2026-06-23"]))
+    monkeypatch.setattr(service, "_collect_movie_cinema_ids", AsyncMock(return_value=[40121, 38931]))
+    monkeypatch.setattr(service, "_build_hot_movie_ids", Mock(return_value=[1490532]))
+    persist = AsyncMock(return_value=show_module.ShowUpdateStats(1, 0, 1))
+    monkeypatch.setattr(service, "_persist_results", persist)
+    title = "其他电影" if empty_kind == "other_movie" else "玩具总动员5"
+    broken = '<table class="plist"><tr><td>损坏的场次行</td></tr></table>' if empty_kind == "broken_table" else ""
+    empty_html = f'<div class="show-list"><span>{title}</span><div>当日场次已放映完</div>{broken}</div>'
+
+    def fetch(url: str, *args: object, **kwargs: object) -> str:
+        return empty_html if url.endswith("/40121") else _MAOYAN_CINEMA_HTML
+
+    monkeypatch.setattr(show_module, "_http_get_text", fetch)
+    if empty_kind == "finished":
+        stats = asyncio.run(service.refresh_wished_movie_shows(10))
+        assert stats.movies_with_shows == 1
+        persist.assert_awaited_once()
+        results = persist.call_args.args[1]
+        assert [c.cinema_id for c in results[0].cinemas] == [38931]
+    else:
+        with pytest.raises(show_module.ExternalDependencyError):
+            asyncio.run(service.refresh_wished_movie_shows(10))
+        persist.assert_not_awaited()
+
+
 @pytest.mark.parametrize("blocked_stage", ["home", "dates", "cinemas", "shows"])
 def test_verification_reports_stop_and_preserves_shows(monkeypatch: MonkeyPatch, blocked_stage: str) -> None:
     movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True, viewing_location="cinema")
