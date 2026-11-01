@@ -38,7 +38,7 @@ class ConfigManager:
         self.maoyan_cookie = ""
         self.maoyan_browser_channel = "chromium"
         self.maoyan_browser_cdp_url = ""
-        self.maoyan_qps = 0.1
+        self.maoyan_qps = 0.2
         self.maoyan_web_headers: dict[str, str] = {}
         self.database_url = f"sqlite:///{self.db_path}"
 

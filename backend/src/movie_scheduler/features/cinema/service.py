@@ -20,6 +20,7 @@ from movie_scheduler.features.cinema.repository import cinema_repository
 from movie_scheduler.features.cinema.schemas import CinemaUpdateResult, CinemaUpsertData
 from movie_scheduler.shared.maoyan import decode_maoyan_stonefont_text, maoyan_get_text
 from movie_scheduler.shared.maoyan_browser import maoyan_browser
+from movie_scheduler.shared.maoyan_diagnostics import log_page_diagnostics
 from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -160,7 +161,10 @@ class CinemaService:
         raw_content = self._http_get(city_id, page)
         if raw_content is None:
             return None
-        return self._parse_page(raw_content)
+        result = self._parse_page(raw_content)
+        if not result[0]:
+            log_page_diagnostics("cinema_list_empty", raw_content, city_id=city_id, page=page)
+        return result
 
     def _http_get(self, city_id: int, page: int) -> str | None:
         offset = (page - 1) * _CINEMA_PAGE_SIZE

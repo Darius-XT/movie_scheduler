@@ -6,7 +6,7 @@ from pytest import MonkeyPatch
 from movie_scheduler.config import ConfigManager
 
 
-@pytest.mark.parametrize("value,expected", [(None, 0.1), ("", 0.1), ("1", 1.0), ("2", 2.0), ("0.1", 0.1)])
+@pytest.mark.parametrize("value,expected", [(None, 0.2), ("", 0.2), ("1", 1.0), ("2", 2.0), ("0.2", 0.2)])
 def test_maoyan_qps_defaults_and_environment(
     monkeypatch: MonkeyPatch, tmp_path: Path, value: str | None, expected: float,
 ) -> None:

@@ -135,11 +135,13 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 - HTML 由 Playwright 无头 Chromium 获取，桌面页面保留浏览器原生请求头，电影详情保留原有移动端 UA；旧 HTTP header 覆盖项不作用于浏览器页面。
 - 业务模块不得直接拼接或打印猫眼 Cookie header；浏览器上下文首次注入 `MOVIE_SCHEDULER_MAOYAN_COOKIE` 时排除陈旧的 `hotMovieIds`，后续保留站点刷新的 Cookie。未传入热映 ID 时不写空 Cookie，列表翻页复用第一页生成的热映 ID；场次、详情临时覆盖 ID 时先清除跨域同名 Cookie，请求结束（包括失败）后恢复原值。
 - 浏览器在专用线程串行执行，复用进程与会话；切换城市或页面 profile 时重建上下文，服务退出时释放资源。Cookie 不落盘。
-- 电影列表、详情、影院与场次页面共用 `MOVIE_SCHEDULER_MAOYAN_QPS` 限速，默认最多 0.1 QPS，相邻导航开始至少间隔 10 秒；失败请求也计入，空闲不积累突发额度。浏览器子资源请求不计入该页面限速。
+- 电影列表、详情、影院与场次页面共用 `MOVIE_SCHEDULER_MAOYAN_QPS` 限速，默认最多 0.2 QPS，相邻导航开始至少间隔 5 秒；失败请求也计入，空闲不积累突发额度。浏览器子资源请求不计入该页面限速。
 - 验证页抛出 `MaoyanVerificationError`，同一轮及其已排队的页面请求立即停止；该异常不能按单页失败吞掉。手动更新返回明确的 SSE `error`，定时电影更新遇验证后跳过本轮场次更新；下一轮任务可以重新尝试。
 - 普通 HTTP 错误、超时仍返回抓取失败；一部电影的日期或影院页面抓取不完整时不覆盖其旧场次及更新时间。
 - 电影列表记录每页条目数与分页声明的末页。提前返回空页、解析失败、请求失败或整页重复时，取消本轮基础信息写入，保留全部已有电影和上映状态；两类列表完整抓取后才执行增量更新。
 - 电影详情只补齐导演、国家、语言、时长、简介中存在空值或“暂无”占位值的条目；已有完整详情和手动条目不请求详情页。详情逐部处理，进度总数只包含待补齐电影。
+- 抓取日志记录页面响应状态、字符数、耗时、最终域名、QPS 及限速等待。异常页面仅记录结构计数和内容指纹，不记录正文、标题、Cookie、令牌或验证跳转完整 URL；浏览器异常记录类型、阶段和代码位置，不打印可能含敏感 URL 的原始异常消息。
+- 影院场次任务逐个记录完成/失败和累计进度，失败立即记录电影、影院、城市标识；解析日志区分电影不匹配、日期缺失/不匹配、时间缺失。保留旧数据和写入完成均记录结果，排查时区分抓取、解析、持久化阶段。
 
 ## 环境变量
 
@@ -153,7 +155,7 @@ SSE 帧不包在 `success/data` 中,但每帧仍是结构化 JSON:
 | `MOVIE_SCHEDULER_CITY_MAPPING` | 可选城市名到城市 ID 的 JSON 对象 |
 | `MOVIE_SCHEDULER_TIMEOUT` | 外部请求超时时间,单位秒 |
 | `MOVIE_SCHEDULER_DOUBAN_API_BASE_URL` | 豆瓣信息补充服务的基础 URL;读取时会移除末尾 `/` |
-| `MOVIE_SCHEDULER_MAOYAN_QPS` | 所有猫眼 HTML 页面共用的每秒请求上限，默认 `0.1`，必须为大于 0 的有限数值 |
+| `MOVIE_SCHEDULER_MAOYAN_QPS` | 所有猫眼 HTML 页面共用的每秒请求上限，默认 `0.2`，必须为大于 0 的有限数值 |
 | `MOVIE_SCHEDULER_MAOYAN_COOKIE` | 可选猫眼浏览器种子 Cookie，仅注入新浏览器上下文 |
 | `MOVIE_SCHEDULER_MAOYAN_BROWSER_CHANNEL` | 默认 `chromium`；本机可以设为 `chrome` 使用已安装的 Google Chrome |
 | `MOVIE_SCHEDULER_MAOYAN_BROWSER_CDP_URL` | 可选本机独立 Chrome 调试入口；设置后连接该浏览器，应用退出仅关闭自己的上下文并断开连接 |

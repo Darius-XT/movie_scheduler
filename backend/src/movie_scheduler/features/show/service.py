@@ -37,6 +37,7 @@ from movie_scheduler.shared.maoyan import (
     maoyan_get_text,
 )
 from movie_scheduler.shared.maoyan_browser import maoyan_browser
+from movie_scheduler.shared.maoyan_diagnostics import log_page_diagnostics, safe_exception_frames
 from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -433,12 +434,31 @@ class ShowService:
         cinema_ids: list[int],
         allowed_dates: set[str],
     ) -> dict[int, _CinemaShowData]:
+        completed = 0
+        failed = 0
+        logger.info("影院场次阶段开始: movie_id=%s city_id=%s cinemas=%s dates=%s", movie_id, city_id, len(cinema_ids), sorted(allowed_dates))
         async def fetch_cinema(cinema_id: int) -> list[_FetchedShowItem]:
-            return await asyncio.to_thread(self._get_cinema_shows, cinema_id, city_id, movie_id, movie_name, None)
+            nonlocal completed, failed
+            started_at = monotonic()
+            try:
+                items = await asyncio.to_thread(self._get_cinema_shows, cinema_id, city_id, movie_id, movie_name, None)
+                logger.info("影院场次解析成功: movie_id=%s cinema_id=%s shows=%s", movie_id, cinema_id, len(items))
+                return items
+            except BaseException as error:
+                failed += 1
+                logger.warning("影院场次任务失败: movie_id=%s cinema_id=%s city_id=%s error_type=%s elapsed_ms=%.1f frames=%s",
+                               movie_id, cinema_id, city_id, type(error).__name__,
+                               (monotonic() - started_at) * 1000, safe_exception_frames(error))
+                raise
+            finally:
+                completed += 1
+                logger.info("影院场次进度: movie_id=%s completed=%s total=%s failed=%s", movie_id, completed, len(cinema_ids), failed)
 
         cinema_tasks = [fetch_cinema(cinema_id) for cinema_id in cinema_ids]
         cinema_results = await asyncio.gather(*cinema_tasks, return_exceptions=True)
 
+        if failed:
+            logger.warning("影院场次阶段不完整: movie_id=%s failed=%s total=%s action=preserve_existing_movie_shows", movie_id, failed, len(cinema_ids))
         valid: list[list[_FetchedShowItem]] = []
         for cinema_result in cinema_results:
             if isinstance(cinema_result, BaseException):
@@ -522,6 +542,7 @@ class ShowService:
             raise ExternalDependencyError(f"获取电影 {movie_id} 在城市 {city_id} 的排片日期失败")
         dates = self._parse_show_dates(text)
         if not dates:
+            log_page_diagnostics("show_dates_empty", text, movie_id=movie_id, city_id=city_id)
             raise DataParsingError(f"电影 {movie_id} 在城市 {city_id} 的排片日期解析结果为空")
         return dates
 
@@ -560,7 +581,10 @@ class ShowService:
                 f"获取影院信息失败,movie_id={movie_id}, city_id={city_id}, show_date={show_date}, offset={offset}"
             )
         cinema_ids, is_last_page = self._parse_cinema_list(text)
+        logger.info("影院分页解析: movie_id=%s city_id=%s show_date=%s offset=%s cinemas=%s last_page=%s",
+                    movie_id, city_id, show_date, offset, len(cinema_ids), is_last_page)
         if not cinema_ids:
+            log_page_diagnostics("cinemas_empty", text, movie_id=movie_id, city_id=city_id, show_date=show_date, offset=offset)
             raise DataParsingError(
                 f"影院分页解析结果为空,movie_id={movie_id}, city_id={city_id}, show_date={show_date}, offset={offset}"
             )
@@ -581,6 +605,7 @@ class ShowService:
             raise ExternalDependencyError(f"获取影院 {cinema_id} 在城市 {city_id} 的场次页面失败")
         items = self._parse_cinema_shows(text, movie_id, movie_name, show_date, cinema_id)
         if not items:
+            log_page_diagnostics("cinema_shows_empty", text, movie_id=movie_id, city_id=city_id, cinema_id=cinema_id, show_date=show_date)
             raise DataParsingError(
                 f"影院 {cinema_id} 在城市 {city_id} 的场次页面解析结果为空, movie_id={movie_id}, show_date={show_date}"
             )
@@ -823,6 +848,7 @@ class ShowService:
         cinema_name = self._extract_html_cinema_name(soup)
         sections = self._find_html_movie_sections(soup, movie_id, movie_name)
         result: list[_FetchedShowItem] = []
+        rejected: dict[str, int] = {}
         for section in sections:
             section_matches = section is not soup and self._html_section_matches_movie(section, movie_id, movie_name)
             for row in section.select("table.plist tbody tr, table.plist tr"):
@@ -838,6 +864,24 @@ class ShowService:
                 )
                 if show_item is not None:
                     result.append(show_item)
+                else:
+                    row_movie_id = self._extract_html_movie_id(row)
+                    date = self._extract_html_show_date(row, target_show_date)
+                    if row_movie_id is not None and row_movie_id != movie_id:
+                        reason = "other_movie"
+                    elif row_movie_id is None and not section_matches:
+                        reason = "movie_identity_missing"
+                    elif not date:
+                        reason = "date_missing"
+                    elif target_show_date is not None and date != target_show_date:
+                        reason = "date_mismatch"
+                    else:
+                        reason = "time_missing"
+                    rejected[reason] = rejected.get(reason, 0) + 1
+        if not result or rejected:
+            log = logger.warning if not result else logger.debug
+            log("场次行解析诊断: movie_id=%s cinema_id=%s target_date=%s sections=%s accepted=%s rejected=%s",
+                movie_id, fallback_cinema_id, target_show_date, len(sections), len(result), rejected)
         return result
 
     def _find_html_movie_sections(self, soup: BeautifulSoup, movie_id: int, movie_name: str) -> list[Tag]:
@@ -1126,8 +1170,10 @@ class ShowService:
                 logger.warning("电影 %s 抓取不完整，保留已有场次及更新时间", movie_id)
                 continue
             async with self._get_movie_persist_lock(movie_id):
+                logger.info("电影场次写入开始: movie_id=%s", movie_id)
                 existing_keys = await asyncio.to_thread(self._collect_existing_show_keys, movie_id)
                 if not await self._is_movie_wished(movie_id):
+                    logger.info("电影已移出想看: movie_id=%s action=delete_cached_shows", movie_id)
                     await asyncio.to_thread(movie_show_repository.delete_for_movie, movie_id)
                     removed_total += len(existing_keys)
                     continue
@@ -1150,6 +1196,8 @@ class ShowService:
                 removed_total += len(existing_keys - new_keys)
                 await asyncio.to_thread(movie_show_repository.replace_for_movie, movie_id, shows)
                 await asyncio.to_thread(movie_repository.touch_shows_updated_at, movie_id)
+                logger.info("电影场次写入完成: movie_id=%s previous=%s current=%s added=%s removed=%s",
+                            movie_id, len(existing_keys), len(shows), len(new_keys - existing_keys), len(existing_keys - new_keys))
                 if shows:
                     movies_with_shows += 1
         return ShowUpdateStats(

@@ -16,6 +16,7 @@ from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.shared.maoyan import maoyan_get_text
+from movie_scheduler.shared.maoyan_diagnostics import log_page_diagnostics
 
 _BEIJING_TZ = timezone(timedelta(hours=8))
 _MAOYAN_MOVIE_LIST_PAGE_SIZE = 18
@@ -254,7 +255,11 @@ class UpdateBaseService:
         html_content = self._http_get(show_type, page, city_id)
         if html_content is None:
             return None
-        return self._parse_html(html_content)
+        result = self._parse_html(html_content)
+        if not result.movies:
+            log_page_diagnostics("movie_list_empty", html_content, city_id=city_id, show_type=show_type, page=page,
+                                 expected_empty=str(result.is_expected_empty))
+        return result
 
     def _http_get(self, show_type: int, page: int, city_id: int) -> str | None:
         url = self._movie_list_url(show_type, page)

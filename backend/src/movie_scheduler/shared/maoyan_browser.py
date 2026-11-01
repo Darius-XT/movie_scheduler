@@ -19,6 +19,7 @@ from movie_scheduler.config import config_manager
 from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.core.request_logging import log_external_http_request
+from movie_scheduler.shared.maoyan_diagnostics import log_page_diagnostics, safe_exception_frames
 
 
 @dataclass(frozen=True)
@@ -93,8 +94,11 @@ class MaoyanBrowser:
                     self._executor = None
 
     def _get_text(self, request: _PageRequest) -> str | None:
+        started_at = monotonic()
+        stage = "context"
         stopped = self._batch_stopped.get()
         if stopped is not None and stopped.is_set():
+            logger.info("猫眼请求跳过: purpose=%s city_id=%s reason=batch_verification", request.purpose, request.city_id)
             raise MaoyanVerificationError()
         try:
             context = self._ensure_context(request)
@@ -106,21 +110,32 @@ class MaoyanBrowser:
                         saved_hot_ids.append({**cookie})
                 context.clear_cookies(name="hotMovieIds")
             try:
+                stage = "cookies"
                 self._update_cookies(context, request.cookie)
+                stage = "new_page"
                 page = context.new_page()
                 try:
+                    stage = "rate_limit"
                     self._wait_for_request_slot()
                     log_external_http_request("GET", request.url, purpose=request.purpose)
                     self._last_request_at = monotonic()
+                    stage = "navigation"
                     response = page.goto(request.url, wait_until="domcontentloaded", timeout=request.timeout * 1000)
+                    stage = "read_content"
                     text = page.content()
+                    logger.info("猫眼页面响应: purpose=%s city_id=%s status=%s chars=%s elapsed_ms=%.1f final_host=%s qps=%s",
+                                request.purpose, request.city_id, response.status if response else None,
+                                len(text), (monotonic() - started_at) * 1000, urlsplit(page.url).hostname,
+                                config_manager.maoyan_qps)
                     if self._is_verification(page.url, page.title(), text):
                         if stopped is not None:
                             stopped.set()
                         logger.warning("%s失败: 猫眼要求身份验证，已停止本轮剩余抓取", request.purpose)
+                        log_page_diagnostics("verification", text, purpose=request.purpose, city_id=request.city_id)
                         raise MaoyanVerificationError()
                     if response is None or not response.ok:
                         logger.warning("%s失败: 浏览器 HTTP 状态=%s", request.purpose, response.status if response else None)
+                        log_page_diagnostics("http_error", text, purpose=request.purpose, city_id=request.city_id)
                         return None
                     return text
                 finally:
@@ -135,7 +150,9 @@ class MaoyanBrowser:
             raise
         except Exception as error:
             # Playwright 异常可能包含带 token 的跳转地址，只记录异常类型。
-            logger.warning("%s失败: 无头浏览器 %s", request.purpose, type(error).__name__)
+            logger.warning("猫眼浏览器失败: purpose=%s city_id=%s stage=%s error_type=%s elapsed_ms=%.1f timeout_s=%s frames=%s",
+                           request.purpose, request.city_id, stage, type(error).__name__,
+                           (monotonic() - started_at) * 1000, request.timeout, safe_exception_frames(error))
             self._close_browser()
             return None
 
@@ -144,6 +161,7 @@ class MaoyanBrowser:
         if self._last_request_at is not None:
             delay = self._last_request_at + 1 / config_manager.maoyan_qps - monotonic()
             if delay > 0:
+                logger.debug("猫眼限速等待: wait_ms=%.1f qps=%s", delay * 1000, config_manager.maoyan_qps)
                 sleep(delay)
 
     def _ensure_context(self, request: _PageRequest) -> BrowserContext:

@@ -18,6 +18,7 @@ from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.movie.update_base.service import UpdateBaseProgressEvent
 from movie_scheduler.shared.maoyan import maoyan_get_text
+from movie_scheduler.shared.maoyan_diagnostics import log_page_diagnostics
 from movie_scheduler.shared.maoyan_browser import maoyan_browser
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -147,7 +148,10 @@ class UpdateExtraService:
         html_content = self._http_get(movie_id)
         if html_content is None:
             return None
-        return self._parse(html_content)
+        details = self._parse(html_content)
+        if details is None:
+            log_page_diagnostics("movie_details_empty", html_content, movie_id=movie_id)
+        return details
 
     def _http_get(self, movie_id: int) -> str | None:
         url = f"{_EXTRA_PAGE_BASE}/{movie_id}"

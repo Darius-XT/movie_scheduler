@@ -47,7 +47,7 @@ def test_hot_ids_are_preserved_across_temporary_overrides(monkeypatch: MonkeyPat
         observed.append([str(c["value"]) for c in jar if c["name"] == "hotMovieIds"])
         if len(observed) == 1:
             jar.append(hot_cookie.copy())  # 模拟第一页生成分页 Cookie。
-        return SimpleNamespace(ok=True)
+        return SimpleNamespace(ok=True, status=200)
 
     page = Mock(url="https://www.maoyan.com/films", goto=goto)
     page.title.side_effect = ["猫眼", "验证中心" if verify else "猫眼", "猫眼"]
@@ -303,7 +303,7 @@ def test_browser_counts_navigation_time_without_accumulating_idle_slots(
 
 def test_browser_uses_configured_qps(monkeypatch: MonkeyPatch) -> None:
     _, _, _, navigation_times = _install_browser(monkeypatch)
-    monkeypatch.setattr(browser_module.config_manager, "maoyan_qps", 0.1)
+    monkeypatch.setattr(browser_module.config_manager, "maoyan_qps", 0.2)
     browser = MaoyanBrowser()
     try:
         for _ in range(3):
@@ -311,4 +311,4 @@ def test_browser_uses_configured_qps(monkeypatch: MonkeyPatch) -> None:
                                     cookie="", timeout=5, verify=True)
     finally:
         browser.close()
-    assert navigation_times == [0, 10, 20]
+    assert navigation_times == [0, 5, 10]
