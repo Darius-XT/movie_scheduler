@@ -6,6 +6,20 @@
 - 每个组件只做一件事；超过 300 行考虑拆分
 - 组件文件名 PascalCase（`MovieCard.vue`），工具文件 camelCase（`formatDate.js`）
 
+## 页面访问密码
+
+- `App.vue` 通过 `PasswordGate` 包裹业务页面；密码通过前不挂载页面、不触发页面的数据加载。
+- 在 `frontend/.env` 设置 `VITE_SITE_PASSWORD`，修改后重启前端开发服务；生产构建需要重新执行 `npm run build`。
+- 未设置密码时显示配置提示，不自动放行；验证只保留在内存中，刷新页面后需重新输入。
+- 这是前端页面遮挡，不是安全认证：密码会进入客户端代码，后端 API 未受保护。不要用它保护敏感数据，也不要复用其他账号密码。
+
+## 公网隧道开发访问
+
+- 使用 ngrok 转发前端端口：`ngrok http 5188`；`/api` 继续由 Vite 转发到后端。
+- 在 `frontend/.env` 设置 `VITE_ALLOWED_HOSTS` 为实际分配的域名，不含协议、端口或路径；多个域名用逗号分隔。
+- 修改配置后执行 `docker compose restart frontend`。域名变化时更新该配置，不使用 `allowedHosts: true` 或放行整个隧道服务商域名。
+- 前端密码页不保护后端接口；公网隧道不会改变这个限制。
+
 ## 状态管理
 
 - **Pinia**：跨组件共享的状态，或需要在页面刷新后恢复的状态
@@ -89,6 +103,13 @@ const cities = response.data.data.cities  // axios 第一层 .data 是 HTTP body
 ```
 
 错误情况下后端返回 `{success: false, error: "..."}`，axios 会按状态码自动抛出，可在 catch 中读 `error.response.data.error`。
+
+## 数据备份
+
+- 页面顶部的 `DataBackupPanel` 提供 JSON 下载、选择本地备份、四张表条数预览与二次覆盖确认；不上传浏览器缓存。
+- API 调用由 `src/api/index.js` 的 `exportBackendData` 和 `importBackendData` 封装。文件预览仅作基本格式检查，完整字段和唯一性由后端校验。
+- 导入为全量覆盖而非合并；空表会清空现有内容。成功后通过确认弹窗重新加载页面，重新读取后端数据，避免旧内存状态继续使用。
+- 操作前等待抓取与行程保存完成，并暂停其他设备写入。运行配置与调试文件不属于备份范围。
 
 ## URL 命名
 

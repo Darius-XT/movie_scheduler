@@ -1,20 +1,22 @@
 <template>
   <div id="app">
-    <el-container>
-      <el-header>
-        <div class="header-content">
-          <h1>Movie Movie Movie</h1>
-        </div>
-      </el-header>
-      <el-main>
-        <router-view />
-      </el-main>
-    </el-container>
+    <PasswordGate>
+      <el-container>
+        <el-header>
+          <div class="header-content">
+            <h1>Movie Movie Movie</h1>
+          </div>
+        </el-header>
+        <el-main>
+          <router-view />
+        </el-main>
+      </el-container>
+    </PasswordGate>
   </div>
 </template>
 
 <script setup>
-// 页面壳层仅负责承载路由页面。
+import PasswordGate from '@/components/PasswordGate.vue'
 </script>
 
 <style>

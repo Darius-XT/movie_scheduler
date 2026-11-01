@@ -7,6 +7,11 @@ const api = axios.create({
 
 export const getCities = () => api.get('/cities')
 
+export const exportBackendData = () => api.get('/backups/export')
+
+export const importBackendData = (backup) =>
+  api.post('/backups/import', { backup, confirm_replace: true })
+
 export const getPlanning = () => api.get('/plan')
 
 export const saveScheduleItems = (scheduleItems) =>

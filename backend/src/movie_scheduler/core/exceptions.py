@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import cast
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.types import ExceptionHandler
 
@@ -42,6 +43,12 @@ class DataParsingError(Exception):
 def register_exception_handlers(app: FastAPI) -> None:
     """注册应用的统一异常处理器。"""
 
+    async def handle_validation_error(_: Request, error: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "error": "请求参数校验失败，请检查请求格式和必填字段"},
+        )
+
     async def handle_app_error(_: Request, error: AppError) -> JSONResponse:
         return JSONResponse(
             status_code=error.status_code,
@@ -77,6 +84,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     app.add_exception_handler(AppError, cast(ExceptionHandler, handle_app_error))
+    app.add_exception_handler(RequestValidationError, cast(ExceptionHandler, handle_validation_error))
     app.add_exception_handler(RepositoryError, cast(ExceptionHandler, handle_repository_error))
     app.add_exception_handler(ExternalDependencyError, cast(ExceptionHandler, handle_external_dependency_error))
     app.add_exception_handler(DataParsingError, cast(ExceptionHandler, handle_data_parsing_error))

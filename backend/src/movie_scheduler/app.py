@@ -14,6 +14,7 @@ from movie_scheduler.core.exceptions import register_exception_handlers
 from movie_scheduler.core.logging import setup_logger
 from movie_scheduler.core.request_logging import RequestLoggingMiddleware
 from movie_scheduler.core.scheduler import auto_update_scheduler
+from movie_scheduler.features.backup.router import router as backup_router
 from movie_scheduler.features.cinema.router import router as cinema_router
 from movie_scheduler.features.city.router import router as city_router
 from movie_scheduler.features.movie.router import router as movie_router
@@ -51,6 +52,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(fastapi_app)
 
     api_router = APIRouter(prefix="/api")
+    api_router.include_router(backup_router)
     api_router.include_router(city_router)
     api_router.include_router(cinema_router)
     api_router.include_router(movie_router)

@@ -7,6 +7,8 @@
 | Feature | 方法 | 路径 | 类型 | 用途 |
 |---------|------|------|------|------|
 | city | `GET` | `/api/cities` | JSON | 获取可选城市列表 |
+| backup | `GET` | `/api/backups/export` | JSON 附件 | 导出四张业务表的完整备份 |
+| backup | `POST` | `/api/backups/import` | JSON | 校验备份后全量覆盖四张业务表，须明确确认 |
 | cinema | `GET` | `/api/cinemas/update-stream` | SSE | 流式更新影院数据(手动触发,增量) |
 | movie | `POST` | `/api/movies/select` | JSON | 按上映状态筛选电影 |
 | movie | `GET` | `/api/movies/wished` | JSON | 读取全部想看电影 |
@@ -23,6 +25,14 @@
 | show | `GET` | `/api/shows/update-stream` | SSE | `city_id` 指定城市；可选 `movie_id` 仅更新该部想看且归类为影院看的非手动电影，省略则更新全部影院看电影。失败返回 error 并保留原场次 |
 
 电影和场次更新的 SSE `progress` 中，`current/total` 表示当前阶段已处理数，而非全任务百分比。未知总量时为 `null`；电影列表按分页、详情按部数报告，场次在每个影院任务结束后推送 `fetching_cinema_shows`（消息包含电影名、已处理影院数和失败数）。写入阶段使用 `persisting_shows`，整轮成功以 `complete` 为准。
+
+## Backup
+
+- `GET /api/backups/export` 返回 `success/data` 包装的 JSON 附件，文件名为 `movie-scheduler-时间戳.json`，设置 `Cache-Control: no-store`。
+- `data` 包含 `application: "movie-scheduler"`、`format_version: 1`、`exported_at`，以及 `movies`、`cinemas`、`movie_shows`、`planning_items` 四个必填数组；各记录保留数据库全部字段、ID 和时间。格式版本仅用于备份文件兼容性，不是 API 版本。
+- `POST /api/backups/import` 请求为 `{ "backup": <完整导出文件内容>, "confirm_replace": true }`。不接受缺表或缺字段的部分备份；未知字段、错误类型或不兼容版本返回 422；未确认、重复 ID/唯一键、标签冲突返回 400。
+- 导入在单个事务中全量替换，不做合并；空数组会清空对应表，任意写入失败回滚全部修改。成功响应为 `{ "success": true, "data": { "movies": 0, "cinemas": 0, "movie_shows": 0, "planning_items": 0 } }`，数字为实际导入条数。
+- 只备份业务数据，不包含 Alembic 版本表、环境配置、Cookie、调试文件或前端缓存。导入前应先备份，并等待更新任务及行程保存完成，暂停其他设备写入；恢复后刷新页面。导入不会取消已经在运行的抓取任务，也不会关闭定时更新。
 
 ## City
 

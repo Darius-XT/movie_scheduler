@@ -1,6 +1,7 @@
 <template>
   <div class="movie-scheduler-page">
     <el-card class="page-card">
+      <DataBackupPanel />
       <!-- 顶部左右布局：信息更新 + 电影筛选 -->
       <div class="top-section">
         <UpdatePanel
@@ -65,6 +66,7 @@ import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import MovieCard from '@/components/MovieCard.vue'
+import DataBackupPanel from '@/components/DataBackupPanel.vue'
 import MovieFilterPanel from '@/components/MovieFilterPanel.vue'
 import ScheduleBoard from '@/components/ScheduleBoard.vue'
 import UpdatePanel from '@/components/UpdatePanel.vue'
