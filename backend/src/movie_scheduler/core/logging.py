@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import colorlog
 
 from movie_scheduler.config import config_manager
 
 logger = logging.getLogger("movie_scheduler")
+
+
+class _BeijingFormatter(colorlog.ColoredFormatter):
+    """固定日志显示时区,不依赖容器的系统时区。"""
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        timestamp = datetime.fromtimestamp(record.created, tz=ZoneInfo("Asia/Shanghai"))
+        return timestamp.strftime(datefmt or "%Y-%m-%d %H:%M:%S %z")
 
 
 def setup_logger(level: str | None = None) -> logging.Logger:
@@ -36,9 +46,9 @@ def setup_logger(level: str | None = None) -> logging.Logger:
         console_format = console_format.replace("%(levelname)s", "%(log_color)s%(levelname)s%(reset)s")
 
     console_handler.setFormatter(
-        colorlog.ColoredFormatter(
+        _BeijingFormatter(
             console_format,
-            datefmt="%Y-%m-%d %H:%M:%S",
+            datefmt="%Y-%m-%d %H:%M:%S %z",
             reset=True,
             log_colors=log_colors,
             secondary_log_colors={"asctime": log_colors},
