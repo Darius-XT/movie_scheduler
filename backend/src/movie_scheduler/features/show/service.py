@@ -12,6 +12,7 @@ import json
 import re
 from collections.abc import AsyncIterator, Callable, Sequence
 from dataclasses import dataclass, field
+from contextvars import ContextVar
 from datetime import datetime
 from time import monotonic
 from typing import TypedDict, cast
@@ -209,6 +210,12 @@ class ShowService:
     def __init__(self) -> None:
         self._hot_movie_ids_cache: dict[int, tuple[float, list[int]]] = {}
         self._movie_persist_locks: dict[int, asyncio.Lock] = {}
+        self._progress: ContextVar[Callable[[ShowUpdateProgressEvent], None] | None] = ContextVar("show_progress", default=None)
+
+    def _report_progress(self, event: ShowUpdateProgressEvent) -> None:
+        callback = self._progress.get()
+        if callback is not None:
+            callback(event)
 
     # ---------- 对外: 定时抓取 + 单片抓取 ----------
 
@@ -236,6 +243,7 @@ class ShowService:
                 ))
             return ShowUpdateStats(added=0, removed=0, movies_with_shows=0)
 
+        progress_token = self._progress.set(progress_callback)
         try:
             if progress_callback is not None:
                 progress_callback(ShowUpdateProgressEvent(
@@ -260,6 +268,8 @@ class ShowService:
         except Exception as error:
             logger.error("场次定时抓取失败: %s", error)
             raise
+        finally:
+            self._progress.reset(progress_token)
 
     async def stream_show_update(self, city_id: int, movie_id: int | None = None) -> AsyncIterator[str]:
         """将场次更新过程编码为 SSE 文本帧。"""
@@ -386,6 +396,9 @@ class ShowService:
                 return None
 
             movie_data = _MovieShowData(movie_id=movie_id, movie_name=movie_name)
+            self._report_progress(ShowUpdateProgressEvent(
+                message=f"《{movie_name}》：正在获取放映日期", stage="fetching_show_dates", city_id=city_id,
+            ))
             show_dates = await asyncio.to_thread(self._get_show_dates, movie_id, city_id)
             logger.debug("找到 %s 个排片日期: %s", len(show_dates), show_dates)
 
@@ -408,6 +421,9 @@ class ShowService:
 
     async def _collect_movie_cinema_ids(self, movie_id: int, city_id: int, show_dates: list[str]) -> list[int]:
         async def fetch_date_cinemas(show_date: str) -> list[int]:
+            self._report_progress(ShowUpdateProgressEvent(
+                message=f"电影 {movie_id}：正在获取 {show_date} 的影院列表", stage="fetching_show_cinemas", city_id=city_id,
+            ))
             return await asyncio.to_thread(self._get_cinemas, movie_id, show_date, city_id)
 
         date_tasks = [fetch_date_cinemas(show_date) for show_date in show_dates]
@@ -437,6 +453,10 @@ class ShowService:
         completed = 0
         failed = 0
         logger.info("影院场次阶段开始: movie_id=%s city_id=%s cinemas=%s dates=%s", movie_id, city_id, len(cinema_ids), sorted(allowed_dates))
+        self._report_progress(ShowUpdateProgressEvent(
+            message=f"《{movie_name}》：影院场次 0/{len(cinema_ids)}", stage="fetching_cinema_shows",
+            current=0, total=len(cinema_ids), city_id=city_id,
+        ))
         async def fetch_cinema(cinema_id: int) -> list[_FetchedShowItem]:
             nonlocal completed, failed
             started_at = monotonic()
@@ -453,6 +473,10 @@ class ShowService:
             finally:
                 completed += 1
                 logger.info("影院场次进度: movie_id=%s completed=%s total=%s failed=%s", movie_id, completed, len(cinema_ids), failed)
+                self._report_progress(ShowUpdateProgressEvent(
+                    message=f"《{movie_name}》：影院场次 {completed}/{len(cinema_ids)}，失败 {failed} 个",
+                    stage="fetching_cinema_shows", current=completed, total=len(cinema_ids), city_id=city_id,
+                ))
 
         cinema_tasks = [fetch_cinema(cinema_id) for cinema_id in cinema_ids]
         cinema_results = await asyncio.gather(*cinema_tasks, return_exceptions=True)

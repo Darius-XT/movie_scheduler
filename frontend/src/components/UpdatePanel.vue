@@ -125,7 +125,7 @@
       <div class="fetch-progress">
         <div class="progress-content">
           <div class="progress-label">电影更新进度</div>
-          <div class="progress-text">{{ movieUpdateProgress }}</div>
+          <TaskProgress :event="{ ...movieProgressEvent, message: movieUpdateProgress }" />
         </div>
       </div>
     </div>
@@ -135,7 +135,7 @@
       <div class="fetch-progress">
         <div class="progress-content">
           <div class="progress-label">场次更新进度</div>
-          <div class="progress-text">{{ showsUpdateProgress }}</div>
+          <TaskProgress :event="{ ...showsProgressEvent, message: showsUpdateProgress }" />
         </div>
       </div>
     </div>
@@ -143,6 +143,7 @@
 </template>
 
 <script setup>
+import TaskProgress from '@/components/TaskProgress.vue'
 import { streamCinemaUpdate, streamMovieUpdate, streamShowUpdate } from '@/api'
 import { readSseStream } from '@/api/sseStream'
 import { useScheduleStore } from '@/stores/scheduleStore'
@@ -163,8 +164,10 @@ const cinemaLoading = ref(false)
 const cinemaUpdateProgress = ref('')
 const movieLoading = ref(false)
 const movieUpdateProgress = ref('')
+const movieProgressEvent = ref({})
 const showsLoading = ref(false)
 const showsUpdateProgress = ref('')
+const showsProgressEvent = ref({})
 
 const cinemaResult = computed(() => store.cinemaUpdateResult)
 const cinemaUpdateMeta = computed(() => store.cinemaUpdateMeta)
@@ -253,7 +256,8 @@ const handleUpdateCinema = async () => {
 
 const handleUpdateMovie = async () => {
   movieLoading.value = true
-  movieUpdateProgress.value = ''
+  movieUpdateProgress.value = '正在准备更新电影信息…'
+  movieProgressEvent.value = {}
   const startedAt = Date.now()
   let succeeded = false
   try {
@@ -261,6 +265,7 @@ const handleUpdateMovie = async () => {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
     await readSseStream(response, (data) => {
+      movieProgressEvent.value = data
       if (data.type === 'progress') {
         movieUpdateProgress.value = data.message || '正在更新电影信息'
       } else if (data.type === 'complete') {
@@ -270,17 +275,18 @@ const handleUpdateMovie = async () => {
         succeeded = true
         ElMessage.success('电影信息更新成功')
       } else if (data.type === 'error') {
-        movieUpdateProgress.value = ''
+        movieUpdateProgress.value = data.error || '电影更新失败'
         ElMessage.error('更新失败: ' + data.error)
       }
     })
+    if (!succeeded && movieProgressEvent.value.type !== 'error') throw new Error('更新连接已中断，请重试')
   } catch (error) {
+    movieProgressEvent.value = { type: 'error' }
+    movieUpdateProgress.value = error.message
     ElMessage.error('更新失败: ' + error.message)
   } finally {
     if (succeeded) {
-      window.setTimeout(() => { movieUpdateProgress.value = '' }, 1200)
-    } else {
-      movieUpdateProgress.value = ''
+      window.setTimeout(() => { if (!movieLoading.value) movieUpdateProgress.value = '' }, 1200)
     }
     movieLoading.value = false
   }
@@ -289,7 +295,8 @@ const handleUpdateMovie = async () => {
 const handleUpdateShows = async () => {
   if (!props.updateForm.cityId) return
   showsLoading.value = true
-  showsUpdateProgress.value = ''
+  showsUpdateProgress.value = '正在准备更新场次…'
+  showsProgressEvent.value = {}
   const startedAt = Date.now()
   let succeeded = false
   try {
@@ -297,6 +304,7 @@ const handleUpdateShows = async () => {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
     await readSseStream(response, (data) => {
+      showsProgressEvent.value = data
       if (data.type === 'progress') {
         showsUpdateProgress.value = data.message || '正在更新场次信息'
       } else if (data.type === 'complete') {
@@ -309,7 +317,7 @@ const handleUpdateShows = async () => {
         if (failed_movies > 0) ElMessage.warning(showsUpdateProgress.value)
         else ElMessage.success('场次信息更新成功')
       } else if (data.type === 'error') {
-        showsUpdateProgress.value = ''
+        showsUpdateProgress.value = data.error || '场次更新失败'
         ElMessage.error('更新失败: ' + data.error)
       }
     })
@@ -317,13 +325,14 @@ const handleUpdateShows = async () => {
     if (succeeded) {
       void store.refreshShowsFromBackend()
     }
+    if (!succeeded && showsProgressEvent.value.type !== 'error') throw new Error('更新连接已中断，请重试')
   } catch (error) {
+    showsProgressEvent.value = { type: 'error' }
+    showsUpdateProgress.value = error.message
     ElMessage.error('更新失败: ' + error.message)
   } finally {
     if (succeeded) {
-      window.setTimeout(() => { showsUpdateProgress.value = '' }, 1200)
-    } else {
-      showsUpdateProgress.value = ''
+      window.setTimeout(() => { if (!showsLoading.value) showsUpdateProgress.value = '' }, 1200)
     }
     showsLoading.value = false
   }

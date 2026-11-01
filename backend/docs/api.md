@@ -22,6 +22,8 @@
 | show | `GET` | `/api/shows` | JSON | 读取想看电影的全部或单部场次(后端每天北京时间 0 点启动自动更新) |
 | show | `GET` | `/api/shows/update-stream` | SSE | `city_id` 指定城市；可选 `movie_id` 仅更新该部想看且归类为影院看的非手动电影，省略则更新全部影院看电影。失败返回 error 并保留原场次 |
 
+电影和场次更新的 SSE `progress` 中，`current/total` 表示当前阶段已处理数，而非全任务百分比。未知总量时为 `null`；电影列表按分页、详情按部数报告，场次在每个影院任务结束后推送 `fetching_cinema_shows`（消息包含电影名、已处理影院数和失败数）。写入阶段使用 `persisting_shows`，整轮成功以 `complete` 为准。
+
 ## City
 
 | 方法 | 路径 | 参数 / 请求体 | 返回 |

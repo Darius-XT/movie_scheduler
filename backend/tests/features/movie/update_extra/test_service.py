@@ -150,7 +150,7 @@ def test_update_extra_stops_before_requesting_remaining_movies(monkeypatch: Monk
     assert [call.args[0] for call in fetch.call_args_list] == [
         "https://www.maoyan.com/films/1", "https://www.maoyan.com/films/2",
     ]
-    assert [(event.current, event.total) for event in events] == [(1, 3), (2, 3)]
+    assert [(event.current, event.total) for event in events] == [(0, 3), (1, 3), (1, 3)]
     save.assert_called_once()
     assert save.call_args.args[0]["id"] == 1
 

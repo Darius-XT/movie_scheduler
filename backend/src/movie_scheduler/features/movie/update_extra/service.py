@@ -65,6 +65,11 @@ class UpdateExtraService:
             for idx, movie in enumerate(movies_to_update, start=1):
                 if await self._process_single(idx=idx, total=total, movie=movie, progress_callback=progress_callback):
                     success_count += 1
+                if progress_callback is not None:
+                    progress_callback(UpdateBaseProgressEvent(
+                        message=f"详细信息已处理 {idx}/{total} 部", stage="fetching_movie_details",
+                        current=idx, total=total,
+                    ))
         logger.info(
             "额外电影信息更新统计: 更新=%d, 跳过或失败=%d, 总计=%d",
             success_count, total - success_count, total,
@@ -99,7 +104,7 @@ class UpdateExtraService:
             progress_callback(UpdateBaseProgressEvent(
                 message=f"正在补充详细信息 ({idx}/{total})",
                 stage="fetching_movie_details",
-                current=idx, total=total,
+                current=idx - 1, total=total,
             ))
         try:
             details = await asyncio.to_thread(self._fetch_details, movie_id)

@@ -139,8 +139,13 @@ def test_finished_notice_does_not_discard_other_cinema_results(monkeypatch: Monk
 
     monkeypatch.setattr(show_module, "_http_get_text", fetch)
     if empty_kind == "finished":
-        stats = asyncio.run(service.refresh_wished_movie_shows(10))
+        events: list[show_module.ShowUpdateProgressEvent] = []
+        stats = asyncio.run(service.refresh_wished_movie_shows(10, progress_callback=events.append))
         assert stats.movies_with_shows == 1
+        cinema_events = [event for event in events if event.stage == "fetching_cinema_shows"]
+        assert [(event.current, event.total) for event in cinema_events] == [(0, 2), (1, 2), (2, 2)]
+        assert events[-1].stage == "persisting_shows"
+        assert service._progress.get() is None
         persist.assert_awaited_once()
         results = persist.call_args.args[1]
         assert [c.cinema_id for c in results[0].cinemas] == [38931]

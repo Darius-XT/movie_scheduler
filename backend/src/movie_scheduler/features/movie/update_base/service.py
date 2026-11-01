@@ -176,6 +176,8 @@ class UpdateBaseService:
                 progress_callback(UpdateBaseProgressEvent(
                     message=f"正在抓取{show_type_name}第 {page} 页",
                     stage="fetching_movie_list", city_id=city_id, page=page,
+                    current=page - 1 if page > 1 else None,
+                    total=expected_last_page if page > 1 else None,
                 ))
             result = self._fetch_page(show_type, page, city_id)
             if result is None:

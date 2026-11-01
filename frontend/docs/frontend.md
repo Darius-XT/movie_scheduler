@@ -33,6 +33,8 @@ export const streamCinemaUpdate = (cityId) =>
 
 后端长时任务通过 **SSE** 推送进度，前端用 `fetch` stream 接收，不用轮询。
 
+电影信息、批量场次和单片场次手动更新共用 `TaskProgress` 展示当前阶段进度：有 `current/total` 时按实际完成数显示，否则显示活动进度条。电影详情按已处理部数、场次按当前电影已完成影院数更新；只有 SSE `complete` 表示整轮完成，错误或连接中断保留失败提示。
+
 ## 想看与行程
 
 - 想看区按手动保存的 `viewing_location` 分为“家里看 / 影院看 / 未分类”，不再按年份自动分类。
