@@ -215,10 +215,15 @@ class ShowService:
         self,
         city_id: int | None = None,
         progress_callback: Callable[[ShowUpdateProgressEvent], None] | None = None,
+        movie_id: int | None = None,
     ) -> ShowUpdateStats:
         """只抓取想看列表中归类为影院看的电影场次。"""
         normalized_city_id = self._normalize_city_id(city_id)
         movie_ids = await asyncio.to_thread(self._list_cinema_movie_ids)
+        if movie_id is not None:
+            if movie_id <= 0 or movie_id not in movie_ids:
+                raise AppError("只能更新想看列表中归类为影院看的非手动电影场次", status_code=422)
+            movie_ids = [movie_id]
 
         if not movie_ids:
             logger.info("场次定时抓取:影院看中没有可抓取电影,跳过")
@@ -255,7 +260,7 @@ class ShowService:
             logger.error("场次定时抓取失败: %s", error)
             raise
 
-    async def stream_show_update(self, city_id: int) -> AsyncIterator[str]:
+    async def stream_show_update(self, city_id: int, movie_id: int | None = None) -> AsyncIterator[str]:
         """将场次更新过程编码为 SSE 文本帧。"""
 
         async def run(push_progress: Callable[[dict[str, object]], None]) -> dict[str, object]:
@@ -268,10 +273,14 @@ class ShowService:
                     "city_id": event.city_id,
                 })
 
-            stats = await self.refresh_wished_movie_shows(
-                city_id=city_id, progress_callback=forward,
-            )
-            movie_ids = await asyncio.to_thread(self._list_cinema_movie_ids)
+            if movie_id is None:
+                stats = await self.refresh_wished_movie_shows(city_id=city_id, progress_callback=forward)
+                movie_ids = await asyncio.to_thread(self._list_cinema_movie_ids)
+            else:
+                stats = await self.refresh_wished_movie_shows(
+                    city_id=city_id, progress_callback=forward, movie_id=movie_id,
+                )
+                movie_ids = [movie_id]
             last_fetched_at = await asyncio.to_thread(movie_repository.get_latest_shows_updated_at, movie_ids)
             return {
                 "added": stats.added,

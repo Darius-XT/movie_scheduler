@@ -19,9 +19,9 @@ async def get_shows(movie_id: int | None = None) -> ShowsResponse:
 
 
 @router.get("/shows/update-stream")
-async def update_shows_stream(city_id: int) -> StreamingResponse:
+async def update_shows_stream(city_id: int, movie_id: int | None = None) -> StreamingResponse:
     """以 SSE 方式流式返回想看电影的场次更新进度。"""
     return StreamingResponse(
-        show_service.stream_show_update(city_id=city_id),
+        show_service.stream_show_update(city_id=city_id, movie_id=movie_id),
         media_type="text/event-stream",
     )

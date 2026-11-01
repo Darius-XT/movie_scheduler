@@ -52,9 +52,9 @@ export const streamMovieUpdate = (cityId) =>
     { headers: { Accept: 'text/event-stream' } }
   )
 
-export const streamShowUpdate = (cityId) =>
+export const streamShowUpdate = (cityId, movieId = null) =>
   fetch(
-    `/api/shows/update-stream?city_id=${cityId}`,
+    `/api/shows/update-stream?city_id=${encodeURIComponent(cityId)}${movieId == null ? '' : `&movie_id=${encodeURIComponent(movieId)}`}`,
     { headers: { Accept: 'text/event-stream' } }
   )
 

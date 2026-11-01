@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -11,6 +12,49 @@ from pytest import MonkeyPatch
 import movie_scheduler.features.show.service as show_module
 from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.features.show.service import ShowService
+
+
+@pytest.mark.parametrize("movie_id", [1, 2, -4, 999])
+def test_single_movie_stream_limits_fetch_and_validates_selection(monkeypatch: MonkeyPatch, movie_id: int) -> None:
+    service = ShowService()
+    monkeypatch.setattr(service, "_list_cinema_movie_ids", lambda: [1, 3])
+    fetch = AsyncMock(return_value=[])
+    persist = AsyncMock(return_value=show_module.ShowUpdateStats(0, 0, 0))
+    latest = Mock(return_value=None)
+    monkeypatch.setattr(service, "_fetch_shows_for_selected_movies", fetch)
+    monkeypatch.setattr(service, "_persist_results", persist)
+    monkeypatch.setattr(show_module.movie_repository, "get_latest_shows_updated_at", latest)
+
+    async def collect() -> list[str]:
+        return [frame async for frame in service.stream_show_update(10, movie_id=movie_id)]
+
+    events = [json.loads(line[6:]) for frame in asyncio.run(collect()) for line in frame.splitlines()
+              if line.startswith("data: ")]
+    if movie_id == 1:
+        fetch.assert_awaited_once_with([1], city_id=10)
+        persist.assert_awaited_once_with([1], [])
+        latest.assert_called_once_with([1])
+        assert events[-1]["type"] == "complete"
+    else:
+        fetch.assert_not_awaited()
+        persist.assert_not_awaited()
+        assert events[-1]["type"] == "error"
+
+
+def test_single_movie_stream_preserves_data_on_verification(monkeypatch: MonkeyPatch) -> None:
+    service = ShowService()
+    monkeypatch.setattr(service, "_list_cinema_movie_ids", lambda: [1])
+    monkeypatch.setattr(service, "_fetch_shows_for_selected_movies", AsyncMock(side_effect=MaoyanVerificationError()))
+    persist = AsyncMock()
+    monkeypatch.setattr(service, "_persist_results", persist)
+
+    async def collect() -> list[str]:
+        return [frame async for frame in service.stream_show_update(10, movie_id=1)]
+
+    frames = "".join(asyncio.run(collect()))
+    assert '"error"' in frames
+    assert '"complete"' not in frames
+    persist.assert_not_awaited()
 
 
 def test_batch_fetch_only_selects_cinema_movies(monkeypatch: MonkeyPatch) -> None:

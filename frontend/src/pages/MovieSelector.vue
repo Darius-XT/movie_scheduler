@@ -19,7 +19,7 @@
         <ScheduleBoard />
 
         <!-- 想看池 -->
-        <WishPool />
+        <WishPool :city-id="updateForm.cityId" />
 
         <!-- 电影列表 -->
         <div class="section-header">

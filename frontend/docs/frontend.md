@@ -67,7 +67,7 @@ export const streamCinemaUpdate = (cityId) =>
   按电影分组挂在 `movieShowsMap` 中,并保存 `lastFetchedAt`(想看电影 `shows_updated_at` 的最大值)。
 - 用户加入新想看时,后端后台抓该电影场次;前端每 10 秒调用一次
   `GET /api/shows?movie_id={id}`,最多轮询 3 分钟,只更新该电影在 `movieShowsMap` 中的缓存。
-- WishPool 顶部展示 `lastFetchedAt`,不再有任何"抓取/更新场次"按钮;数据可能短暂滞后。
+- WishPool 顶部展示 `lastFetchedAt`；影院看中每部非手动电影右侧提供“更新场次”，使用当前所选城市，通过 SSE 展示进度，完成后只重新读取该电影的场次缓存；失败保留已有场次。
 
 场次展示统一使用 `src/utils/showTime.js` 处理开始/结束时间:场次列表、想看池和行程板都显示
 `HH:mm-HH:mm`。结束时间由场次开始时间加 `durationMinutes` 推算;展示时如果片长缺失或无效,

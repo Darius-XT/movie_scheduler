@@ -20,6 +20,7 @@
 | plan | `GET` | `/api/plan` | JSON | 读取单用户行程列表 |
 | plan | `PUT` | `/api/plan/items` | JSON | 全量替换单用户行程列表 |
 | show | `GET` | `/api/shows` | JSON | 读取想看电影的全部或单部场次(后端每天北京时间 0 点启动自动更新) |
+| show | `GET` | `/api/shows/update-stream` | SSE | `city_id` 指定城市；可选 `movie_id` 仅更新该部想看且归类为影院看的非手动电影，省略则更新全部影院看电影。失败返回 error 并保留原场次 |
 
 ## City
 

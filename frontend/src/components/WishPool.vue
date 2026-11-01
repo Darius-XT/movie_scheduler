@@ -111,6 +111,11 @@
             </span>
           </div>
           <div class="wish-pool-group-actions">
+            <MovieShowUpdateButton
+              v-if="activeViewingFilter === 'cinema' && group.movieId > 0"
+              :movie-id="group.movieId"
+              :city-id="cityId"
+            />
             <MovieViewingLocationButtons :movie="group.movie" />
             <MovieChannelSelect v-if="activeViewingFilter === 'home'" :movie="group.movie" />
             <el-button text size="small" @click="handleRemoveWishMovie(group.movie)">
@@ -237,6 +242,7 @@ import { computed, ref, watch } from 'vue'
 import ManualMovieDialog from '@/components/ManualMovieDialog.vue'
 import MovieChannelSelect from '@/components/MovieChannelSelect.vue'
 import MovieViewingLocationButtons from '@/components/MovieViewingLocationButtons.vue'
+import MovieShowUpdateButton from '@/components/MovieShowUpdateButton.vue'
 import { MOVIE_CHANNELS, getMovieViewingGroup, getMovieYear, matchesMovieChannel } from '@/utils/wishFilters'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import {
@@ -248,6 +254,7 @@ import {
 import { formatShowTimeRange, parseShowTimeToMinutes, UNKNOWN_SHOW_DURATION_MINUTES } from '@/utils/showTime'
 
 const store = useScheduleStore()
+defineProps({ cityId: { type: Number, default: null } })
 
 const WISH_GROUP_DEFAULT_COLLAPSED = true
 const SHOWS_PAGE_SIZE = 8
