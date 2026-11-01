@@ -9,6 +9,7 @@ import pytest
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.show.service as show_module
+from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.features.show.service import ShowService
 
 
@@ -72,6 +73,62 @@ def test_failed_fetch_preserves_shows_and_timestamp(monkeypatch: MonkeyPatch, fa
     with pytest.raises(show_module.ExternalDependencyError, match="已保留原有场次"):
         asyncio.run(service.refresh_wished_movie_shows(10))
     assert writes == []
+
+
+@pytest.mark.parametrize("blocked_stage", ["home", "dates", "cinemas", "shows"])
+def test_verification_reports_stop_and_preserves_shows(monkeypatch: MonkeyPatch, blocked_stage: str) -> None:
+    movie = SimpleNamespace(id=1490532, title="玩具总动员5", is_wished=True, viewing_location="cinema")
+    replace = Mock()
+    touch = Mock()
+    monkeypatch.setattr(show_module.movie_repository, "list_wished_movies", lambda: [movie])
+    monkeypatch.setattr(show_module.movie_repository, "get_movie_by_id", Mock(return_value=movie))
+    monkeypatch.setattr(show_module.movie_show_repository, "replace_for_movie", replace)
+    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", touch)
+
+    def fetch(url: str, label: str, city_id: int, **kwargs: object) -> str:
+        if url == "https://www.maoyan.com/":
+            stage, content = "home", "<html></html>"
+        elif "/cinema/" in url:
+            stage, content = "shows", _MAOYAN_CINEMA_HTML
+        elif "showDate=" in url:
+            stage, content = "cinemas", _MAOYAN_MOVIE_DATE_CINEMAS_HTML
+        else:
+            stage, content = "dates", _MAOYAN_MOVIE_CINEMAS_HTML
+        if stage == blocked_stage:
+            raise MaoyanVerificationError()
+        return content
+
+    monkeypatch.setattr(show_module, "_http_get_text", fetch)
+
+    async def collect() -> list[str]:
+        return [frame async for frame in ShowService().stream_show_update(10)]
+
+    frames = asyncio.run(collect())
+    assert any('"type":"error"' in frame and "已停止本轮剩余抓取" in frame and "原有场次已保留" in frame for frame in frames)
+    assert not any('"type":"complete"' in frame for frame in frames)
+    replace.assert_not_called()
+    touch.assert_not_called()
+
+
+def test_verification_does_not_persist_other_movies_partial_results(monkeypatch: MonkeyPatch) -> None:
+    service = ShowService()
+    movies = [SimpleNamespace(id=i, is_wished=True, viewing_location="cinema") for i in [1, 2]]
+    replace = Mock()
+    touch = Mock()
+
+    async def fetch_movie(movie_id: int, city_id: int) -> show_module._FinalMovieShowData:
+        if movie_id == 1:
+            raise MaoyanVerificationError()
+        return show_module._FinalMovieShowData(movie_id, [])
+
+    monkeypatch.setattr(show_module.movie_repository, "list_wished_movies", lambda: movies)
+    monkeypatch.setattr(service, "_process_single_movie", fetch_movie)
+    monkeypatch.setattr(show_module.movie_show_repository, "replace_for_movie", replace)
+    monkeypatch.setattr(show_module.movie_repository, "touch_shows_updated_at", touch)
+    with pytest.raises(MaoyanVerificationError):
+        asyncio.run(service.refresh_wished_movie_shows(10))
+    replace.assert_not_called()
+    touch.assert_not_called()
 
 
 def test_partial_failure_does_not_replace_failed_movie(monkeypatch: MonkeyPatch) -> None:

@@ -13,12 +13,13 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 
 from movie_scheduler.config import config_manager
-from movie_scheduler.core.exceptions import AppError, RepositoryError
+from movie_scheduler.core.exceptions import AppError, MaoyanVerificationError, RepositoryError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.cinema.models import CinemaWriteData
 from movie_scheduler.features.cinema.repository import cinema_repository
 from movie_scheduler.features.cinema.schemas import CinemaUpdateResult, CinemaUpsertData
 from movie_scheduler.shared.maoyan import decode_maoyan_stonefont_text, maoyan_get_text
+from movie_scheduler.shared.maoyan_browser import maoyan_browser
 from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -55,11 +56,12 @@ class CinemaService:
     ) -> CinemaUpdateResult:
         """异步更新指定城市的影院信息(增量 upsert)。"""
         normalized_city_id = self._normalize_city_id(city_id)
-        success_count, failure_count = await asyncio.to_thread(
-            self._update_all_cinema_info,
-            normalized_city_id,
-            progress_callback,
-        )
+        with maoyan_browser.batch():
+            success_count, failure_count = await asyncio.to_thread(
+                self._update_all_cinema_info,
+                normalized_city_id,
+                progress_callback,
+            )
         return CinemaUpdateResult(success_count=success_count, failure_count=failure_count)
 
     async def stream_cinema_update(self, city_id: int) -> AsyncIterator[str]:
@@ -175,6 +177,8 @@ class CinemaService:
             if text is not None:
                 logger.debug("影院数据响应长度: %s 字符", len(text))
             return text
+        except MaoyanVerificationError:
+            raise
         except Exception as error:
             logger.error("获取影院数据异常: error=%s", error, exc_info=True)
             return None
@@ -258,6 +262,8 @@ class CinemaService:
         return normalized
 
     def _map_stream_error(self, error: Exception) -> str:
+        if isinstance(error, MaoyanVerificationError):
+            return str(error)
         if isinstance(error, AppError):
             return error.message
         if isinstance(error, RepositoryError):

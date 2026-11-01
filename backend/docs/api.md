@@ -19,7 +19,7 @@
 | movie | `POST` | `/api/movies/{movie_id}/update-douban` | JSON | 为单部电影抓取豆瓣评分与详情链接 |
 | plan | `GET` | `/api/plan` | JSON | 读取单用户行程列表 |
 | plan | `PUT` | `/api/plan/items` | JSON | 全量替换单用户行程列表 |
-| show | `GET` | `/api/shows` | JSON | 读取想看电影的全部或单部场次(后端每小时自动刷新) |
+| show | `GET` | `/api/shows` | JSON | 读取想看电影的全部或单部场次(后端每天北京时间 0 点启动自动更新) |
 
 ## City
 
@@ -37,6 +37,9 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 
 ## Movie
 
+电影更新只为缺少导演、国家、语言、时长或简介的电影补充详情，“暂无”占位值仍视为缺失。
+电影、影院与场次更新遇猫眼验证页时返回 SSE `error`，说明本轮剩余抓取已停止；电影更新不写入本轮完成时间，场次更新保留原有场次和更新时间。
+
 | 方法 | 路径 | 参数 / 请求体 | 返回 |
 |------|------|---------------|------|
 | `POST` | `/api/movies/select` | body: `{"selection_mode": "showing" \| "upcoming" \| "all"}` | `{"success": true, "data": {"movies": [...]}}` |
@@ -48,7 +51,7 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 | `GET` | `/api/movies/update-status` | 无 | `{"success": true, "data": {"last_updated_at": "..." \| null}}` |
 | `POST` | `/api/movies/{movie_id}/update-douban` | path: `movie_id` | `{"success": true, "data": {"score": "...", "douban_url": "..."}}` |
 
-电影信息与想看电影场次由同一个调度任务串行执行: 每个整点(分钟 0)自动跑一次,服务启动时立即跑一次。前端通过轮询 `GET /api/movies/update-status` 感知更新时间变化,自动重新筛选电影列表。
+电影信息与想看电影场次由同一个调度任务串行执行: 每天北京时间 0 点自动跑一次,服务启动时只注册任务,不立即执行。前端通过轮询 `GET /api/movies/update-status` 感知更新时间变化,自动重新筛选电影列表。
 
 ## Plan
 
@@ -69,4 +72,4 @@ SSE 事件:`{"type": "progress", "stage": "...", "message": "...", "city_id": ..
 场次更新 SSE 的 `complete.data` 包含 `added`、`removed`、`movies_with_shows`、`failed_movies` 和 `last_fetched_at`。
 `failed_movies` 表示抓取不完整且保留旧数据的电影数量；全部抓取失败时返回 `error` 事件，不更新原有场次或抓取时间。
 
-排片数据由后端每个整点(分钟 0)自动刷新一次,服务启动时也会立即刷一次。加入想看时后端会后台刷新该电影场次,前端可用 `movie_id` 参数轮询单部电影。
+排片数据由后端每天北京时间 0 点启动的自动更新任务刷新,在电影信息更新之后执行;服务启动时不立即刷新。加入想看时后端会后台刷新该电影场次,前端可用 `movie_id` 参数轮询单部电影。

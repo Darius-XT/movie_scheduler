@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from math import isfinite
 from pathlib import Path
 from typing import cast
 
@@ -37,6 +38,7 @@ class ConfigManager:
         self.maoyan_cookie = ""
         self.maoyan_browser_channel = "chromium"
         self.maoyan_browser_cdp_url = ""
+        self.maoyan_qps = 0.1
         self.maoyan_web_headers: dict[str, str] = {}
         self.database_url = f"sqlite:///{self.db_path}"
 
@@ -57,6 +59,7 @@ class ConfigManager:
         self.maoyan_cookie = self._get_str("MOVIE_SCHEDULER_MAOYAN_COOKIE", self.maoyan_cookie)
         self.maoyan_browser_channel = self._get_str("MOVIE_SCHEDULER_MAOYAN_BROWSER_CHANNEL", self.maoyan_browser_channel)
         self.maoyan_browser_cdp_url = self._get_url("MOVIE_SCHEDULER_MAOYAN_BROWSER_CDP_URL", "")
+        self.maoyan_qps = self._get_positive_float("MOVIE_SCHEDULER_MAOYAN_QPS", self.maoyan_qps)
         for header, suffix in {
             "User-Agent": "USER_AGENT",
             "Sec-CH-UA": "SEC_CH_UA",
@@ -102,6 +105,13 @@ class ConfigManager:
         if value is None or value == "":
             return default
         return int(value)
+
+    def _get_positive_float(self, key: str, default: float) -> float:
+        value = os.getenv(key)
+        parsed = default if value is None or value == "" else float(value)
+        if not isfinite(parsed) or parsed <= 0:
+            raise ValueError(f"{key} 必须是大于 0 的有限数值")
+        return parsed
 
     def _get_bool(self, key: str, default: bool) -> bool:
         value = os.getenv(key)

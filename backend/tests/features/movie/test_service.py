@@ -9,7 +9,8 @@ from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.movie.schemas import CreateManualMovieRequest, SetMovieChannelsRequest, SetMovieLabelRequest
 from movie_scheduler.features.movie.service import MovieService
-from movie_scheduler.core.exceptions import AppError
+from movie_scheduler.core.exceptions import AppError, MaoyanVerificationError
+import movie_scheduler.features.movie.service as movie_module
 from movie_scheduler.features.show.repository import movie_show_repository
 from movie_scheduler.features.show.service import show_service
 from movie_scheduler.features.movie.schemas import SetMovieViewingLocationRequest
@@ -84,3 +85,32 @@ def test_create_manual_movie_uses_local_id_and_wish_state(monkeypatch: MonkeyPat
     assert -(2**52) <= data["id"] < 0
     assert data["title"] == "手动电影"
     assert result["is_wished"] is True
+
+
+@pytest.mark.parametrize("stage", ["base", "extra"])
+def test_movie_stream_reports_verification_without_completing(monkeypatch: MonkeyPatch, stage: str) -> None:
+    base = Mock(side_effect=MaoyanVerificationError() if stage == "base" else None)
+    extra = AsyncMock(side_effect=MaoyanVerificationError() if stage == "extra" else None)
+    touch = Mock()
+    monkeypatch.setattr(movie_module.update_base_service, "update_all", base)
+    monkeypatch.setattr(movie_module.update_extra_service, "update_all", extra)
+    monkeypatch.setattr(movie_repository, "touch_movies_last_updated_at", touch)
+
+    async def collect() -> list[str]:
+        return [frame async for frame in MovieService().stream_movie_update(10)]
+
+    frames = asyncio.run(collect())
+    assert any('"type":"error"' in frame and "已停止本轮剩余抓取" in frame for frame in frames)
+    assert not any('"type":"complete"' in frame for frame in frames)
+    touch.assert_not_called()
+    assert extra.await_count == int(stage == "extra")
+
+
+def test_scheduled_movie_verification_propagates_without_timestamp(monkeypatch: MonkeyPatch) -> None:
+    service = MovieService()
+    touch = Mock()
+    monkeypatch.setattr(service, "update_movies", AsyncMock(side_effect=MaoyanVerificationError()))
+    monkeypatch.setattr(movie_repository, "touch_movies_last_updated_at", touch)
+    with pytest.raises(MaoyanVerificationError):
+        asyncio.run(service.refresh_all_movies())
+    touch.assert_not_called()

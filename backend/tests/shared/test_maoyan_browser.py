@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 from threading import get_ident
@@ -9,18 +10,43 @@ import pytest
 from pytest import MonkeyPatch
 
 import movie_scheduler.shared.maoyan_browser as browser_module
+from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.shared.maoyan_browser import MaoyanBrowser
+
+
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch: MonkeyPatch) -> _Clock:
+    clock = _Clock()
+    monkeypatch.setattr(browser_module, "monotonic", clock.monotonic)
+    monkeypatch.setattr(browser_module, "sleep", clock.sleep)
+    monkeypatch.setattr(browser_module.config_manager, "maoyan_qps", 1.0)
+    return clock
 
 
 def _install_browser(
     monkeypatch: MonkeyPatch, *, title: str = "猫眼电影", status: int = 200,
-) -> tuple[list[tuple[str, int]], list[object], SimpleNamespace]:
+) -> tuple[list[tuple[str, int]], list[object], SimpleNamespace, list[float]]:
     events: list[tuple[str, int]] = []
     cookies: list[object] = []
+    navigation_times: list[float] = []
     def record(name: str) -> None:
         events.append((name, get_ident()))
 
     def goto(*args: object, **kwargs: object) -> SimpleNamespace:
+        navigation_times.append(browser_module.monotonic())
         return SimpleNamespace(ok=status == 200, status=status)
 
     def add_cookies(values: list[object]) -> None:
@@ -54,11 +80,11 @@ def _install_browser(
     monkeypatch.setattr(browser_module, "sync_playwright", lambda: SimpleNamespace(start=lambda: playwright))
     monkeypatch.setattr(browser_module.config_manager, "maoyan_cookie", "uuid=seed")
     monkeypatch.setattr(browser_module.config_manager, "maoyan_browser_cdp_url", "")
-    return events, cookies, page
+    return events, cookies, page, navigation_times
 
 
 def test_browser_reuses_session_serializes_threads_and_cleans_up(monkeypatch: MonkeyPatch) -> None:
-    events, cookies, _ = _install_browser(monkeypatch)
+    events, cookies, _, navigation_times = _install_browser(monkeypatch)
     browser = MaoyanBrowser()
     request_id: ContextVar[str] = ContextVar("request_id", default="missing")
     logs: list[str] = []
@@ -83,26 +109,76 @@ def test_browser_reuses_session_serializes_threads_and_cleans_up(monkeypatch: Mo
     finally:
         browser.close()
     assert logs == ["request-test"] * 4
+    assert navigation_times == [0, 1, 2, 3]
     assert len({thread for _, thread in events}) == 1
     assert events[-1][0] == "stop"
 
 
-@pytest.mark.parametrize("title,status", [("验证中心", 200), ("猫眼电影", 403)])
-def test_browser_rejects_verification_and_http_failure(monkeypatch: MonkeyPatch, title: str, status: int) -> None:
-    events, _, _ = _install_browser(monkeypatch, title=title, status=status)
+def test_browser_http_failure_still_counts_toward_qps(monkeypatch: MonkeyPatch) -> None:
+    events, _, _, navigation_times = _install_browser(monkeypatch, status=403)
     browser = MaoyanBrowser()
     try:
-        assert browser.get_text("https://www.maoyan.com/cinemas", "影院", 10,
-                                cookie="", timeout=5, verify=True) is None
+        for _ in range(2):
+            assert browser.get_text("https://www.maoyan.com/cinemas", "影院", 10,
+                                    cookie="", timeout=5, verify=True) is None
+        assert navigation_times == [0, 1]
         assert "page-close" in [name for name, _ in events]
     finally:
         browser.close()
 
 
+@pytest.mark.parametrize("status", [200, 403])
+def test_verification_stops_concurrent_batch_and_next_batch_can_retry(monkeypatch: MonkeyPatch, status: int) -> None:
+    events, _, page, navigation_times = _install_browser(monkeypatch, title="验证中心", status=status)
+    browser = MaoyanBrowser()
+    results: list[str | None | BaseException] = []
+
+    def fetch() -> str | None:
+        return browser.get_text("https://www.maoyan.com/cinemas", "影院", 10,
+                                cookie="", timeout=5, verify=True)
+
+    async def run_batch() -> None:
+        with browser.batch():
+            results.extend(await asyncio.gather(*(asyncio.to_thread(fetch) for _ in range(4)), return_exceptions=True))
+
+    try:
+        with pytest.raises(MaoyanVerificationError, match="已停止本轮"):
+            asyncio.run(run_batch())
+        assert len(results) == 4
+        assert all(isinstance(result, MaoyanVerificationError) for result in results)
+        assert navigation_times == [0]
+        assert [name for name, _ in events].count("page-close") == 1
+        assert "browser-close" not in [name for name, _ in events]
+        page.title = lambda: "猫眼电影"
+        with browser.batch():
+            assert fetch() == ("<html>影院列表</html>" if status == 200 else None)
+        assert navigation_times == [0, 1]
+    finally:
+        browser.close()
+
+
+def test_nested_batch_cannot_reset_verification_stop(monkeypatch: MonkeyPatch) -> None:
+    _, _, _, navigation_times = _install_browser(monkeypatch, title="验证中心")
+    browser = MaoyanBrowser()
+    try:
+        with pytest.raises(MaoyanVerificationError):
+            with browser.batch():
+                with pytest.raises(MaoyanVerificationError):
+                    with browser.batch():
+                        browser.get_text("https://www.maoyan.com/cinemas", "影院", 10,
+                                         cookie="", timeout=5, verify=True)
+                with browser.batch():
+                    pytest.fail("同一轮不能重置已触发的验证状态")
+        assert navigation_times == [0]
+    finally:
+        browser.close()
+
+
 def test_browser_recovers_after_navigation_failure(monkeypatch: MonkeyPatch) -> None:
-    events, _, page = _install_browser(monkeypatch)
+    events, _, page, navigation_times = _install_browser(monkeypatch)
     original_goto = page.goto
     def fail(*args: object, **kwargs: object) -> None:
+        navigation_times.append(browser_module.monotonic())
         raise TimeoutError("private-token-not-for-logs")
 
     page.goto = fail
@@ -114,12 +190,13 @@ def test_browser_recovers_after_navigation_failure(monkeypatch: MonkeyPatch) -> 
         assert browser.get_text("https://www.maoyan.com/cinemas", "影院", 10,
                                 cookie="", timeout=5, verify=True)
         assert [name for name, _ in events].count("launch") == 2
+        assert navigation_times == [0, 1]
     finally:
         browser.close()
 
 
 def test_remote_browser_disconnect_keeps_host_process_alive(monkeypatch: MonkeyPatch) -> None:
-    events, _, _ = _install_browser(monkeypatch)
+    events, _, _, _ = _install_browser(monkeypatch)
     playwright = browser_module.sync_playwright().start()
     connected: list[str] = []
 
@@ -143,3 +220,44 @@ def test_remote_browser_disconnect_keeps_host_process_alive(monkeypatch: MonkeyP
     assert connected == ["http://192.0.2.1:9223"]
     assert "context-close" in [name for name, _ in events]
     assert "browser-close" not in [name for name, _ in events]
+
+
+def test_browser_counts_navigation_time_without_accumulating_idle_slots(
+    monkeypatch: MonkeyPatch, clock: _Clock,
+) -> None:
+    _, _, page, navigation_times = _install_browser(monkeypatch)
+    original_goto = page.goto
+    durations = iter([0.25, 1.25, 0, 0, 0])
+
+    def goto(*args: object, **kwargs: object) -> SimpleNamespace:
+        response = original_goto(*args, **kwargs)
+        clock.now += next(durations)
+        return response
+
+    page.goto = goto
+    browser = MaoyanBrowser()
+    try:
+        for _ in range(3):
+            assert browser.get_text("https://www.maoyan.com/cinemas", "影院", 10,
+                                    cookie="", timeout=5, verify=True)
+        clock.now += 5
+        for _ in range(2):
+            assert browser.get_text("https://www.maoyan.com/films", "电影", 10,
+                                    cookie="", timeout=5, verify=True)
+    finally:
+        browser.close()
+    assert navigation_times == [0, 1, 2.25, 7.25, 8.25]
+    assert clock.sleeps == [0.75, 1]
+
+
+def test_browser_uses_configured_qps(monkeypatch: MonkeyPatch) -> None:
+    _, _, _, navigation_times = _install_browser(monkeypatch)
+    monkeypatch.setattr(browser_module.config_manager, "maoyan_qps", 0.1)
+    browser = MaoyanBrowser()
+    try:
+        for _ in range(3):
+            assert browser.get_text("https://www.maoyan.com/films", "电影", 10,
+                                    cookie="", timeout=5, verify=True)
+    finally:
+        browser.close()
+    assert navigation_times == [0, 10, 20]

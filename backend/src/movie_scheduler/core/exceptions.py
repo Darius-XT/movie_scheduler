@@ -28,6 +28,13 @@ class ExternalDependencyError(Exception):
     """用于表示外部依赖调用失败。"""
 
 
+class MaoyanVerificationError(ExternalDependencyError):
+    """猫眼验证页要求终止本轮抓取，不能按单页失败降级。"""
+
+    def __init__(self) -> None:
+        super().__init__("猫眼要求身份验证，已停止本轮剩余抓取，请稍后重试")
+
+
 class DataParsingError(Exception):
     """用于表示外部数据解析失败。"""
 

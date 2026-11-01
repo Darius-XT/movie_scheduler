@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import socket
+from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
-from contextvars import copy_context
+from contextlib import contextmanager
+from contextvars import ContextVar, copy_context
 from dataclasses import dataclass
-from threading import Lock
+from threading import Event, Lock
+from time import monotonic, sleep
 from urllib.parse import urlsplit
 
 from playwright._impl._api_structures import SetCookieParam
 from playwright.sync_api import Browser, BrowserContext, Playwright, sync_playwright
 
 from movie_scheduler.config import config_manager
+from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.core.request_logging import log_external_http_request
 
@@ -40,12 +44,37 @@ class MaoyanBrowser:
         self._context: BrowserContext | None = None
         self._context_key: tuple[int, bool, bool, str, str | None] | None = None
         self._remote = False
+        self._last_request_at: float | None = None
+        self._batch_stopped: ContextVar[Event | None] = ContextVar("maoyan_batch_stopped", default=None)
+
+    @contextmanager
+    def batch(self) -> Generator[None, None, None]:
+        """同一轮及其子任务共享停止状态；下一轮可以重新尝试。"""
+        current = self._batch_stopped.get()
+        if current is not None:
+            if current.is_set():
+                raise MaoyanVerificationError()
+            yield
+            if current.is_set():
+                raise MaoyanVerificationError()
+            return
+        stopped = Event()
+        token = self._batch_stopped.set(stopped)
+        try:
+            yield
+            if stopped.is_set():
+                raise MaoyanVerificationError()
+        except MaoyanVerificationError:
+            stopped.set()
+            raise
+        finally:
+            self._batch_stopped.reset(token)
 
     def get_text(
         self, url: str, purpose: str, city_id: int, *, cookie: str,
         timeout: int, verify: bool, mobile: bool = False, user_agent: str | None = None,
     ) -> str | None:
-        """返回渲染后的 HTML；请求或验证失败返回 None，不记录敏感响应。"""
+        """返回 HTML；普通失败返回 None，验证页抛出异常停止本轮，不记录敏感响应。"""
         request = _PageRequest(url, purpose, city_id, cookie, timeout, verify, mobile, user_agent)
         with self._lock:
             if self._executor is None:
@@ -64,28 +93,44 @@ class MaoyanBrowser:
                     self._executor = None
 
     def _get_text(self, request: _PageRequest) -> str | None:
+        stopped = self._batch_stopped.get()
+        if stopped is not None and stopped.is_set():
+            raise MaoyanVerificationError()
         try:
             context = self._ensure_context(request)
             self._update_cookies(context, request.cookie)
             page = context.new_page()
             try:
+                self._wait_for_request_slot()
                 log_external_http_request("GET", request.url, purpose=request.purpose)
+                self._last_request_at = monotonic()
                 response = page.goto(request.url, wait_until="domcontentloaded", timeout=request.timeout * 1000)
-                if response is None or not response.ok:
-                    logger.warning("%s失败: 浏览器 HTTP 状态=%s", request.purpose, response.status if response else None)
-                    return None
                 text = page.content()
                 if self._is_verification(page.url, page.title(), text):
-                    logger.warning("%s失败: 猫眼要求身份验证，未返回业务数据", request.purpose)
+                    if stopped is not None:
+                        stopped.set()
+                    logger.warning("%s失败: 猫眼要求身份验证，已停止本轮剩余抓取", request.purpose)
+                    raise MaoyanVerificationError()
+                if response is None or not response.ok:
+                    logger.warning("%s失败: 浏览器 HTTP 状态=%s", request.purpose, response.status if response else None)
                     return None
                 return text
             finally:
                 page.close()
+        except MaoyanVerificationError:
+            raise
         except Exception as error:
             # Playwright 异常可能包含带 token 的跳转地址，只记录异常类型。
             logger.warning("%s失败: 无头浏览器 %s", request.purpose, type(error).__name__)
             self._close_browser()
             return None
+
+    def _wait_for_request_slot(self) -> None:
+        # 专用线程共用请求间隔；失败或重建浏览器也不重置，空闲不积累突发额度。
+        if self._last_request_at is not None:
+            delay = self._last_request_at + 1 / config_manager.maoyan_qps - monotonic()
+            if delay > 0:
+                sleep(delay)
 
     def _ensure_context(self, request: _PageRequest) -> BrowserContext:
         if self._browser is None or not self._browser.is_connected():

@@ -25,7 +25,7 @@ features/movie/
 
 ## 定时任务
 
-`core/scheduler.py` 用 APScheduler 在每个整点(分钟 0)串行触发:
+`core/scheduler.py` 用 APScheduler 在每天北京时间 0 点串行触发:
 
 1. `movie_service.refresh_all_movies()` — 跑 `update_base` + `update_extra`(豆瓣不走定时,只走单片接口)
 2. `show_service.refresh_wished_movie_shows()` — 抓所有想看电影的场次

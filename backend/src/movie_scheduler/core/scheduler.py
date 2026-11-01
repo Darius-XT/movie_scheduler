@@ -1,8 +1,8 @@
 """跨领域的定时任务调度器。
 
 策略:
-- 每个整点(分钟 0)触发一次"全量自动更新":先增量更新电影信息,再为想看电影抓场次。
-- 服务启动时只注册调度器,不立即触发更新;等下一个整点执行。
+- 每天北京时间 0 点触发一次"全量自动更新":先增量更新电影信息,再为想看电影抓场次。
+- 服务启动时只注册调度器,不立即触发更新;等下一个北京时间 0 点执行。
 - 两个任务串行执行(场次抓取依赖最新的 movies 表与 wishMovies 状态),
   但前端各自显示自己的"上次更新时间"。
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.service import movie_service
 from movie_scheduler.features.show.service import show_service
@@ -31,7 +32,7 @@ class AutoUpdateScheduler:
         # apscheduler 3.x 没有 type stubs, add_job 的 **trigger_args 被推断为 Unknown
         scheduler.add_job(  # pyright: ignore[reportUnknownMemberType]
             self._run_all,
-            trigger=CronTrigger(minute=0, timezone="Asia/Shanghai"),
+            trigger=CronTrigger(hour=0, minute=0, timezone="Asia/Shanghai"),
             id="auto_update_movies_and_shows",
             replace_existing=True,
             max_instances=1,
@@ -39,7 +40,7 @@ class AutoUpdateScheduler:
         )
         scheduler.start()
         self._scheduler = scheduler
-        logger.info("自动更新调度器已启动:每个整点触发一次")
+        logger.info("自动更新调度器已启动:每天北京时间 0 点触发一次")
 
     def shutdown(self) -> None:
         """停止调度器。"""
@@ -54,10 +55,16 @@ class AutoUpdateScheduler:
         logger.info("自动更新任务开始")
         try:
             await movie_service.refresh_all_movies()
+        except MaoyanVerificationError as error:
+            logger.warning("自动更新任务已停止: %s", error)
+            return
         except Exception as error:  # noqa: BLE001
             logger.error("电影自动更新异常: %s", error)
         try:
             await show_service.refresh_wished_movie_shows()
+        except MaoyanVerificationError as error:
+            logger.warning("自动更新任务已停止: %s", error)
+            return
         except Exception as error:  # noqa: BLE001
             logger.error("场次自动抓取异常: %s", error)
         logger.info("自动更新任务结束")

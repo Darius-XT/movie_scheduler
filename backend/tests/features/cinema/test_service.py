@@ -1,11 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import Mock
 
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.cinema.service as cinema_module
+from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.features.cinema.service import CinemaService
+
+
+def test_cinema_verification_stops_pages_and_reports_error(monkeypatch: MonkeyPatch) -> None:
+    fetch = Mock(side_effect=[_CINEMAS_PAGE_1, MaoyanVerificationError(), _CINEMAS_PAGE_2])
+    save = Mock()
+    monkeypatch.setattr(cinema_module, "maoyan_get_text", fetch)
+    monkeypatch.setattr(cinema_module.cinema_repository, "save_cinema_batch", save)
+
+    async def collect() -> list[str]:
+        return [frame async for frame in CinemaService().stream_cinema_update(10)]
+
+    frames = asyncio.run(collect())
+    assert fetch.call_count == 2
+    save.assert_not_called()
+    assert any('"type":"error"' in frame and "已停止本轮剩余抓取" in frame for frame in frames)
+    assert not any('"type":"complete"' in frame for frame in frames)
 
 
 def test_update_cinemas_parses_maoyan_html_pages(monkeypatch: MonkeyPatch) -> None:

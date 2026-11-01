@@ -25,6 +25,7 @@ from movie_scheduler.core.exceptions import (
     AppError,
     DataParsingError,
     ExternalDependencyError,
+    MaoyanVerificationError,
     RepositoryError,
 )
 from movie_scheduler.core.logging import logger
@@ -35,6 +36,7 @@ from movie_scheduler.shared.maoyan import (
     decode_maoyan_stonefont_text,
     maoyan_get_text,
 )
+from movie_scheduler.shared.maoyan_browser import maoyan_browser
 from movie_scheduler.shared.sse import stream_with_progress
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -352,10 +354,10 @@ class ShowService:
         async def fetch_movie(movie_id: int) -> _FinalMovieShowData | None:
             return await self._process_single_movie(movie_id, city_id)
 
-        tasks = [fetch_movie(movie_id) for movie_id in movie_ids]
-        movie_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        result = self._collect_valid_movie_results(movie_results)
+        with maoyan_browser.batch():
+            tasks = [fetch_movie(movie_id) for movie_id in movie_ids]
+            movie_results = await asyncio.gather(*tasks, return_exceptions=True)
+            result = self._collect_valid_movie_results(movie_results)
         if movie_ids and not result:
             raise ExternalDependencyError("所有电影场次抓取失败，已保留原有场次，请检查猫眼会话或浏览器日志")
         total_shows = sum(len(c.shows) for m in result for c in m.cinemas)
@@ -382,6 +384,8 @@ class ShowService:
             self._merge_cinemas(movie_data, cinemas)
 
             return self._finalize_movie(movie_data)
+        except MaoyanVerificationError:
+            raise
         except asyncio.CancelledError:
             logger.info("处理电影 ID %s 的场次任务被取消", movie_id)
             raise
@@ -472,6 +476,8 @@ class ShowService:
             valid: list[list[_FetchedShowItem]] = []
             for cinema_result in cinema_results:
                 if isinstance(cinema_result, BaseException):
+                    if isinstance(cinema_result, MaoyanVerificationError):
+                        raise cinema_result
                     if isinstance(cinema_result, _DegradableError):
                         logger.warning("获取影院场次时发生可降级错误,跳过当前影院: %s", cinema_result)
                         continue
@@ -479,6 +485,8 @@ class ShowService:
                 valid.append(cinema_result)
 
             return self._build_cinemas_from_shows(valid)
+        except MaoyanVerificationError:
+            raise
         except asyncio.CancelledError:
             logger.info("处理日期 %s 的场次任务被取消", show_date)
             raise
@@ -1074,6 +1082,8 @@ class ShowService:
         result: list[_FinalMovieShowData] = []
         for movie_result in movie_results:
             if isinstance(movie_result, BaseException):
+                if isinstance(movie_result, MaoyanVerificationError):
+                    raise movie_result
                 if isinstance(movie_result, asyncio.CancelledError):
                     logger.info("场次抓取任务被取消")
                     raise movie_result
@@ -1226,6 +1236,8 @@ class ShowService:
         return value.isoformat() if value else None
 
     def _map_stream_error(self, error: Exception) -> str:
+        if isinstance(error, MaoyanVerificationError):
+            return f"{error}；原有场次已保留"
         if isinstance(error, AppError):
             return error.message
         if isinstance(error, RepositoryError):

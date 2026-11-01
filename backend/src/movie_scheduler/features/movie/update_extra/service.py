@@ -12,16 +12,19 @@ from typing import Any, cast
 import urllib3
 
 from movie_scheduler.config import config_manager
+from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import MovieWriteData
 from movie_scheduler.features.movie.repository import movie_repository
 from movie_scheduler.features.movie.update_base.service import UpdateBaseProgressEvent
 from movie_scheduler.shared.maoyan import maoyan_get_text
+from movie_scheduler.shared.maoyan_browser import maoyan_browser
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _EXTRA_PAGE_BASE = "https://www.maoyan.com/films"
 _EXTRA_API_TIMEOUT = 30
+_DETAIL_FIELDS = ("director", "country", "language", "duration", "description")
 
 
 @dataclass(slots=True)
@@ -43,20 +46,24 @@ class UpdateExtraService:
         self,
         progress_callback: Callable[[UpdateBaseProgressEvent], None] | None = None,
     ) -> int:
-        """更新电影额外详情,返回成功数量。"""
-        logger.info("开始获取电影详情信息")
-        movies_to_update = await asyncio.to_thread(movie_repository.get_all_movies)
+        """只补齐缺失的电影详情,返回成功数量；验证页停止本轮。"""
+        movies = await asyncio.to_thread(movie_repository.get_all_movies)
+        movies_to_update = [movie for movie in movies if self._needs_details(movie)]
+        logger.info(
+            "电影详情筛选: 总计=%d, 待补齐=%d, 跳过=%d",
+            len(movies), len(movies_to_update), len(movies) - len(movies_to_update),
+        )
         if not movies_to_update:
             logger.info("没有可更新详情的电影")
             return 0
 
         total = len(movies_to_update)
-        tasks = [
-            self._process_single(idx=idx, total=total, movie=movie, progress_callback=progress_callback)
-            for idx, movie in enumerate(movies_to_update, start=1)
-        ]
-        results = await asyncio.gather(*tasks)
-        success_count = sum(1 for s in results if s)
+        success_count = 0
+        with maoyan_browser.batch():
+            # 浏览器本身串行；逐部处理避免提前占满线程池，验证后无需清理大批排队任务。
+            for idx, movie in enumerate(movies_to_update, start=1):
+                if await self._process_single(idx=idx, total=total, movie=movie, progress_callback=progress_callback):
+                    success_count += 1
         logger.info(
             "额外电影信息更新统计: 更新=%d, 跳过或失败=%d, 总计=%d",
             success_count, total - success_count, total,
@@ -64,6 +71,16 @@ class UpdateExtraService:
         return success_count
 
     # ---------- 内部: 单部处理 ----------
+
+    def _needs_details(self, movie: object) -> bool:
+        movie_id = getattr(movie, "id", None)
+        if not isinstance(movie_id, int) or movie_id <= 0:
+            return False
+        for name in _DETAIL_FIELDS:
+            value = str(getattr(movie, name, None) or "").strip()
+            if not value or value.startswith("暂无"):
+                return True
+        return False
 
     async def _process_single(
         self,
@@ -98,6 +115,8 @@ class UpdateExtraService:
                 return True
             logger.error("保存电影详情失败: %s (ID: %s)", movie_title, movie_id)
             return False
+        except MaoyanVerificationError:
+            raise
         except Exception as error:
             logger.error("处理电影 %s (ID: %s) 时发生异常: %s", movie_title, movie_id, error)
             return False
@@ -113,7 +132,7 @@ class UpdateExtraService:
         update_data = cast(MovieWriteData, asdict(details))
         update_data["id"] = movie_id
         changed = False
-        for field_name in ("director", "country", "language", "duration", "description"):
+        for field_name in _DETAIL_FIELDS:
             current = getattr(movie, field_name, None)
             incoming = update_data.get(field_name)
             if not self._same_text(current, incoming):

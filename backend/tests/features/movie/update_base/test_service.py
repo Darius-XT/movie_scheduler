@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from unittest.mock import Mock
 
+import pytest
 from pytest import MonkeyPatch
 
 import movie_scheduler.features.movie.update_base.service as base_module
+from movie_scheduler.core.exceptions import MaoyanVerificationError
 from movie_scheduler.features.movie.update_base.service import UpdateBaseService, _ScrapedMovieBaseInfo
 from movie_scheduler.features.movie.models import Movie
 
@@ -52,6 +54,24 @@ class _FakeResponse:
       </body>
     </html>
     """
+
+
+def test_verification_aborts_pagination_before_database_changes(monkeypatch: MonkeyPatch) -> None:
+    fetch = Mock(side_effect=[_FakeResponse.text, MaoyanVerificationError()])
+    save = Mock()
+    delete = Mock()
+    movies: list[Movie] = []
+    monkeypatch.setattr(base_module, "maoyan_get_text", fetch)
+    monkeypatch.setattr(base_module.movie_repository, "get_all_movies", lambda: movies)
+    monkeypatch.setattr(base_module.movie_repository, "save_movie", save)
+    monkeypatch.setattr(base_module.movie_repository, "delete_movie", delete)
+    with pytest.raises(MaoyanVerificationError):
+        UpdateBaseService().update_all(10)
+    assert [call.args[0] for call in fetch.call_args_list] == [
+        "https://www.maoyan.com/films?showType=1", "https://www.maoyan.com/films?showType=1&offset=18",
+    ]
+    save.assert_not_called()
+    delete.assert_not_called()
 
 
 def test_update_base_uses_shared_maoyan_client(monkeypatch: MonkeyPatch) -> None:

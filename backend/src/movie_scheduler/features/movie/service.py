@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Literal, cast
 
 from movie_scheduler.config import config_manager
-from movie_scheduler.core.exceptions import AppError, RepositoryError
+from movie_scheduler.core.exceptions import AppError, MaoyanVerificationError, RepositoryError
 from movie_scheduler.core.logging import logger
 from movie_scheduler.features.movie.models import Movie
 from movie_scheduler.features.movie.repository import movie_repository
@@ -25,6 +25,7 @@ from movie_scheduler.features.movie.update_douban.service import (
 )
 from movie_scheduler.features.movie.update_extra.service import update_extra_service
 from movie_scheduler.features.show.service import show_service
+from movie_scheduler.shared.maoyan_browser import maoyan_browser
 from movie_scheduler.shared.sse import stream_with_progress
 
 SelectionMode = Literal["showing", "upcoming", "all"]
@@ -105,10 +106,11 @@ class MovieService:
         """更新所有电影信息(增量): 基础列表 → 额外详情。返回基础信息阶段的统计。"""
         normalized_city_id = self._normalize_city_id(city_id)
         logger.info("开始更新所有电影信息, city_id=%s", normalized_city_id)
-        stats = await asyncio.to_thread(
-            update_base_service.update_all, normalized_city_id, progress_callback,
-        )
-        await update_extra_service.update_all(progress_callback=progress_callback)
+        with maoyan_browser.batch():
+            stats = await asyncio.to_thread(
+                update_base_service.update_all, normalized_city_id, progress_callback,
+            )
+            await update_extra_service.update_all(progress_callback=progress_callback)
         if progress_callback is not None:
             progress_callback(UpdateBaseProgressEvent(
                 message="正在汇总电影更新结果", stage="finalizing_movie_update",
@@ -117,7 +119,7 @@ class MovieService:
         return stats
 
     async def refresh_all_movies(self) -> None:
-        """定时任务入口: 更新电影信息(增量), 失败时只记日志不抛。
+        """定时更新电影；验证错误向调度器传播，以停止本轮后续场次抓取。
 
         无论本轮是否真的有字段变化, 都单独记录一次电影信息任务完成时间。
         """
@@ -125,6 +127,8 @@ class MovieService:
             await self.update_movies(city_id=None)
             await asyncio.to_thread(movie_repository.touch_movies_last_updated_at)
             logger.info("电影定时更新完成")
+        except MaoyanVerificationError:
+            raise
         except Exception as error:  # noqa: BLE001
             logger.error("电影定时更新失败: %s", error)
 
@@ -233,6 +237,8 @@ class MovieService:
         return normalized
 
     def _map_stream_error(self, error: Exception) -> str:
+        if isinstance(error, MaoyanVerificationError):
+            return str(error)
         if isinstance(error, AppError):
             return error.message
         if isinstance(error, RepositoryError):

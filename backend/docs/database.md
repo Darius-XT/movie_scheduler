@@ -8,7 +8,7 @@
 |----|-----|------------|------|
 | `cinemas` | `features/cinema/models.py` | `features/cinema/repository.py` | 保存影院基础信息 |
 | `movies` | `features/movie/models.py` | `features/movie/repository.py` | 保存电影基础信息、豆瓣信息、热映状态、想看状态、场次刷新时间 |
-| `movie_shows` | `features/show/models.py` | `features/show/repository.py` | 想看电影的场次缓存(每小时自动刷新) |
+| `movie_shows` | `features/show/models.py` | `features/show/repository.py` | 想看电影的场次缓存(每天北京时间 0 点启动自动更新) |
 | `planning_items` | `features/plan/models.py` | `features/plan/repository.py` | 保存单用户行程(场次维度) |
 
 所有 ORM 共享同一个 `Base = declarative_base()`,定义在 `movie_scheduler/core/db.py`。Alembic `migrations/env.py` 在读取 `Base.metadata` 之前显式 import 各 feature 的 `models` 模块,触发表注册。
@@ -55,7 +55,7 @@
 
 ## movie_shows
 
-`movie_shows` 是想看电影的场次缓存,由后端定时任务每小时刷新。同一电影/影院/日期/时间组合保证唯一。
+`movie_shows` 是想看电影的场次缓存,由后端每天北京时间 0 点启动的定时任务刷新。同一电影/影院/日期/时间组合保证唯一。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
